@@ -152,10 +152,41 @@ export interface Action extends BaseRecord {
   videoTimestampMs?: number | null;
 }
 
-/** Alle entiteiten die in de lokale database staan en meesynchroniseren. */
-export type Entity = Team | Player | Match | MatchSet | Rally | Action;
+/**
+ * Startopstelling van een set: welke speler staat bij aanvang in welke zone.
+ * Vanaf hier is elke latere rotatiestand te berekenen, dus dit is het enige wat
+ * bijgehouden hoeft te worden.
+ */
+export interface Lineup extends BaseRecord {
+  matchId: string;
+  setId: string;
+  team: TeamSide;
+  /** Speler-id per zone 1 t/m 6; null als de plek (nog) niet is ingevuld. */
+  positions: Record<Zone, string | null>;
+}
 
-export type EntityName = 'teams' | 'players' | 'matches' | 'sets' | 'rallies' | 'actions';
+/** Wissel: vanaf de genoemde rally staat de invaller in het veld. */
+export interface Substitution extends BaseRecord {
+  matchId: string;
+  setId: string;
+  rallyId: string;
+  team: TeamSide;
+  playerOutId: string;
+  playerInId: string;
+}
+
+/** Alle entiteiten die in de lokale database staan en meesynchroniseren. */
+export type Entity = Team | Player | Match | MatchSet | Rally | Action | Lineup | Substitution;
+
+export type EntityName =
+  | 'teams'
+  | 'players'
+  | 'matches'
+  | 'sets'
+  | 'rallies'
+  | 'actions'
+  | 'lineups'
+  | 'substitutions';
 
 export interface EntityMap {
   teams: Team;
@@ -164,4 +195,6 @@ export interface EntityMap {
   sets: MatchSet;
   rallies: Rally;
   actions: Action;
+  lineups: Lineup;
+  substitutions: Substitution;
 }

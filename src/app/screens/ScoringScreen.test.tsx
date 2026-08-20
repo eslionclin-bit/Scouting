@@ -14,7 +14,7 @@ async function renderScoring(): Promise<{ store: ScoutingStore; matchId: string;
   const fixture = await seedMatch(store);
   render(
     <StoreProvider store={store}>
-      <ScoringScreen matchId={fixture.match.id} onExit={() => {}} />
+      <ScoringScreen matchId={fixture.match.id} onExit={() => {}} onOpenDashboard={() => {}} />
     </StoreProvider>,
   );
   await screen.findByText(/Nog geen acties in deze rally/);

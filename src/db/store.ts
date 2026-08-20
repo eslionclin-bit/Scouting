@@ -16,6 +16,7 @@ import { Mutex } from './mutex';
 import type { WriteContext } from './mutations';
 import { META_KEYS } from './schema';
 import { ActionRepository } from './repositories/actions';
+import { LineupRepository, SubstitutionRepository } from './repositories/lineups';
 import { MatchRepository } from './repositories/matches';
 import { PlayerRepository } from './repositories/players';
 import { RallyRepository } from './repositories/rallies';
@@ -35,6 +36,8 @@ export class ScoutingStore {
   readonly sets: SetRepository;
   readonly rallies: RallyRepository;
   readonly actions: ActionRepository;
+  readonly lineups: LineupRepository;
+  readonly substitutions: SubstitutionRepository;
 
   private readonly listeners = new Set<() => void>();
 
@@ -46,6 +49,8 @@ export class ScoutingStore {
     this.sets = new SetRepository(ctx);
     this.rallies = new RallyRepository(ctx, this.sets);
     this.actions = new ActionRepository(ctx, this.rallies, this.players);
+    this.lineups = new LineupRepository(ctx);
+    this.substitutions = new SubstitutionRepository(ctx);
   }
 
   static async open(options: StoreOptions = {}): Promise<ScoutingStore> {

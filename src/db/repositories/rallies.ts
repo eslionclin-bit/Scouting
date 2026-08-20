@@ -6,6 +6,7 @@
  * setstand meteen herberekent.
  */
 
+import { rotationForNextRally } from '../../domain/rotation';
 import { rallyOutcomeFor, validateRallyCompletion, type ValidationIssue } from '../../domain/rules';
 import type { Rally, TeamSide } from '../../domain/types';
 import { buildRecord, commit, reviseRecord, type WriteContext, type WriteOp } from '../mutations';
@@ -56,7 +57,9 @@ export class RallyRepository {
       wonBy: null,
       pointsUsAfter: null,
       pointsThemAfter: null,
-      rotationUs: input.rotationUs ?? null,
+      // De rotatiestand volgt uit de al gespeelde rally's, dus die hoeft niemand
+      // bij te houden: één systeem in plaats van rotatie op papier ernaast.
+      rotationUs: input.rotationUs ?? rotationForNextRally(rallies, set.startingServe, 'us'),
     });
     await commit(this.ctx, [{ entity: 'rallies', record }]);
     return record;

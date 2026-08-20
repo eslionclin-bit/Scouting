@@ -53,6 +53,19 @@ export async function openScoutingDb(options: OpenOptions = {}): Promise<Scoutin
 
         db.createObjectStore('meta', { keyPath: 'key' });
       }
+
+      if (oldVersion < 2) {
+        // v2: rotatie- en wisselbeheer. Bestaande wedstrijden houden gewoon hun
+        // data; ze hebben alleen geen opstelling, en dat mag.
+        const lineups = db.createObjectStore('lineups', { keyPath: 'id' });
+        lineups.createIndex('by_match', 'matchId');
+        lineups.createIndex('by_set', 'setId');
+
+        const substitutions = db.createObjectStore('substitutions', { keyPath: 'id' });
+        substitutions.createIndex('by_match', 'matchId');
+        substitutions.createIndex('by_set', 'setId');
+        substitutions.createIndex('by_rally', 'rallyId');
+      }
     },
     blocked() {
       options.onBlocked?.();

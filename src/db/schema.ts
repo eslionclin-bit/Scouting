@@ -7,10 +7,20 @@
  */
 
 import type { DBSchema } from 'idb';
-import type { Action, EntityName, Match, MatchSet, Player, Rally, Team } from '../domain/types';
+import type {
+  Action,
+  EntityName,
+  Lineup,
+  Match,
+  MatchSet,
+  Player,
+  Rally,
+  Substitution,
+  Team,
+} from '../domain/types';
 
 export const DB_NAME = 'volley-scouting';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 /** Stores waarin domeinrecords staan; deze synchroniseren mee. */
 export const ENTITY_STORES: readonly EntityName[] = [
@@ -20,6 +30,8 @@ export const ENTITY_STORES: readonly EntityName[] = [
   'sets',
   'rallies',
   'actions',
+  'lineups',
+  'substitutions',
 ] as const;
 
 /**
@@ -84,6 +96,16 @@ export interface ScoutingSchema extends DBSchema {
       by_player: string;
       by_match_type: [string, string];
     };
+  };
+  lineups: {
+    key: string;
+    value: Lineup;
+    indexes: { by_match: string; by_set: string };
+  };
+  substitutions: {
+    key: string;
+    value: Substitution;
+    indexes: { by_match: string; by_set: string; by_rally: string };
   };
   outbox: {
     key: number;

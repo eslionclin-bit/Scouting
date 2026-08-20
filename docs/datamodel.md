@@ -174,12 +174,61 @@ De invoervolgorde van scherm A zit in `src/app/entry/entryReducer.ts`: een pure
 reducer, los van React, zodat de kern van de app te testen is zonder een scherm
 te renderen.
 
-## 10. Wat hier bewust nog niet zit
+## 10. Rotatie en wissels (schema v2)
 
-- Rotatie- en wisselbeheer (v2): `Rally.rotationUs` is er al als aanknopingspunt.
-- Berekeningen voor dashboard en opponent-dossier (v2/v4): die lezen straks uit
-  `loadMatchBundle()` en de bestaande indexen; het model hoeft er niet voor te
-  wijzigen.
+Twee stores erbij: `lineups` (één startopstelling per set) en `substitutions`.
+Meer is er niet nodig, en dat is het punt: **alleen de startopstelling en de
+wissels worden vastgelegd, elke rotatiestand daarna wordt berekend.** Zou de
+stand per rally worden opgeslagen, dan kan die na een undo of een gecorrigeerde
+uitslag uit de pas gaan lopen met de rally's zelf.
+
+De regel (in `domain/rotation.ts`): een team draait door zodra het een rally wint
+waarin de tegenstander serveerde. `rallies.start()` schrijft de uitkomst mee in
+`Rally.rotationUs`, zodat de analyse per rotatie niets hoeft te herleiden.
+
+Wissels zijn vervangingen op de plek waar de gewisselde speler staat, geldig
+vanaf de rally waarin ze worden ingevoerd; terugwisselen is gewoon de omgekeerde
+vervanging.
+
+Bestaande wedstrijden uit schema v1 blijven werken: die hebben simpelweg geen
+opstelling, en de rotatiekolom in het dashboard blijft dan leeg.
+
+## 11. Analyse
+
+`src/analysis` slaat de geneste wedstrijd eerst plat tot één rij per actie, met
+set, rally en rotatie erbij (`toActionRows`). Elke berekening werkt daarna op
+dezelfde rijen en filteren is een `Array.filter` — dus wat het dashboard toont
+bij 'set 2, rotatie 4' komt gegarandeerd uit dezelfde telling als het totaal.
+
+Wat er wordt gerekend, en waarom zo:
+
+- **Puntpercentage** alleen bij opslag, aanval en block. Een perfecte receptie
+  levert geen punt op, alleen een goede uitgangspositie; daar staat het
+  positieve percentage (perfect + goed).
+- **Rendement** is `(perfect − fout) / totaal`, de gebruikelijke maat in
+  volleybal, en dus navertelbaar uit de rally's.
+- **Sideout per rotatie**: van de rally's waarin de tegenstander serveerde, het
+  aandeel dat wij wonnen. Dit is de reden dat rotatie überhaupt wordt
+  bijgehouden.
+
+## 12. Kleurgebruik in de cijfers
+
+De vier kwalificatiekleuren uit de projectbrief (groen, lichtgroen, oranje,
+rood) zijn nagerekend op onderscheidbaarheid, ook bij kleurenblindheid. De
+oorspronkelijke tinten lagen voor deuteranopie vrijwel op elkaar; de gekozen
+waarden halen de norm, met het paar lichtgroen/oranje op de ondergrens. Daarom
+staat bij elke kwalificatiekleur ook tekst — op de knoppen, in de pilletjes van
+de rally-keten, in de legenda en in de tabel. Kleur draagt de betekenis nooit
+alleen.
+
+De zone-heatmap gebruikt één tint in vier stappen (donker → licht), met in elk
+vak het aantal en het percentage. Wie de stappen niet uit elkaar houdt, leest de
+getallen.
+
+## 13. Wat hier bewust nog niet zit
+
+- Opponent-dossier (v4): leest straks uit `matches.by_opponent` en dezelfde
+  analysefuncties; het model hoeft er niet voor te wijzigen.
 - Live meelezen (v3): het transport-contract ligt er, een relay over het lokale
   netwerk nog niet. Ook het rolonderscheid invoerder/meelezer staat wel in
   `meta`, maar heeft nog geen scherm.

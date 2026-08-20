@@ -1,0 +1,379 @@
+/**
+ * Scherm B — analysedashboard.
+ *
+ * Na de wedstrijd of tussen twee sets door: wat deden we, en waar zit het lek.
+ * Alles is een telling uit de ingevoerde acties, met de filters van de
+ * projectbrief erboven: set, rotatie en speler. De filters gelden voor het hele
+ * scherm, zodat elk getal bij dezelfde selectie hoort.
+ */
+
+import { useMemo, useState, type ReactElement } from 'react';
+import { loadMatchBundle } from '../../db/bundle';
+import {
+  filterActions,
+  filterRallies,
+  statsByPlayer,
+  statsByRotation,
+  statsByType,
+  summarize,
+  toActionRows,
+  toRallyRows,
+  zoneTally,
+} from '../../analysis';
+import { ACTION_TYPE_LABELS } from '../../domain/protocol';
+import { ACTION_TYPES, type ActionType } from '../../domain/types';
+import { QualityBar, QualityLegend } from '../components/QualityBar';
+import { StatTile } from '../components/StatTile';
+import { ZoneHeatmap } from '../components/ZoneHeatmap';
+import { useQuery } from '../StoreProvider';
+
+export interface DashboardScreenProps {
+  matchId: string;
+  onExit: () => void;
+}
+
+export function DashboardScreen({ matchId, onExit }: DashboardScreenProps): ReactElement {
+  const [setId, setSetId] = useState<string | null>(null);
+  const [rotation, setRotation] = useState<number | null>(null);
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  const [zoneType, setZoneType] = useState<ActionType>('attack');
+
+  const { data, error } = useQuery(
+    async (store) => loadMatchBundle(store, matchId),
+    [matchId],
+  );
+
+  const view = useMemo(() => {
+    if (!data) return null;
+    const filter = { setId, rotation };
+    const actionRows = filterActions(toActionRows(data), filter);
+    const rallyRows = filterRallies(toRallyRows(data), filter);
+
+    const ours = filterActions(actionRows, { team: 'us' });
+    const theirs = filterActions(actionRows, { team: 'them' });
+    const selected = playerId ? filterActions(ours, { playerId }) : ours;
+
+    const rotations = statsByRotation(rallyRows);
+    const receiveRallies = rotations.reduce((sum, entry) => sum + entry.receiveRallies, 0);
+    const sideouts = rotations.reduce(
+      (sum, entry) => sum + Math.round((entry.sideoutPct ?? 0) * entry.receiveRallies),
+      0,
+    );
+
+    return {
+      actionRows,
+      rallyRows,
+      ours,
+      theirs,
+      selected,
+      ourTypes: statsByType(selected),
+      theirTypes: statsByType(theirs),
+      players: statsByPlayer(
+        ours,
+        data.players.filter((player) => player.teamId === data.match.ownTeamId),
+      ),
+      rotations,
+      pointsUs: rallyRows.filter((row) => row.rally.wonBy === 'us').length,
+      pointsThem: rallyRows.filter((row) => row.rally.wonBy === 'them').length,
+      sideoutPct: receiveRallies > 0 ? sideouts / receiveRallies : null,
+    };
+  }, [data, setId, rotation, playerId]);
+
+  if (error) {
+    return (
+      <div className="boot boot--error">
+        <p>{error.message}</p>
+        <button type="button" className="button" onClick={onExit}>
+          Terug
+        </button>
+      </div>
+    );
+  }
+  if (!data || !view) return <div className="boot">Cijfers berekenen…</div>;
+
+  const ownPlayers = data.players.filter((player) => player.teamId === data.match.ownTeamId);
+  const attackStats = view.ourTypes.attack;
+
+  return (
+    <div className="dashboard">
+      <header className="dashboard__header">
+        <button type="button" className="button button--ghost" onClick={onExit}>
+          ← Terug
+        </button>
+        <div>
+          <h1>{data.opponent?.name ?? 'Wedstrijd'}</h1>
+          <p className="dashboard__sub">
+            {data.match.date} · {data.match.homeAway === 'home' ? 'thuis' : 'uit'} ·{' '}
+            {data.sets.map((set) => `${set.set.pointsUs}-${set.set.pointsThem}`).join(' · ') ||
+              'nog geen sets'}
+          </p>
+        </div>
+      </header>
+
+      <div className="filters" role="group" aria-label="Filters">
+        <FilterGroup label="Set">
+          <FilterChip active={setId === null} onClick={() => setSetId(null)}>
+            Alles
+          </FilterChip>
+          {data.sets.map((set) => (
+            <FilterChip
+              key={set.set.id}
+              active={setId === set.set.id}
+              onClick={() => setSetId(set.set.id)}
+            >
+              {set.set.setNumber}
+            </FilterChip>
+          ))}
+        </FilterGroup>
+
+        <FilterGroup label="Rotatie">
+          <FilterChip active={rotation === null} onClick={() => setRotation(null)}>
+            Alles
+          </FilterChip>
+          {[1, 2, 3, 4, 5, 6].map((value) => (
+            <FilterChip key={value} active={rotation === value} onClick={() => setRotation(value)}>
+              R{value}
+            </FilterChip>
+          ))}
+        </FilterGroup>
+
+        <FilterGroup label="Speler">
+          <FilterChip active={playerId === null} onClick={() => setPlayerId(null)}>
+            Alles
+          </FilterChip>
+          {ownPlayers.map((player) => (
+            <FilterChip
+              key={player.id}
+              active={playerId === player.id}
+              onClick={() => setPlayerId(player.id)}
+            >
+              #{player.number}
+            </FilterChip>
+          ))}
+        </FilterGroup>
+      </div>
+
+      <div className="tiles">
+        <StatTile label="Punten wij" value={String(view.pointsUs)} tone="us" />
+        <StatTile label="Punten zij" value={String(view.pointsThem)} tone="them" />
+        <StatTile
+          label="Rendement aanval"
+          value={attackStats.efficiency === null ? '—' : formatSigned(attackStats.efficiency)}
+          hint={`${attackStats.counts.perfect} punt · ${attackStats.counts.error} fout · ${attackStats.total} totaal`}
+        />
+        <StatTile
+          label="Sideout"
+          value={view.sideoutPct === null ? '—' : formatPct(view.sideoutPct)}
+          hint="rally's gewonnen op opslag tegenstander"
+        />
+      </div>
+
+      <section className="card">
+        <h2>Per speler</h2>
+        <QualityLegend />
+        <div className="tablewrap">
+          <table className="stats">
+            <thead>
+              <tr>
+                <th scope="col">Speler</th>
+                <th scope="col">Acties</th>
+                <th scope="col">Opslag</th>
+                <th scope="col">Receptie</th>
+                <th scope="col">Aanval</th>
+                <th scope="col">Fout%</th>
+                <th scope="col">Verdeling</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.players.map((player) => (
+                <tr key={player.playerId}>
+                  <th scope="row">
+                    <span className="stats__number">#{player.number}</span> {player.name}
+                  </th>
+                  <td>{player.overall.total}</td>
+                  <td>{describeScoring(player.byType.serve)}</td>
+                  <td>{describePassing(player.byType.reception)}</td>
+                  <td>{describeScoring(player.byType.attack)}</td>
+                  <td>{player.overall.total > 0 ? formatPct(player.overall.errorPct) : '—'}</td>
+                  <td>
+                    <QualityBar counts={player.overall.counts} total={player.overall.total} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>Per actietype</h2>
+        <div className="tablewrap">
+          <table className="stats">
+            <thead>
+              <tr>
+                <th scope="col">Actie</th>
+                <th scope="col">Wij</th>
+                <th scope="col">Verdeling wij</th>
+                <th scope="col">Zij</th>
+                <th scope="col">Verdeling zij</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ACTION_TYPES.map((type) => (
+                <tr key={type}>
+                  <th scope="row">{ACTION_TYPE_LABELS[type]}</th>
+                  <td>{describeAny(view.ourTypes[type])}</td>
+                  <td>
+                    <QualityBar
+                      counts={view.ourTypes[type].counts}
+                      total={view.ourTypes[type].total}
+                    />
+                  </td>
+                  <td>{describeAny(view.theirTypes[type])}</td>
+                  <td>
+                    <QualityBar
+                      counts={view.theirTypes[type].counts}
+                      total={view.theirTypes[type].total}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card__head">
+          <h2>Zones</h2>
+          <div className="choices">
+            {(['attack', 'serve'] as const).map((type) => (
+              <FilterChip key={type} active={zoneType === type} onClick={() => setZoneType(type)}>
+                {ACTION_TYPE_LABELS[type]}
+              </FilterChip>
+            ))}
+          </div>
+        </div>
+        <p className="card__hint">
+          Vertrekzone: van waaruit wordt {zoneType === 'attack' ? 'aangevallen' : 'geserveerd'}.
+        </p>
+        <div className="heatmaps">
+          <ZoneHeatmap
+            title="Wij"
+            subtitle={ACTION_TYPE_LABELS[zoneType].toLowerCase()}
+            tally={zoneTally(filterActions(view.ours, { type: zoneType }))}
+          />
+          <ZoneHeatmap
+            title="Tegenstander"
+            subtitle={ACTION_TYPE_LABELS[zoneType].toLowerCase()}
+            tally={zoneTally(filterActions(view.theirs, { type: zoneType }))}
+          />
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>Per rotatie</h2>
+        <p className="card__hint">
+          R1 is de startopstelling van de set; daarna draait het team door na elke gewonnen rally op
+          de opslag van de tegenstander.
+        </p>
+        <div className="tablewrap">
+          <table className="stats">
+            <thead>
+              <tr>
+                <th scope="col">Rotatie</th>
+                <th scope="col">Rally's</th>
+                <th scope="col">Voor</th>
+                <th scope="col">Tegen</th>
+                <th scope="col">Sideout</th>
+                <th scope="col">Punt op eigen opslag</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.rotations.map((entry) => (
+                <tr key={entry.rotation}>
+                  <th scope="row">R{entry.rotation}</th>
+                  <td>{entry.rallies}</td>
+                  <td>{entry.pointsFor}</td>
+                  <td>{entry.pointsAgainst}</td>
+                  <td>
+                    {entry.sideoutPct === null
+                      ? '—'
+                      : `${formatPct(entry.sideoutPct)} (${entry.receiveRallies})`}
+                  </td>
+                  <td>
+                    {entry.serveRallies === 0
+                      ? '—'
+                      : `${formatPct(entry.servePoints / entry.serveRallies)} (${entry.serveRallies})`}
+                  </td>
+                </tr>
+              ))}
+              {view.rotations.length === 0 && (
+                <tr>
+                  <td colSpan={6}>Nog geen afgeronde rally's in deze selectie.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }): ReactElement {
+  return (
+    <div className="filters__group">
+      <span className="filters__label">{label}</span>
+      <div className="filters__chips">{children}</div>
+    </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      className={`chip chip--small ${active ? 'chip--active' : ''}`}
+      aria-pressed={active}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+type Stats = ReturnType<typeof summarize>;
+
+/** Opslag, aanval, block: puntpercentage en rendement zeggen het meest. */
+function describeScoring(stats: Stats): string {
+  if (stats.total === 0) return '—';
+  return `${stats.total} · ${formatPct(stats.pointPct ?? 0)} pt · ${formatPct(stats.errorPct)} fout`;
+}
+
+/** Receptie, toets, verdediging: hoe vaak bleef de bal goed bruikbaar. */
+function describePassing(stats: Stats): string {
+  if (stats.total === 0) return '—';
+  return `${stats.total} · ${formatPct(stats.positivePct)} positief`;
+}
+
+function describeAny(stats: Stats): string {
+  return stats.pointPct === null ? describePassing(stats) : describeScoring(stats);
+}
+
+function formatPct(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatSigned(value: number): string {
+  const rounded = Math.round(value * 100);
+  return `${rounded > 0 ? '+' : ''}${rounded}%`;
+}

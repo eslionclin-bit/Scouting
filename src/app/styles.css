@@ -15,10 +15,29 @@
   --us: #38bdf8;
   --them: #f472b6;
 
-  --perfect: #16a34a;
-  --good: #65a30d;
-  --poor: #ea580c;
-  --error: #dc2626;
+  /* Kwalificatiekleuren: groen, lichtgroen, oranje, rood uit de projectbrief.
+     Gecontroleerd tegen deze achtergrond op onderscheidbaarheid bij
+     kleurenblindheid; lichtgroen naast oranje haalt net de ondergrens, dus
+     staat er overal ook tekst bij — kleur draagt de betekenis nooit alleen. */
+  --perfect: #0ca30c;
+  --good: #7ed957;
+  --poor: #ec835a;
+  --error: #d03b3b;
+  --quality-perfect: var(--perfect);
+  --quality-good: var(--good);
+  --quality-poor: var(--poor);
+  --quality-error: var(--error);
+  /* Inkt op die vlakken: donker waar het vlak licht is, wit op rood. */
+  --on-quality: #0b1220;
+  --on-quality-error: #ffffff;
+
+  /* Sequentiële schaal voor de zone-heatmap: één tint, van bijna-achtergrond
+     naar helder. Gevalideerd als oplopende schaal op deze achtergrond. */
+  --heat-0: transparent;
+  --heat-1: #1c5cab;
+  --heat-2: #2a78d6;
+  --heat-3: #5598e7;
+  --heat-4: #86b6ef;
 
   --radius: 12px;
   --tap: 3rem;
@@ -643,7 +662,7 @@ button {
   border-radius: var(--radius);
   border: 0;
   text-align: left;
-  color: #f8fafc;
+  color: var(--on-quality);
 }
 
 .quality--perfect {
@@ -657,6 +676,7 @@ button {
 }
 .quality--error {
   background: var(--error);
+  color: var(--on-quality-error);
 }
 
 .quality__label {
@@ -787,4 +807,410 @@ button {
 .toast--info {
   background: var(--bg-raised);
   color: var(--text);
+}
+
+/* ---------- Scherm B: analysedashboard ---------- */
+
+.dashboard {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 4rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard__header h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.dashboard__sub {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Filters staan als één rij boven alle cijfers: ze gelden voor het hele scherm,
+   dus ze horen niet per blok herhaald te worden. */
+.filters {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+
+.filters__group {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.filters__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.filters__chips {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.chip--small {
+  min-height: 2.4rem;
+  padding: 0 0.7rem;
+  font-size: 0.85rem;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.tile-stat {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+
+.tile-stat__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.tile-stat__value {
+  font-size: 1.9rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.tile-stat__hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.tile-stat--us .tile-stat__value {
+  color: var(--us);
+}
+
+.tile-stat--them .tile-stat__value {
+  color: var(--them);
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  padding: 1rem;
+}
+
+.card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.card__hint {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* Brede tabellen scrollen in hun eigen kader; de pagina zelf niet. */
+.tablewrap {
+  overflow-x: auto;
+}
+
+.stats {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats th,
+.stats td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.stats thead th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.stats tbody th {
+  font-weight: 600;
+}
+
+.stats tbody tr:last-child th,
+.stats tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.stats__number {
+  color: var(--muted);
+}
+
+/* Kwalificatieverdeling: vaste volgorde, met een spleet tussen de segmenten
+   zodat aangrenzende kleuren niet in elkaar overlopen. */
+.qbar {
+  display: flex;
+  gap: 2px;
+  min-width: 8rem;
+  height: 1.4rem;
+  align-items: stretch;
+}
+
+.qbar--empty {
+  color: var(--muted);
+}
+
+.qbar__segment {
+  display: grid;
+  place-items: center;
+  min-width: 0.4rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--on-quality);
+}
+
+.qbar__segment--perfect {
+  background: var(--perfect);
+}
+.qbar__segment--good {
+  background: var(--good);
+}
+.qbar__segment--poor {
+  background: var(--poor);
+}
+.qbar__segment--error {
+  background: var(--error);
+  color: var(--on-quality-error);
+}
+
+.qlegend {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.qlegend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.qlegend__swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 3px;
+}
+
+/* Heatmaps */
+
+.heatmaps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+.heatmap {
+  margin: 0;
+}
+
+.heatmap__caption {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.heatmap__title {
+  font-weight: 700;
+}
+
+.heatmap__subtitle,
+.heatmap__total {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.heatmap__total {
+  margin: 0.4rem 0 0;
+}
+
+.court--heat .court__row {
+  gap: 2px;
+}
+
+.court--heat {
+  gap: 2px;
+}
+
+.heatcell {
+  display: grid;
+  place-items: center;
+  gap: 0.05rem;
+  min-height: 4rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.heatcell__zone {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.heatcell__value {
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.heatcell__pct {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* Elke stap draagt zijn eigen inkt: wit op de donkere stappen, zwart op de
+   lichte. De kleine labels zijn juist op de drukste vakken belangrijk. */
+.heatcell--s0 {
+  background: var(--heat-0);
+}
+
+.heatcell--s1,
+.heatcell--s2 {
+  color: #ffffff;
+}
+
+.heatcell--s1 .heatcell__zone,
+.heatcell--s1 .heatcell__pct,
+.heatcell--s2 .heatcell__zone,
+.heatcell--s2 .heatcell__pct {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.heatcell--s1 {
+  background: var(--heat-1);
+}
+
+.heatcell--s2 {
+  background: var(--heat-2);
+}
+
+.heatcell--s3,
+.heatcell--s4 {
+  color: #0b1220;
+}
+
+.heatcell--s3 .heatcell__zone,
+.heatcell--s3 .heatcell__pct,
+.heatcell--s4 .heatcell__zone,
+.heatcell--s4 .heatcell__pct {
+  color: rgba(11, 18, 32, 0.75);
+}
+
+.heatcell--s3 {
+  background: var(--heat-3);
+}
+
+.heatcell--s4 {
+  background: var(--heat-4);
+}
+
+/* Opstelling en wissels */
+
+.sheet__card--wide {
+  max-width: 44rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.sheet__tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sheet__subtitle {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.sheet__players {
+  margin-top: 0.75rem;
+}
+
+.sheet__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.court--lineup .court__row {
+  gap: 0.4rem;
+}
+
+.lineupcell {
+  display: grid;
+  gap: 0.15rem;
+  min-height: 4rem;
+  padding: 0.4rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  text-align: center;
+}
+
+.lineupcell--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.lineupcell__zone {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.lineupcell__player {
+  font-size: 0.85rem;
+  font-weight: 600;
 }

@@ -10,10 +10,11 @@ import { useQuery, useStore } from '../StoreProvider';
 
 export interface HomeScreenProps {
   onOpenMatch: (matchId: string) => void;
+  onOpenDashboard: (matchId: string) => void;
   onNewMatch: () => void;
 }
 
-export function HomeScreen({ onOpenMatch, onNewMatch }: HomeScreenProps): ReactElement {
+export function HomeScreen({ onOpenMatch, onOpenDashboard, onNewMatch }: HomeScreenProps): ReactElement {
   const store = useStore();
 
   const { data } = useQuery(async (instance) => {
@@ -81,6 +82,13 @@ export function HomeScreen({ onOpenMatch, onNewMatch }: HomeScreenProps): ReactE
               </span>
             </button>
             <div className="matchlist__actions">
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => onOpenDashboard(match.id)}
+              >
+                Cijfers
+              </button>
               <button type="button" className="button button--ghost" onClick={() => void download(match.id, 'json')}>
                 JSON
               </button>

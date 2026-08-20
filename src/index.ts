@@ -40,6 +40,17 @@ export {
   type ValidationIssue,
 } from './domain/rules';
 export { COURT_GRID, ZONE_LABELS, emptyZoneTally, isZone, toZone } from './domain/zones';
+export {
+  emptyPositions,
+  playersOnCourt,
+  positionsAt,
+  rotatePositions,
+  rotationForNextRally,
+  rotationsAfter,
+  serverAt,
+} from './domain/rotation';
+
+export * from './analysis';
 
 export { SyncEngine, type SyncEngineOptions } from './sync/engine';
 export { LoopbackHub } from './sync/loopback';

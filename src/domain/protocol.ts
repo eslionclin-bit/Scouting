@@ -37,12 +37,18 @@ export const TEAM_SIDE_LABELS: Record<TeamSide, string> = {
   them: 'Tegenstander',
 };
 
-/** Kleurcodering van de kwalificatieknoppen (projectbrief §4-A). */
+/**
+ * Kleurcodering van de kwalificaties (projectbrief §4-A: groen, lichtgroen,
+ * oranje, rood). De exacte waarden zijn gecontroleerd op onderscheidbaarheid,
+ * ook bij kleurenblindheid; het paar lichtgroen/oranje ligt daarbij op de
+ * ondergrens, dus een kwalificatiekleur staat in de app nooit zonder tekst.
+ * De waarden zelf staan in `app/styles.css`.
+ */
 export const QUALITY_COLORS: Record<Quality, string> = {
-  perfect: 'green',
-  good: 'light-green',
-  poor: 'orange',
-  error: 'red',
+  perfect: 'var(--quality-perfect)',
+  good: 'var(--quality-good)',
+  poor: 'var(--quality-poor)',
+  error: 'var(--quality-error)',
 };
 
 /** Numerieke waarde, handig voor gemiddelden in het analysedashboard. */

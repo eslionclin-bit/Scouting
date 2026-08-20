@@ -4,9 +4,9 @@ Offline-first scouting-app voor volleybal: rally's actie-voor-actie invoeren op 
 tablet in de sporthal, zonder internet, met synchronisatie zodra er weer een
 netwerk is.
 
-Wat er nu draait: **v1 — het rally-invoerscherm als PWA**, bovenop een datamodel,
-lokale opslag en sync-laag die eerst zijn neergezet. Installeerbaar op een
-tablet, en volledig bruikbaar zonder verbinding.
+Wat er nu draait: **v1 en v2** — het rally-invoerscherm en het analysedashboard,
+inclusief rotatie- en wisselbeheer, bovenop een datamodel, lokale opslag en
+sync-laag. Installeerbaar op een tablet, en volledig bruikbaar zonder verbinding.
 
 ## Aan de slag
 
@@ -14,7 +14,7 @@ tablet, en volledig bruikbaar zonder verbinding.
 npm install
 npm run dev     # ontwikkelserver
 npm run build   # typecheck + productiebuild inclusief service worker
-npm test        # 57 tests: domein, opslag, sync, invoerscherm, export
+npm test        # 74 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -24,6 +24,7 @@ npm test        # 57 tests: domein, opslag, sync, invoerscherm, export
 | Domein | `src/domain` | Types, scoutingprotocol, validatieregels, zonelogica, logische klok |
 | Opslag | `src/db` | IndexedDB-schema, transacties, repositories per entiteit |
 | Sync | `src/sync` | Outbox, samenvoegen (LWW), sync-engine, transport-contract |
+| Analyse | `src/analysis` | Tellingen per speler, actietype, zone en rotatie |
 | Export | `src/export` | JSON (canoniek) en CSV (voor Excel) |
 | App | `src/app` | React-schermen, invoerstroom, PWA-registratie |
 
@@ -52,6 +53,26 @@ rondt de rally meteen af en zet de opslag van de winnaar klaar.
 
 Undo werkt over de rallygrens heen: is de nieuwe rally nog leeg, dan wordt de
 vorige rally heropend en dáár de laatste actie teruggedraaid.
+
+**Opstelling en wissels** — via de knop 'Opstelling' in het invoerscherm. Je zet
+alleen de zes van het begin van de set neer; welke speler tijdens rally 34 in
+zone 3 staat, rekent de app zelf uit. De rotatiestand staat in de kop van het
+scherm en wordt bij elke rally meegeschreven, zodat er geen rotatielijst op
+papier naast hoeft te bestaan. Een wissel geldt vanaf de rally waarin hij wordt
+ingevoerd.
+
+**Analysedashboard (scherm B)** — bereikbaar vanaf het startscherm en vanuit de
+invoer ('Cijfers'):
+
+- filters voor set, rotatie en speler in één rij, geldig voor het hele scherm;
+- kerncijfers: punten, aanvalsrendement en sideout-percentage;
+- een tabel per speler en per actietype, met de verdeling over de vier
+  kwalificaties ernaast;
+- zone-heatmaps voor aanval en opslag, eigen team en tegenstander apart;
+- een rotatietabel met sideout per rotatie — de plek waar een patroon als
+  'in R4 komen we er niet uit' zichtbaar wordt.
+
+Elk getal is een telling uit de ingevoerde acties, geen schatting.
 
 ### Dezelfde stappen in code
 
@@ -137,5 +158,7 @@ hervat.
 
 ## Volgende stap
 
-Fase v2 uit de projectbrief: het analysedashboard (scherm B) en rotatie- en
-wisselbeheer, bovenop `loadMatchBundle()` en de bestaande indexen.
+Fase v3 uit de projectbrief: live meelezen tussen invoerder en coach over het
+lokale netwerk. Het transport-contract en de sync-engine liggen er al; wat nog
+ontbreekt is een relay over het lokale netwerk en het meelees-scherm met de
+rolkeuze.

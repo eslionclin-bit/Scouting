@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
+import { LineupSheet } from '../components/LineupSheet';
 import { ProtocolSheet } from '../components/ProtocolSheet';
 import { ActionTypePicker } from '../components/ActionTypePicker';
 import { CourtPicker } from '../components/CourtPicker';
@@ -26,18 +27,20 @@ import {
 } from '../entry/entryReducer';
 import { isTerminalAction, requiresZoneFrom } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
-import type { Player, Quality, TeamSide } from '../../domain/types';
+import type { Player, Quality, TeamSide, Zone } from '../../domain/types';
 
 export interface ScoringScreenProps {
   matchId: string;
   onExit: () => void;
+  onOpenDashboard: () => void;
 }
 
-export function ScoringScreen({ matchId, onExit }: ScoringScreenProps): ReactElement {
+export function ScoringScreen({ matchId, onExit, onOpenDashboard }: ScoringScreenProps): ReactElement {
   const store = useStore();
   const { messages, push, dismiss } = useToasts();
   const [entry, dispatch] = useReducer(entryReducer, initialEntryState('us'));
   const [explain, setExplain] = useState<Quality | null>(null);
+  const [showLineup, setShowLineup] = useState(false);
 
   const { data, error } = useQuery(
     async (instance) => {
@@ -56,8 +59,24 @@ export function ScoringScreen({ matchId, onExit }: ScoringScreenProps): ReactEle
       // De invoer heeft altijd een openstaande rally nodig; die maken we hier
       // aan zodat de invoerder er nooit zelf aan hoeft te denken.
       const rally = await instance.rallies.start({ setId: set.id });
-      const actions = await instance.actions.listByRally(rally.id);
-      return { match, ownTeam, opponent, ownPlayers, opponentPlayers, sets, set, rally, actions };
+      const [actions, lineup, substitutions] = await Promise.all([
+        instance.actions.listByRally(rally.id),
+        instance.lineups.forSet(set.id),
+        instance.substitutions.listBySet(set.id),
+      ]);
+      return {
+        match,
+        ownTeam,
+        opponent,
+        ownPlayers,
+        opponentPlayers,
+        sets,
+        set,
+        rally,
+        actions,
+        lineup,
+        substitutions,
+      };
     },
     [matchId],
   );
@@ -160,6 +179,27 @@ export function ScoringScreen({ matchId, onExit }: ScoringScreenProps): ReactEle
     dispatch({ kind: 'reset' });
   }
 
+  async function saveLineup(positions: Record<Zone, string | null>): Promise<void> {
+    if (!data?.set) return;
+    try {
+      await store.lineups.set({ setId: data.set.id, positions });
+      setShowLineup(false);
+    } catch (cause) {
+      push('error', cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
+  async function substitute(playerOutId: string, playerInId: string): Promise<void> {
+    if (!data?.rally) return;
+    try {
+      await store.substitutions.add({ rallyId: data.rally.id, playerOutId, playerInId });
+      setShowLineup(false);
+      push('info', 'Wissel vastgelegd vanaf deze rally.');
+    } catch (cause) {
+      push('error', cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function nextSet(): Promise<void> {
     if (!data?.set) return;
     try {
@@ -192,7 +232,8 @@ export function ScoringScreen({ matchId, onExit }: ScoringScreenProps): ReactEle
           </strong>
           <span className="topbar__meta">
             {match.homeAway === 'home' ? 'thuis' : 'uit'} tegen {opponent?.name ?? 'onbekend'} · rally{' '}
-            {rally.sequence} · opslag {TEAM_SIDE_LABELS[rally.servingTeam].toLowerCase()}
+            {rally.sequence} · opslag {TEAM_SIDE_LABELS[rally.servingTeam].toLowerCase()} · rotatie R
+            {rally.rotationUs ?? 1}
           </span>
         </div>
 
@@ -202,6 +243,12 @@ export function ScoringScreen({ matchId, onExit }: ScoringScreenProps): ReactEle
               {item.pointsUs}-{item.pointsThem}
             </span>
           ))}
+          <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
+            Opstelling
+          </button>
+          <button type="button" className="button button--ghost" onClick={onOpenDashboard}>
+            Cijfers
+          </button>
           <button type="button" className="button button--ghost" onClick={() => void nextSet()}>
             Set afronden
           </button>
@@ -277,6 +324,18 @@ export function ScoringScreen({ matchId, onExit }: ScoringScreenProps): ReactEle
           Undo rally
         </button>
       </footer>
+
+      {showLineup && (
+        <LineupSheet
+          players={data.ownPlayers}
+          lineup={data.lineup}
+          substitutions={data.substitutions ?? []}
+          rotation={rally.rotationUs ?? 1}
+          onSaveLineup={(positions) => void saveLineup(positions)}
+          onSubstitute={(out, into) => void substitute(out, into)}
+          onClose={() => setShowLineup(false)}
+        />
+      )}
 
       {explain && entry.type && (
         <ProtocolSheet actionType={entry.type} quality={explain} onClose={() => setExplain(null)} />
