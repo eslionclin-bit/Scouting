@@ -12,6 +12,7 @@ import type { DeviceRole } from '../domain/types';
 import { applyRemoteChanges, type MergeResult } from '../sync/merge';
 import type { ChangeEnvelope } from '../sync/types';
 import { openScoutingDb, type ScoutingDb, type OpenOptions } from './database';
+import { Mutex } from './mutex';
 import type { WriteContext } from './mutations';
 import { META_KEYS } from './schema';
 import { ActionRepository } from './repositories/actions';
@@ -35,7 +36,10 @@ export class ScoutingStore {
   readonly rallies: RallyRepository;
   readonly actions: ActionRepository;
 
+  private readonly listeners = new Set<() => void>();
+
   private constructor(private readonly ctx: WriteContext) {
+    ctx.onCommit = () => this.emit();
     this.teams = new TeamRepository(ctx);
     this.players = new PlayerRepository(ctx);
     this.matches = new MatchRepository(ctx);
@@ -58,8 +62,22 @@ export class ScoutingStore {
       db,
       clock,
       deviceId,
+      lock: new Mutex(),
       now: options.now ?? (() => new Date()),
     });
+  }
+
+  /**
+   * Meelezen met wijzigingen. De UI hoeft niet te pollen: elke geslaagde
+   * transactie — lokaal ingevoerd of binnengekomen via sync — meldt zich hier.
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private emit(): void {
+    for (const listener of this.listeners) listener();
   }
 
   get db(): ScoutingDb {
@@ -87,6 +105,7 @@ export class ScoutingStore {
 
   async setMeta(key: string, value: unknown): Promise<void> {
     await this.ctx.db.put('meta', { key, value });
+    this.emit();
   }
 
   /** Rolkeuze bij het starten van een wedstrijd: invoeren of meelezen (§6). */

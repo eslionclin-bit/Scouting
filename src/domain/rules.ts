@@ -192,3 +192,31 @@ export function validateRallyCompletion(
   }
   return issues;
 }
+
+/**
+ * Voorstel voor de volgende actie in de keten.
+ *
+ * Puur invoergemak: na een opslag volgt aan de andere kant meestal een receptie,
+ * daarna een toets, daarna een aanval. De invoerder kan het altijd overrulen —
+ * daarom is dit een voorstel en geen regel.
+ */
+export function suggestNextAction(
+  last: Pick<Action, 'team' | 'type' | 'quality'> | undefined,
+): { team: TeamSide; type: ActionType } | null {
+  if (!last || isTerminalAction(last)) return null;
+  switch (last.type) {
+    case 'serve':
+      return { team: other(last.team), type: 'reception' };
+    case 'reception':
+    case 'dig':
+      return { team: last.team, type: 'set' };
+    case 'set':
+      return { team: last.team, type: 'attack' };
+    case 'attack':
+      return { team: other(last.team), type: 'dig' };
+    case 'block':
+      return { team: other(last.team), type: 'dig' };
+    default:
+      return null;
+  }
+}

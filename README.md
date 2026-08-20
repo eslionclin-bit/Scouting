@@ -4,16 +4,17 @@ Offline-first scouting-app voor volleybal: rally's actie-voor-actie invoeren op 
 tablet in de sporthal, zonder internet, met synchronisatie zodra er weer een
 netwerk is.
 
-Deze eerste fase bevat **het datamodel, de lokale opslag en de sync-laag** — nog
-geen UI. Dat is bewust: het invoerscherm, het dashboard en het opponent-dossier
-leunen alle drie op dezelfde structuur, en die moet eerst kloppen.
+Wat er nu draait: **v1 — het rally-invoerscherm als PWA**, bovenop een datamodel,
+lokale opslag en sync-laag die eerst zijn neergezet. Installeerbaar op een
+tablet, en volledig bruikbaar zonder verbinding.
 
 ## Aan de slag
 
 ```bash
 npm install
-npm test        # 42 tests: domein, opslag, sync tussen twee apparaten, export
-npm run typecheck
+npm run dev     # ontwikkelserver
+npm run build   # typecheck + productiebuild inclusief service worker
+npm test        # 57 tests: domein, opslag, sync, invoerscherm, export
 ```
 
 ## Wat er nu staat
@@ -24,10 +25,35 @@ npm run typecheck
 | Opslag | `src/db` | IndexedDB-schema, transacties, repositories per entiteit |
 | Sync | `src/sync` | Outbox, samenvoegen (LWW), sync-engine, transport-contract |
 | Export | `src/export` | JSON (canoniek) en CSV (voor Excel) |
+| App | `src/app` | React-schermen, invoerstroom, PWA-registratie |
 
-De UI hoort straks alleen `src/index.ts` te importeren.
+## De schermen
 
-### Een wedstrijd invoeren, in code
+**Startscherm** — wedstrijden openen of een nieuwe beginnen, en per wedstrijd
+exporteren naar JSON of CSV. Staat er nog iets in de outbox, dan zie je dat hier.
+
+**Nieuwe wedstrijd** — eigen team met spelers, tegenstander, datum, thuis/uit en
+wie begint met serveren. Een bestaand eigen team wordt voorgevuld, zodat er
+meestal alleen nog een tegenstander hoeft te worden ingetikt.
+
+**Rally-invoer (scherm A)** — het scherm waar het tijdens de wedstrijd om draait:
+
+- bovenin set, stand en de rally-keten als pilletjes met pijltjes ertussen;
+- daaronder de vaste volgorde actie → speler → zone → kwalificatie, waarbij de
+  actieve stap oplicht;
+- de vier kwalificatieknoppen zijn kleurgecodeerd en tonen het criterium uit het
+  protocol; lang indrukken opent de volledige uitleg met voorbeeld;
+- onderaan 'punt wij' / 'punt zij', stap terug, undo actie en undo rally.
+
+Twee dingen nemen werk uit handen tijdens live invoer: na een opslag zet de app
+de receptie van de tegenpartij klaar (en zo verder door de keten), en een actie
+die de rally volgens het protocol beëindigt — een fout, een ace, een kill —
+rondt de rally meteen af en zet de opslag van de winnaar klaar.
+
+Undo werkt over de rallygrens heen: is de nieuwe rally nog leeg, dan wordt de
+vorige rally heropend en dáár de laatste actie teruggedraaid.
+
+### Dezelfde stappen in code
 
 ```ts
 import { ScoutingStore } from './src';
@@ -101,7 +127,15 @@ Uitgebreid toegelicht in [`docs/datamodel.md`](docs/datamodel.md). Kort:
 - **Volledige records in de outbox**, geen delta's — herverzenden is daardoor
   ongevaarlijk.
 
+### Offline en installeerbaar
+
+De service worker (via `vite-plugin-pwa`) cachet de app-shell, dus de app start
+ook op zonder enige verbinding; de wedstrijddata staat toch al in IndexedDB. Op
+een tablet is de app te installeren als icoon op het startscherm, zonder
+appstore-traject. Een wedstrijd die openstond, wordt bij het opnieuw openen
+hervat.
+
 ## Volgende stap
 
-Fase v1 uit de projectbrief: het rally-invoerscherm als PWA (app-shell,
-service worker, manifest) bovenop deze laag.
+Fase v2 uit de projectbrief: het analysedashboard (scherm B) en rotatie- en
+wisselbeheer, bovenop `loadMatchBundle()` en de bestaande indexen.

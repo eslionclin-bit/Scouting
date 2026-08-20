@@ -1,0 +1,38 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      // De app-shell wordt bij installatie gecachet; daarna start de app ook op
+      // zonder enige verbinding — de wedstrijddata staat toch al in IndexedDB.
+      registerType: 'autoUpdate',
+      includeAssets: ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'Volleybal scouting',
+        short_name: 'Scouting',
+        description: 'Rally\'s actie voor actie vastleggen, ook zonder verbinding.',
+        lang: 'nl',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        // Een tablet ligt tijdens een wedstrijd in de lengte op tafel.
+        orientation: 'landscape',
+        background_color: '#0f172a',
+        theme_color: '#0f172a',
+        icons: [
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        cleanupOutdatedCaches: true,
+      },
+    }),
+  ],
+  build: { target: 'es2022' },
+});

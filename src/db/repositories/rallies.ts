@@ -35,6 +35,10 @@ export class RallyRepository {
    * achterlaten.
    */
   async start(input: StartRallyInput): Promise<Rally> {
+    return this.ctx.lock.run(() => this.startUnlocked(input));
+  }
+
+  private async startUnlocked(input: StartRallyInput): Promise<Rally> {
     const set = await this.sets.require(input.setId);
     const rallies = await this.listBySet(input.setId);
 
@@ -87,6 +91,10 @@ export class RallyRepository {
    * laatste actie (fout = punt tegen, perfecte opslag/aanval/block = punt voor).
    */
   async complete(rallyId: string, wonBy?: TeamSide): Promise<CompleteRallyResult> {
+    return this.ctx.lock.run(() => this.completeUnlocked(rallyId, wonBy));
+  }
+
+  private async completeUnlocked(rallyId: string, wonBy?: TeamSide): Promise<CompleteRallyResult> {
     const rally = await this.require(rallyId);
     const actions = alive(
       await this.ctx.db.getAllFromIndex('actions', 'by_rally', rallyId),
@@ -111,6 +119,10 @@ export class RallyRepository {
 
   /** Draait een afgeronde rally terug naar 'loopt nog', bijvoorbeeld na een misklik. */
   async reopen(rallyId: string): Promise<Rally> {
+    return this.ctx.lock.run(() => this.reopenUnlocked(rallyId));
+  }
+
+  private async reopenUnlocked(rallyId: string): Promise<Rally> {
     const rally = await this.require(rallyId);
     const record = reviseRecord(this.ctx, rally, {
       wonBy: null,
@@ -125,6 +137,10 @@ export class RallyRepository {
 
   /** Undo van een hele rally: rally en al zijn acties worden getombstoned. */
   async remove(rallyId: string): Promise<void> {
+    return this.ctx.lock.run(() => this.removeUnlocked(rallyId));
+  }
+
+  private async removeUnlocked(rallyId: string): Promise<void> {
     const rally = await this.require(rallyId);
     const deletedAt = this.ctx.now().toISOString();
     const actions = alive(await this.ctx.db.getAllFromIndex('actions', 'by_rally', rallyId));

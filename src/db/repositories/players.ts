@@ -16,6 +16,10 @@ export class PlayerRepository {
   constructor(private readonly ctx: WriteContext) {}
 
   async create(input: PlayerInput): Promise<Player> {
+    return this.ctx.lock.run(() => this.createUnlocked(input));
+  }
+
+  private async createUnlocked(input: PlayerInput): Promise<Player> {
     await this.assertNumberFree(input.teamId, input.number, null);
     const record = buildRecord(this.ctx, 'players', {
       teamId: input.teamId,
@@ -30,6 +34,10 @@ export class PlayerRepository {
 
   /** Handig bij het opzetten van een wedstrijd: hele opstelling in één keer. */
   async createMany(inputs: readonly PlayerInput[]): Promise<Player[]> {
+    return this.ctx.lock.run(() => this.createManyUnlocked(inputs));
+  }
+
+  private async createManyUnlocked(inputs: readonly PlayerInput[]): Promise<Player[]> {
     const seen = new Set<string>();
     for (const input of inputs) {
       const key = `${input.teamId}#${input.number}`;

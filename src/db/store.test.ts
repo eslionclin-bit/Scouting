@@ -228,6 +228,30 @@ describe('ScoutingStore', () => {
     expect(await pendingCount(store.db)).toBe(before + 2);
   });
 
+  it('maakt bij twee gelijktijdige starts één rally aan', async () => {
+    // Snel tikken, of de UI die tegelijk opnieuw laadt: beide kwamen vroeger
+    // uit op twee openstaande rally's in dezelfde set.
+    const [first, second] = await Promise.all([
+      store.rallies.start({ setId: fixture.set.id }),
+      store.rallies.start({ setId: fixture.set.id }),
+    ]);
+
+    expect(first.id).toBe(second.id);
+    expect(await store.rallies.listBySet(fixture.set.id)).toHaveLength(1);
+  });
+
+  it('geeft gelijktijdig ingevoerde acties oplopende volgnummers', async () => {
+    const rally = await store.rallies.start({ setId: fixture.set.id });
+    await Promise.all([
+      store.actions.append({ rallyId: rally.id, team: 'them', type: 'reception', quality: 'good' }),
+      store.actions.append({ rallyId: rally.id, team: 'them', type: 'set', quality: 'good' }),
+      store.actions.append({ rallyId: rally.id, team: 'them', type: 'attack', quality: 'poor', zoneFrom: 4 }),
+    ]);
+
+    const chain = await store.actions.listByRally(rally.id);
+    expect(chain.map((action) => action.sequence)).toStrictEqual([1, 2, 3]);
+  });
+
   it('onthoudt rol en actieve wedstrijd van dit apparaat', async () => {
     expect(await store.getDeviceRole()).toBe('scorer');
     await store.setDeviceRole('viewer');

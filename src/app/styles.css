@@ -1,0 +1,790 @@
+/*
+ * Stijl voor bediening met duim of wijsvinger op een tablet die naast de lijn
+ * ligt: grote raakvlakken (minimaal 44px), hoog contrast onder sporthalverlichting,
+ * en een donkere achtergrond zodat de kleurcodes van de kwalificaties opvallen.
+ */
+
+:root {
+  --bg: #0f172a;
+  --bg-raised: #1e293b;
+  --bg-panel: #172033;
+  --line: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --us: #38bdf8;
+  --them: #f472b6;
+
+  --perfect: #16a34a;
+  --good: #65a30d;
+  --poor: #ea580c;
+  --error: #dc2626;
+
+  --radius: 12px;
+  --tap: 3rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  /* Tijdens invoeren mag een dubbele tik nooit inzoomen. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ---------- Algemene bouwstenen ---------- */
+
+.button {
+  min-height: var(--tap);
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  font-weight: 600;
+}
+
+.button--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #082f49;
+}
+
+.button--ghost {
+  background: transparent;
+}
+
+.button--danger {
+  border-color: var(--error);
+  color: #fecaca;
+}
+
+.button--us {
+  background: var(--us);
+  border-color: var(--us);
+  color: #082f49;
+}
+
+.button--them {
+  background: var(--them);
+  border-color: var(--them);
+  color: #4a044e;
+}
+
+.button--wide {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.boot {
+  display: grid;
+  place-content: center;
+  gap: 0.75rem;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.boot--error {
+  color: #fecaca;
+}
+
+/* ---------- Startscherm ---------- */
+
+.home,
+.setup {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.home__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.home h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.home__sub,
+.setup__hint {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.home__pending {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  background: #422006;
+  color: #fed7aa;
+  font-size: 0.9rem;
+}
+
+.matchlist {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.matchlist__item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem;
+}
+
+.matchlist__open {
+  flex: 1;
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0.5rem;
+}
+
+.matchlist__opponent {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.matchlist__meta,
+.matchlist__sets {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.matchlist__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.matchlist__actions .button {
+  min-height: 2.2rem;
+  padding: 0 0.7rem;
+  font-size: 0.8rem;
+}
+
+.matchlist__empty {
+  color: var(--muted);
+  padding: 2rem 0;
+  text-align: center;
+}
+
+/* ---------- Wedstrijd opzetten ---------- */
+
+.setup__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.setup__header h1 {
+  font-size: 1.3rem;
+  margin: 0;
+}
+
+.setup__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.field > span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.field input {
+  min-height: var(--tap);
+  padding: 0 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+.choices {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chip {
+  min-height: var(--tap);
+  padding: 0 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.chip--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #082f49;
+  font-weight: 700;
+}
+
+.setup__subtitle {
+  margin: 2rem 0 0;
+  font-size: 1rem;
+}
+
+.roster {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.roster__row {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 0.5rem;
+}
+
+.roster input {
+  min-height: var(--tap);
+  padding: 0 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+.setup__error {
+  color: #fecaca;
+  background: #450a0a;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+}
+
+/* ---------- Scherm A: rally-invoer ---------- */
+
+.scoring {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  gap: 0.75rem;
+  padding: 0.75rem 0.75rem 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.topbar__score {
+  display: grid;
+  justify-items: center;
+  line-height: 1.2;
+}
+
+.topbar__set {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.topbar__points {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.topbar__points span {
+  color: var(--muted);
+}
+
+.topbar__meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.topbar__sets {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.setpill {
+  padding: 0.3rem 0.5rem;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.setpill--current {
+  color: var(--text);
+  outline: 1px solid var(--accent);
+}
+
+/* Rally-keten */
+
+.chain {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  min-height: 3rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+
+.chain__empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.chain__item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chain__arrow {
+  color: var(--muted);
+}
+
+.chain__undo {
+  margin-left: auto;
+  min-height: 2.4rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  border-left: 4px solid var(--line);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.pill--us {
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.35);
+}
+
+.pill--them {
+  box-shadow: inset 0 0 0 1px rgba(244, 114, 182, 0.35);
+}
+
+.pill--perfect {
+  border-left-color: var(--perfect);
+}
+.pill--good {
+  border-left-color: var(--good);
+}
+.pill--poor {
+  border-left-color: var(--poor);
+}
+.pill--error {
+  border-left-color: var(--error);
+}
+
+.pill__player {
+  font-weight: 700;
+}
+
+.pill__zone,
+.pill__quality {
+  color: var(--muted);
+}
+
+/* Teamwissel */
+
+.teamswitch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.teamswitch__button {
+  min-height: var(--tap);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  font-weight: 700;
+}
+
+.teamswitch__button--active:first-child {
+  background: var(--us);
+  border-color: var(--us);
+  color: #082f49;
+}
+
+.teamswitch__button--active:last-child {
+  background: var(--them);
+  border-color: var(--them);
+  color: #4a044e;
+}
+
+/* Invoerpanelen */
+
+/* Neemt de resterende hoogte, zodat de onderbalk met afronden en undo altijd
+   onderaan het scherm staat — daar liggen de duimen. */
+.entry {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+  padding-bottom: 0.75rem;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  padding: 0.75rem;
+}
+
+/* De actieve stap krijgt een rand: bij snelle invoer moet in één oogopslag
+   duidelijk zijn waar de app op wacht. */
+.panel--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.panel__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.panel__subtitle {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+.panel__hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.panel__actions {
+  margin-top: 0.6rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.grid--types {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.grid--players {
+  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+}
+
+.grid--qualities {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.tile {
+  min-height: var(--tap);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  padding: 0.4rem;
+}
+
+.tile--selected {
+  border-color: var(--accent);
+  background: #0c4a6e;
+  font-weight: 700;
+}
+
+.tile--player {
+  display: grid;
+  gap: 0.1rem;
+  min-height: 4rem;
+}
+
+.tile__number {
+  font-size: 1.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile__name {
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tile--unknown {
+  color: var(--muted);
+}
+
+/* Mini-veld */
+
+.court {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.court__net {
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 2px dashed var(--line);
+  padding-bottom: 0.2rem;
+}
+
+.court__row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.court__zone {
+  min-height: 3.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.court__zone--from {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #082f49;
+}
+
+.court__zone--to {
+  border-color: var(--accent);
+  border-style: dashed;
+  color: var(--accent);
+}
+
+/* Kwalificatieknoppen */
+
+.quality {
+  display: grid;
+  gap: 0.2rem;
+  min-height: 4.5rem;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  border: 0;
+  text-align: left;
+  color: #f8fafc;
+}
+
+.quality--perfect {
+  background: var(--perfect);
+}
+.quality--good {
+  background: var(--good);
+}
+.quality--poor {
+  background: var(--poor);
+}
+.quality--error {
+  background: var(--error);
+}
+
+.quality__label {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.quality__criterion {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  opacity: 0.9;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Onderbalk */
+
+.bottombar {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+}
+
+/* Protocol-uitleg */
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.7);
+}
+
+.sheet__card {
+  position: relative;
+  max-width: 32rem;
+  width: 100%;
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  border-top: 6px solid var(--line);
+}
+
+.sheet__card--perfect {
+  border-top-color: var(--perfect);
+}
+.sheet__card--good {
+  border-top-color: var(--good);
+}
+.sheet__card--poor {
+  border-top-color: var(--poor);
+}
+.sheet__card--error {
+  border-top-color: var(--error);
+}
+
+.sheet__card h3 {
+  margin: 0 0 0.5rem;
+}
+
+.sheet__principle {
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+.sheet__card dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-top: 0.75rem;
+}
+
+.sheet__card dd {
+  margin: 0.2rem 0 0;
+}
+
+.sheet__rule {
+  margin: 1.25rem 0;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* Meldingen */
+
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 0.4rem;
+  width: min(90vw, 30rem);
+  z-index: 10;
+}
+
+.toast {
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  font-size: 0.9rem;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.5);
+}
+
+.toast--error {
+  background: #7f1d1d;
+  color: #fee2e2;
+}
+
+.toast--warning {
+  background: #78350f;
+  color: #fef3c7;
+}
+
+.toast--info {
+  background: var(--bg-raised);
+  color: var(--text);
+}

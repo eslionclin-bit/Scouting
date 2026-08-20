@@ -13,6 +13,7 @@
 import type { HybridClock } from '../domain/clock';
 import { newId } from '../domain/ids';
 import { matchScopeOf } from '../domain/scope';
+import type { Mutex } from './mutex';
 import type { BaseRecord, EntityMap, EntityName } from '../domain/types';
 import { META_KEYS, type OutboxEntry } from './schema';
 import type { ScoutingDb } from './database';
@@ -22,6 +23,10 @@ export interface WriteContext {
   clock: HybridClock;
   deviceId: string;
   now: () => Date;
+  /** Serialiseert operaties die eerst lezen en daarna schrijven. */
+  lock: Mutex;
+  /** Aangeroepen na een geslaagde transactie, zodat de UI kan bijwerken. */
+  onCommit?: (ops: readonly WriteOp[]) => void;
 }
 
 /** Velden die de aanroeper aanlevert; de metadata vult de schrijflaag zelf in. */
@@ -103,4 +108,5 @@ export async function commit(ctx: WriteContext, ops: readonly WriteOp[]): Promis
   writes.push(tx.objectStore('meta').put({ key: META_KEYS.clock, value: ctx.clock.state() }));
   await Promise.all(writes);
   await tx.done;
+  ctx.onCommit?.(ops);
 }

@@ -55,12 +55,22 @@ export class TeamRepository {
    * opponent-dossier over meerdere wedstrijden aan één team gekoppeld.
    */
   async findOrCreateOpponent(name: string): Promise<Team> {
-    const normalized = name.trim();
-    const existing = (await this.opponents()).find(
-      (team) => team.name.toLowerCase() === normalized.toLowerCase(),
-    );
-    if (existing) return existing;
-    return this.create({ name: normalized, isOwnTeam: false });
+    return this.ctx.lock.run(async () => {
+      const normalized = name.trim();
+      const existing = (await this.opponents()).find(
+        (team) => team.name.toLowerCase() === normalized.toLowerCase(),
+      );
+      if (existing) return existing;
+
+      const record = buildRecord(this.ctx, 'teams', {
+        name: normalized,
+        isOwnTeam: false,
+        club: null,
+        level: null,
+      });
+      await commit(this.ctx, [{ entity: 'teams', record }]);
+      return record;
+    });
   }
 
   async update(id: string, patch: Partial<TeamInput>): Promise<Team> {

@@ -28,6 +28,10 @@ export class SetRepository {
   constructor(private readonly ctx: WriteContext) {}
 
   async start(input: StartSetInput): Promise<MatchSet> {
+    return this.ctx.lock.run(() => this.startUnlocked(input));
+  }
+
+  private async startUnlocked(input: StartSetInput): Promise<MatchSet> {
     const existing = await this.listByMatch(input.matchId);
     const setNumber = input.setNumber ?? existing.length + 1;
     if (setNumber < 1 || setNumber > MAX_SETS) {

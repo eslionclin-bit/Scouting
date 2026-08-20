@@ -150,10 +150,36 @@ Een cloud-transport is dezelfde twee methodes over HTTP.
 Geen van beide is een eigen gesloten formaat — data mag nooit vastzitten in de
 app.
 
-## 8. Wat hier bewust nog niet zit
+## 8. Gelijktijdigheid
 
-- Service worker en manifest: die horen bij de app-shell, en die komt met de UI.
+IndexedDB-transacties overleven geen `await`, terwijl operaties als 'start een
+rally als er nog geen open rally is' of 'geef deze actie het volgende volgnummer'
+nu eenmaal eerst lezen en daarna schrijven. Bij snel tikken — of als de UI
+tegelijk opnieuw laadt — leverde dat twee openstaande rally's in één set op.
+
+`src/db/mutex.ts` zet zulke operaties achter elkaar. Vergrendeld zijn:
+`rallies.start/complete/reopen/remove`, `actions.append/remove/undoLast`,
+`sets.start`, `players.create/createMany` en `teams.findOrCreateOpponent`. De
+mutex is niet herintreedbaar: een vergrendelde methode roept geen andere
+vergrendelde methode aan (`undoLast` zet daarom zelf de tombstone).
+
+## 9. De app-laag
+
+`src/app` is de enige map die React kent. De opslag komt binnen via
+`StoreProvider`; elke geslaagde transactie verhoogt een versienummer, waarop
+`useQuery` opnieuw draait. Geen polling, en geen handmatig verversen na elke
+actie — ook wijzigingen die via sync binnenkomen, komen zo vanzelf op het scherm.
+
+De invoervolgorde van scherm A zit in `src/app/entry/entryReducer.ts`: een pure
+reducer, los van React, zodat de kern van de app te testen is zonder een scherm
+te renderen.
+
+## 10. Wat hier bewust nog niet zit
+
 - Rotatie- en wisselbeheer (v2): `Rally.rotationUs` is er al als aanknopingspunt.
 - Berekeningen voor dashboard en opponent-dossier (v2/v4): die lezen straks uit
   `loadMatchBundle()` en de bestaande indexen; het model hoeft er niet voor te
   wijzigen.
+- Live meelezen (v3): het transport-contract ligt er, een relay over het lokale
+  netwerk nog niet. Ook het rolonderscheid invoerder/meelezer staat wel in
+  `meta`, maar heeft nog geen scherm.

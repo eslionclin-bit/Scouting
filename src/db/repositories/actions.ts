@@ -41,6 +41,15 @@ export class ActionRepository {
     input: AppendActionInput,
     options: ValidateActionContext = {},
   ): Promise<AppendActionResult> {
+    // Vergrendeld omdat het volgnummer uit de al opgeslagen acties komt: twee
+    // tikken vlak na elkaar mogen niet allebei nummer 3 krijgen.
+    return this.ctx.lock.run(() => this.appendUnlocked(input, options));
+  }
+
+  private async appendUnlocked(
+    input: AppendActionInput,
+    options: ValidateActionContext,
+  ): Promise<AppendActionResult> {
     const rally = await this.rallies.require(input.rallyId);
     if (rally.wonBy !== null) {
       throw new ValidationError('Deze rally is al afgerond.', [
@@ -104,16 +113,23 @@ export class ActionRepository {
 
   /** Undo per actie: haalt de laatst ingevoerde actie uit de rally. */
   async undoLast(rallyId: string): Promise<Action | undefined> {
-    const actions = await this.listByRally(rallyId);
-    const last = actions.at(-1);
-    if (!last) return undefined;
-    await this.remove(last.id);
-    return last;
+    return this.ctx.lock.run(async () => {
+      const actions = await this.listByRally(rallyId);
+      const last = actions.at(-1);
+      if (!last) return undefined;
+      await this.tombstone(last);
+      return last;
+    });
   }
 
   async remove(id: string): Promise<void> {
-    const current = await this.require(id);
-    const record = reviseRecord(this.ctx, current, { deletedAt: this.ctx.now().toISOString() });
+    await this.ctx.lock.run(async () => {
+      await this.tombstone(await this.require(id));
+    });
+  }
+
+  private async tombstone(action: Action): Promise<void> {
+    const record = reviseRecord(this.ctx, action, { deletedAt: this.ctx.now().toISOString() });
     await commit(this.ctx, [{ entity: 'actions', record }]);
   }
 
