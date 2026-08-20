@@ -1,0 +1,167 @@
+/**
+ * Datamodel van de scouting-app.
+ *
+ * Structuur (zie projectbrief §2):
+ *   Wedstrijd -> Set (1-5) -> Rally -> Actie
+ *
+ * Ontwerpuitgangspunten:
+ * - Elk record heeft een device-onafhankelijk UUID, zodat twee apparaten offline
+ *   records kunnen aanmaken zonder ooit te botsen op sleutels.
+ * - Elk record draagt sync-metadata (`rev`, `updatedAt`, `deletedAt`), zodat
+ *   samenvoegen tussen apparaten deterministisch is (last-writer-wins op `rev`).
+ * - Verwijderen gebeurt nooit hard: een tombstone (`deletedAt`) synchroniseert wél,
+ *   een verdwenen rij niet. Undo van een actie is dus gewoon een tombstone.
+ */
+
+/** Kant van het net. 'us' = eigen team, 'them' = tegenstander. */
+export type TeamSide = 'us' | 'them';
+
+/** Actietypes uit het scoutingprotocol. */
+export type ActionType =
+  | 'serve' // opslag
+  | 'reception' // receptie
+  | 'set' // toets / opbouw
+  | 'attack' // aanval
+  | 'block' // block
+  | 'dig'; // verdediging
+
+export const ACTION_TYPES: readonly ActionType[] = [
+  'serve',
+  'reception',
+  'set',
+  'attack',
+  'block',
+  'dig',
+] as const;
+
+/** Vierpuntsschaal. Volgorde loopt van beste naar slechtste gevolg. */
+export type Quality = 'perfect' | 'good' | 'poor' | 'error';
+
+export const QUALITIES: readonly Quality[] = ['perfect', 'good', 'poor', 'error'] as const;
+
+/** Zone volgens standaard rotatienummering 1 t/m 6 (1 = rechtsachter bij opslag). */
+export type Zone = 1 | 2 | 3 | 4 | 5 | 6;
+
+export const ZONES: readonly Zone[] = [1, 2, 3, 4, 5, 6] as const;
+
+/** Rol van dit apparaat binnen een wedstrijd (projectbrief §6). */
+export type DeviceRole = 'scorer' | 'viewer';
+
+/**
+ * Sync-metadata die elk opgeslagen record draagt.
+ *
+ * `rev` is een hybride logische klok (zie domain/clock.ts): monotoon oplopend,
+ * lexicografisch sorteerbaar en met device-id als tiebreak. Daarmee is
+ * last-writer-wins deterministisch, ook als de klokken van twee tablets
+ * uiteenlopen.
+ */
+export interface SyncMeta {
+  /** Hybride logische klok van de laatste schrijfactie. */
+  rev: string;
+  /** Apparaat dat de laatste schrijfactie deed. */
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Tombstone: gezet betekent verwijderd, maar het record blijft synchroniseerbaar. */
+  deletedAt: string | null;
+}
+
+export interface BaseRecord extends SyncMeta {
+  id: string;
+}
+
+/** Team: zowel het eigen team als elke tegenstander (nodig voor het opponent-dossier). */
+export interface Team extends BaseRecord {
+  name: string;
+  /** Precies één team in de database hoort het eigen team te zijn. */
+  isOwnTeam: boolean;
+  club?: string | null;
+  level?: string | null;
+}
+
+export interface Player extends BaseRecord {
+  teamId: string;
+  /** Rugnummer; uniek binnen een team. */
+  number: number;
+  name: string;
+  position?: string | null;
+  active: boolean;
+}
+
+export type MatchStatus = 'planned' | 'live' | 'finished';
+
+export interface Match extends BaseRecord {
+  /** ISO-datum (YYYY-MM-DD) van de wedstrijd. */
+  date: string;
+  ownTeamId: string;
+  opponentTeamId: string;
+  homeAway: 'home' | 'away';
+  location?: string | null;
+  competition?: string | null;
+  status: MatchStatus;
+  notes?: string | null;
+}
+
+export type SetStatus = 'pending' | 'live' | 'finished';
+
+/** Eén set binnen een wedstrijd. Heet `MatchSet` omdat `Set` een JS-builtin is. */
+export interface MatchSet extends BaseRecord {
+  matchId: string;
+  /** 1 t/m 5. */
+  setNumber: number;
+  pointsUs: number;
+  pointsThem: number;
+  status: SetStatus;
+  /** Wie begint met serveren in deze set. */
+  startingServe: TeamSide;
+}
+
+export interface Rally extends BaseRecord {
+  matchId: string;
+  setId: string;
+  /** Volgnummer binnen de set, oplopend vanaf 1. */
+  sequence: number;
+  servingTeam: TeamSide;
+  /** null zolang de rally loopt. */
+  wonBy: TeamSide | null;
+  /** Stand ná deze rally; null zolang de rally loopt. */
+  pointsUsAfter: number | null;
+  pointsThemAfter: number | null;
+  /** Rotatiestand van het eigen team (1-6) tijdens deze rally, indien bijgehouden. */
+  rotationUs?: number | null;
+}
+
+export interface Action extends BaseRecord {
+  matchId: string;
+  setId: string;
+  rallyId: string;
+  /** Volgnummer binnen de rally, oplopend vanaf 1. */
+  sequence: number;
+  team: TeamSide;
+  /** Speler aan wie de actie wordt toegewezen (toewijzingsregel uit het protocol). */
+  playerId: string | null;
+  /** Rugnummer als los veld: bij de tegenstander ken je vaak wel het nummer, niet de speler. */
+  playerNumber: number | null;
+  type: ActionType;
+  /** Vertrekzone: verplicht bij opslag en aanval. */
+  zoneFrom: Zone | null;
+  /** Landingszone: altijd optioneel. */
+  zoneTo: Zone | null;
+  quality: Quality;
+  /** Alleen relevant bij invoer tijdens video-terugkijken. */
+  videoTimestampMs?: number | null;
+}
+
+/** Alle entiteiten die in de lokale database staan en meesynchroniseren. */
+export type Entity = Team | Player | Match | MatchSet | Rally | Action;
+
+export type EntityName = 'teams' | 'players' | 'matches' | 'sets' | 'rallies' | 'actions';
+
+export interface EntityMap {
+  teams: Team;
+  players: Player;
+  matches: Match;
+  sets: MatchSet;
+  rallies: Rally;
+  actions: Action;
+}
