@@ -4,9 +4,9 @@ Offline-first scouting-app voor volleybal: rally's actie-voor-actie invoeren op 
 tablet in de sporthal, zonder internet, met synchronisatie zodra er weer een
 netwerk is.
 
-Wat er nu draait: **v1 tot en met v3** — rally-invoer, analysedashboard met
-rotatie- en wisselbeheer, en live meelezen tussen twee apparaten op hetzelfde
-lokale netwerk. Installeerbaar op een tablet, en volledig bruikbaar zonder
+Wat er nu draait: **v1 tot en met v4** — rally-invoer, analysedashboard met
+rotatie- en wisselbeheer, live meelezen tussen twee apparaten, en het
+opponent-dossier. Installeerbaar op een tablet, en volledig bruikbaar zonder
 verbinding.
 
 ## Aan de slag
@@ -15,7 +15,8 @@ verbinding.
 npm install
 npm run dev     # ontwikkelserver
 npm run build   # typecheck + productiebuild inclusief service worker
-npm test        # 82 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
+npm test        # 92 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -84,6 +85,15 @@ invoerscherm.
 
 Het meeleesscherm toont dezelfde rally-keten en stand, de laatste rally's, en de
 cijfers die tijdens een time-out tellen — zonder één invoerknop.
+
+**Opponent-dossier (scherm C)** — via de knop 'Dossier' bij een wedstrijd: alles
+wat we van deze tegenstander weten, over alle wedstrijden heen. Head-to-head,
+aanvals- en opslagzones, en een lijst met de belangrijkste patronen.
+
+Elke bevinding draagt het aantal waarnemingen waarop hij berust, en onder de
+twaalf waarnemingen zegt het dossier niets — vier aanvallen uit zone 4 zijn geen
+voorkeur. Het tactisch advies is een vertaling van precies één telling naar een
+handeling, met die telling eronder. Geen giswerk, zoals de projectbrief vraagt.
 
 ### Dezelfde stappen in code
 

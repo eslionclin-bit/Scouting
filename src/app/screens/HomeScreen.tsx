@@ -16,6 +16,7 @@ export interface HomeScreenProps {
   /** Rolkeuze hoort bij het openen van een wedstrijd (projectbrief §6). */
   onOpenMatch: (matchId: string, role: DeviceRole) => void;
   onOpenDashboard: (matchId: string) => void;
+  onOpenOpponent: (opponentId: string) => void;
   onNewMatch: () => void;
 }
 
@@ -23,6 +24,7 @@ export function HomeScreen({
   session,
   onOpenMatch,
   onOpenDashboard,
+  onOpenOpponent,
   onNewMatch,
 }: HomeScreenProps): ReactElement {
   const store = useStore();
@@ -36,6 +38,8 @@ export function HomeScreen({
       matches.map(async (match) => ({
         match,
         opponent: teamNames.get(match.opponentTeamId) ?? 'onbekend',
+        // Het dossier groeit met elke wedstrijd tegen dezelfde tegenstander.
+        earlier: matches.filter((other) => other.opponentTeamId === match.opponentTeamId).length - 1,
         sets: await instance.sets.listByMatch(match.id),
       })),
     );
@@ -90,7 +94,7 @@ export function HomeScreen({
       )}
 
       <ul className="matchlist">
-        {data?.matches.map(({ match, opponent, sets }) => (
+        {data?.matches.map(({ match, opponent, earlier, sets }) => (
           <li key={match.id} className="matchlist__item">
             <button type="button" className="matchlist__open" onClick={() => onOpenMatch(match.id, 'scorer')}>
               <span className="matchlist__opponent">{opponent}</span>
@@ -118,6 +122,18 @@ export function HomeScreen({
                 onClick={() => onOpenDashboard(match.id)}
               >
                 Cijfers
+              </button>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => onOpenOpponent(match.opponentTeamId)}
+                title={
+                  earlier > 0
+                    ? `Dossier over ${earlier + 1} wedstrijden tegen ${opponent}`
+                    : `Dossier over ${opponent}`
+                }
+              >
+                Dossier{earlier > 0 ? ` (${earlier + 1})` : ''}
               </button>
               <button type="button" className="button button--ghost" onClick={() => void download(match.id, 'json')}>
                 JSON

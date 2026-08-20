@@ -1333,3 +1333,88 @@ button {
 .sheet__card .field {
   margin: 0.75rem 0 0.4rem;
 }
+
+/* ---------- Scherm C: opponent-dossier ---------- */
+
+.findings,
+.advice,
+.matchhistory {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.findings__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  border-left: 4px solid var(--accent);
+}
+
+.findings__text {
+  font-weight: 600;
+}
+
+/* Het aantal waarnemingen hoort naast de bevinding te staan, niet eronder
+   verstopt: het is het verschil tussen een patroon en een toevalstreffer. */
+.findings__sample {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.advice__item {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  border-left: 4px solid var(--perfect);
+}
+
+.advice__because {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.matchhistory__item {
+  display: grid;
+  grid-template-columns: 7rem 4rem 4rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchhistory__date {
+  font-weight: 600;
+}
+
+.matchhistory__meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.matchhistory__result {
+  font-weight: 700;
+}
+
+.matchhistory__result--won {
+  color: var(--perfect);
+}
+
+.matchhistory__result--lost {
+  color: var(--error);
+}

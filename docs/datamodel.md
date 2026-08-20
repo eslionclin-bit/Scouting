@@ -273,10 +273,33 @@ apparaat: dezelfde tablet kan de ene wedstrijd invoeren en de volgende meelezen.
 Het meeleesscherm schrijft niets aan de wedstrijddata — geen openstaande rally,
 geen acties — en dat is als test vastgelegd.
 
-## 14. Wat hier bewust nog niet zit
+## 14. Opponent-dossier
 
-- Opponent-dossier (v4): leest straks uit `matches.by_opponent` en dezelfde
-  analysefuncties; het model hoeft er niet voor te wijzigen.
+Het dossier telt op over alle wedstrijden tegen dezelfde tegenstander
+(`matches.by_opponent`) en gebruikt verder dezelfde analysefuncties als het
+dashboard. Het datamodel hoefde er niet voor te wijzigen: een tegenstander was al
+een gewoon team met een eigen id, en daar hangen de wedstrijden aan.
+
+De projectbrief vraagt om bevindingen die "puur afgeleid zijn uit tellingen, geen
+giswerk". Dat is hier op drie manieren afgedwongen:
+
+1. **Een ondergrens.** Onder de twaalf waarnemingen wordt een patroon niet
+   genoemd, hoe sterk het er ook uitziet. Vier aanvallen uit zone 4 zijn geen
+   voorkeur, en het scherm zegt dat ook met zoveel woorden.
+2. **Het aantal staat erbij.** Elke bevinding draagt zijn eigen `sample`, en het
+   scherm toont die naast de tekst. Zo kan een coach zelf wegen hoe hard iets is.
+3. **Advies is een vertaling, geen toevoeging.** Elk advies verwijst naar precies
+   één bevinding en wordt alleen gegenereerd als die bevinding er is. Er kan dus
+   geen advies op het scherm staan zonder telling eronder — een test bewaakt dat.
+
+De drempels zelf (40% voor een zoneconcentratie, 20% voor aanvalsfouten, en zo
+verder) staan bij elkaar bovenin `analysis/opponent.ts`, zodat ze te verstellen
+zijn zonder de rest aan te raken.
+
+## 15. Wat hier bewust nog niet zit
+
 - Meerdere gelijktijdige invoerders (v5): `PeerHost` verwerkt al een binnenkomende
   `push`, dus een tweede invoerder is vooral een kwestie van UI en van afspreken
   wie wat invoert.
+- Video-invoer: `Action.videoTimestampMs` ligt klaar in het model, maar er is nog
+  geen scherm dat een video naast de invoer zet.

@@ -9,6 +9,7 @@ import { usePeerSession } from './hooks/usePeerSession';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { NewMatchScreen } from './screens/NewMatchScreen';
+import { OpponentScreen } from './screens/OpponentScreen';
 import { ScoringScreen } from './screens/ScoringScreen';
 import { ViewerScreen } from './screens/ViewerScreen';
 import { useStore } from './StoreProvider';
@@ -18,7 +19,8 @@ type View =
   | { name: 'new' }
   | { name: 'scoring'; matchId: string }
   | { name: 'viewer'; matchId: string }
-  | { name: 'dashboard'; matchId: string };
+  | { name: 'dashboard'; matchId: string }
+  | { name: 'opponent'; opponentId: string };
 
 export function App(): ReactElement {
   const store = useStore();
@@ -105,7 +107,16 @@ export function App(): ReactElement {
       return (
         <DashboardScreen
           matchId={view.matchId}
+          onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
           onExit={() => setView({ name: 'scoring', matchId: view.matchId })}
+        />
+      );
+    case 'opponent':
+      return (
+        <OpponentScreen
+          opponentId={view.opponentId}
+          onOpenMatch={(matchId) => setView({ name: 'dashboard', matchId })}
+          onExit={() => setView({ name: 'home' })}
         />
       );
     case 'home':
@@ -115,6 +126,7 @@ export function App(): ReactElement {
           session={session}
           onNewMatch={() => setView({ name: 'new' })}
           onOpenDashboard={(matchId) => setView({ name: 'dashboard', matchId })}
+          onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
           onOpenMatch={(matchId, role) => {
             void store.setActiveMatchId(matchId);
             void store.setMatchRole(matchId, role);

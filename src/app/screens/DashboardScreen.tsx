@@ -30,9 +30,14 @@ import { useQuery } from '../StoreProvider';
 export interface DashboardScreenProps {
   matchId: string;
   onExit: () => void;
+  onOpenOpponent?: (opponentId: string) => void;
 }
 
-export function DashboardScreen({ matchId, onExit }: DashboardScreenProps): ReactElement {
+export function DashboardScreen({
+  matchId,
+  onExit,
+  onOpenOpponent,
+}: DashboardScreenProps): ReactElement {
   const [setId, setSetId] = useState<string | null>(null);
   const [rotation, setRotation] = useState<number | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -108,6 +113,15 @@ export function DashboardScreen({ matchId, onExit }: DashboardScreenProps): Reac
               'nog geen sets'}
           </p>
         </div>
+        {onOpenOpponent && data.opponent && (
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => onOpenOpponent(data.opponent!.id)}
+          >
+            Dossier tegenstander
+          </button>
+        )}
       </header>
 
       <div className="filters" role="group" aria-label="Filters">
