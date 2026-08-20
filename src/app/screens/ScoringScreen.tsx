@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
 import { LineupSheet } from '../components/LineupSheet';
+import { PairingSheet } from '../components/PairingSheet';
 import { ProtocolSheet } from '../components/ProtocolSheet';
 import { ActionTypePicker } from '../components/ActionTypePicker';
 import { CourtPicker } from '../components/CourtPicker';
@@ -16,6 +17,7 @@ import { PlayerGrid } from '../components/PlayerGrid';
 import { QualityButtons } from '../components/QualityButtons';
 import { RallyChain } from '../components/RallyChain';
 import { Toasts } from '../components/Toasts';
+import type { PeerSession } from '../hooks/usePeerSession';
 import { useToasts } from '../hooks/useToasts';
 import { useQuery, useStore } from '../StoreProvider';
 import {
@@ -31,16 +33,23 @@ import type { Player, Quality, TeamSide, Zone } from '../../domain/types';
 
 export interface ScoringScreenProps {
   matchId: string;
+  session: PeerSession;
   onExit: () => void;
   onOpenDashboard: () => void;
 }
 
-export function ScoringScreen({ matchId, onExit, onOpenDashboard }: ScoringScreenProps): ReactElement {
+export function ScoringScreen({
+  matchId,
+  session,
+  onExit,
+  onOpenDashboard,
+}: ScoringScreenProps): ReactElement {
   const store = useStore();
   const { messages, push, dismiss } = useToasts();
   const [entry, dispatch] = useReducer(entryReducer, initialEntryState('us'));
   const [explain, setExplain] = useState<Quality | null>(null);
   const [showLineup, setShowLineup] = useState(false);
+  const [showPairing, setShowPairing] = useState(false);
 
   const { data, error } = useQuery(
     async (instance) => {
@@ -243,6 +252,13 @@ export function ScoringScreen({ matchId, onExit, onOpenDashboard }: ScoringScree
               {item.pointsUs}-{item.pointsThem}
             </span>
           ))}
+          <button
+            type="button"
+            className={`button button--ghost ${session.peers > 0 ? 'button--live' : ''}`}
+            onClick={() => setShowPairing(true)}
+          >
+            {session.peers > 0 ? `Meelezen (${session.peers})` : 'Koppelen'}
+          </button>
           <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
             Opstelling
           </button>
@@ -324,6 +340,10 @@ export function ScoringScreen({ matchId, onExit, onOpenDashboard }: ScoringScree
           Undo rally
         </button>
       </footer>
+
+      {showPairing && (
+        <PairingSheet role="scorer" session={session} onClose={() => setShowPairing(false)} />
+      )}
 
       {showLineup && (
         <LineupSheet

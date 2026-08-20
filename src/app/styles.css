@@ -161,6 +161,12 @@ button {
   font-size: 0.9rem;
 }
 
+.home__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .home__pending {
   margin: 1rem 0 0;
   padding: 0.6rem 0.8rem;
@@ -1213,4 +1219,117 @@ button {
 .lineupcell__player {
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+/* ---------- Live meelezen ---------- */
+
+.viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 100dvh;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0.75rem 0.75rem 2rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.badge--connected {
+  border-color: var(--perfect);
+  color: var(--perfect);
+}
+
+.badge--waiting {
+  border-color: var(--poor);
+  color: var(--poor);
+}
+
+.badge--error {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.button--live {
+  border-color: var(--perfect);
+  color: var(--perfect);
+}
+
+.rallylog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.rallylog__item {
+  display: grid;
+  grid-template-columns: 4rem 6rem 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  border-left: 4px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.rallylog__item--us {
+  border-left-color: var(--us);
+}
+
+.rallylog__item--them {
+  border-left-color: var(--them);
+}
+
+.rallylog__score {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rallylog__outcome,
+.rallylog__actions {
+  color: var(--muted);
+}
+
+/* Koppelen */
+
+.pairing__steps {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.pairing__ok {
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  background: #052e16;
+  color: #bbf7d0;
+}
+
+.sheet__card textarea {
+  width: 100%;
+  padding: 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  resize: vertical;
+}
+
+.sheet__card .field {
+  margin: 0.75rem 0 0.4rem;
 }

@@ -54,6 +54,11 @@ export * from './analysis';
 
 export { SyncEngine, type SyncEngineOptions } from './sync/engine';
 export { LoopbackHub } from './sync/loopback';
+export { PeerHost, type PeerHostState } from './sync/peer/host';
+export { PeerClient } from './sync/peer/client';
+export { createMemoryChannelPair, type PeerChannel } from './sync/peer/channel';
+export { acceptInvite, createInvite, isWebRtcSupported } from './sync/peer/webrtc';
+export type { PeerMessage, PeerRole } from './sync/peer/protocol';
 export { compactOutbox, pendingCount } from './sync/outbox';
 export type { ChangeEnvelope, SyncState, SyncStatus, SyncTransport } from './sync/types';
 

@@ -8,7 +8,8 @@ import type { Action, Player } from '../../domain/types';
 export interface RallyChainProps {
   actions: readonly Action[];
   playersById: ReadonlyMap<string, Player>;
-  onUndoLast: () => void;
+  /** Weglaten voor een read-only weergave, zoals het meeleesscherm. */
+  onUndoLast?: () => void;
 }
 
 export function RallyChain({ actions, playersById, onUndoLast }: RallyChainProps): ReactElement {
@@ -31,7 +32,7 @@ export function RallyChain({ actions, playersById, onUndoLast }: RallyChainProps
           </span>
         </span>
       ))}
-      {actions.length > 0 && (
+      {actions.length > 0 && onUndoLast && (
         <button type="button" className="chain__undo" onClick={onUndoLast}>
           ↩ Undo actie
         </button>

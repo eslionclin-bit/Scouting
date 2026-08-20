@@ -225,10 +225,58 @@ De zone-heatmap gebruikt één tint in vier stappen (donker → licht), met in e
 vak het aantal en het percentage. Wie de stappen niet uit elkaar houdt, leest de
 getallen.
 
-## 13. Wat hier bewust nog niet zit
+## 13. Live meelezen
+
+Twee apparaten, één wedstrijd: de invoerder op de tribune legt vast, de coach op
+de bank kijkt mee. De offline-garantie per apparaat blijft daarbij overeind —
+meelezen is een extra bovenop de lokale opslag, nooit een voorwaarde ervoor.
+
+### Waarom een koppelcode
+
+Een browser kan geen server draaien, dus twee tablets kunnen elkaar niet zomaar
+vinden op een netwerk. Wat wél kan is een rechtstreekse WebRTC-verbinding. Die
+heeft eenmalig een uitwisseling nodig van verbindingsgegevens, en juist daarvoor
+is normaal een server nodig. Die stap doen hier de mensen zelf: de invoerder
+toont een code, de meelezer plakt hem en geeft een antwoordcode terug.
+
+Er wordt bewust géén STUN-server geconfigureerd. Die zou internet vereisen en
+voegt op een lokaal netwerk niets toe: de kandidaten die overblijven zijn de
+adressen binnen het eigen netwerk, precies wat een sporthal-wifi of een hotspot
+oplevert.
+
+Alle ICE-kandidaten gaan in één code ('vanilla ICE') in plaats van los nagestuurd
+te worden — er is immers nog geen kanaal om ze over na te sturen.
+
+### Wie doet wat
+
+- **`PeerHost`** (invoerder) luistert op de store: elke geslaagde transactie gaat
+  meteen naar de gekoppelde apparaten. Op een `pull` antwoordt hij met alles van
+  deze wedstrijd dat nieuwer is dan de cursor van de vrager.
+- **`PeerClient`** (meelezer) is gewoon een `SyncTransport`, dus de bestaande
+  engine doet het werk: opnieuw proberen, afbouwen, nooit blokkeren. Daarbovenop
+  verwerkt hij ongevraagd binnenkomende wijzigingen — dat is wat meelezen live
+  maakt.
+
+Er is geen apart wijzigingslogboek nodig: revisies zijn sorteerbaar, dus 'alles
+nieuwer dan deze cursor' is een filter over de records van de wedstrijd. Een
+meelezer die tussendoor de verbinding kwijtraakt, haalt bij het opnieuw koppelen
+alleen op wat hij miste.
+
+De laag eronder — het `PeerChannel`-contract — weet niets van WebRTC. In tests
+draait dezelfde logica over twee functies in het geheugen, en het echte pad is
+nagelopen met twee losse browsercontexten die over een datakanaal koppelden.
+
+### Rolkeuze
+
+De rol staat per wedstrijd in `meta` (`device.role.<matchId>`), niet per
+apparaat: dezelfde tablet kan de ene wedstrijd invoeren en de volgende meelezen.
+Het meeleesscherm schrijft niets aan de wedstrijddata — geen openstaande rally,
+geen acties — en dat is als test vastgelegd.
+
+## 14. Wat hier bewust nog niet zit
 
 - Opponent-dossier (v4): leest straks uit `matches.by_opponent` en dezelfde
   analysefuncties; het model hoeft er niet voor te wijzigen.
-- Live meelezen (v3): het transport-contract ligt er, een relay over het lokale
-  netwerk nog niet. Ook het rolonderscheid invoerder/meelezer staat wel in
-  `meta`, maar heeft nog geen scherm.
+- Meerdere gelijktijdige invoerders (v5): `PeerHost` verwerkt al een binnenkomende
+  `push`, dus een tweede invoerder is vooral een kwestie van UI en van afspreken
+  wie wat invoert.

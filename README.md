@@ -4,9 +4,10 @@ Offline-first scouting-app voor volleybal: rally's actie-voor-actie invoeren op 
 tablet in de sporthal, zonder internet, met synchronisatie zodra er weer een
 netwerk is.
 
-Wat er nu draait: **v1 en v2** — het rally-invoerscherm en het analysedashboard,
-inclusief rotatie- en wisselbeheer, bovenop een datamodel, lokale opslag en
-sync-laag. Installeerbaar op een tablet, en volledig bruikbaar zonder verbinding.
+Wat er nu draait: **v1 tot en met v3** — rally-invoer, analysedashboard met
+rotatie- en wisselbeheer, en live meelezen tussen twee apparaten op hetzelfde
+lokale netwerk. Installeerbaar op een tablet, en volledig bruikbaar zonder
+verbinding.
 
 ## Aan de slag
 
@@ -14,7 +15,7 @@ sync-laag. Installeerbaar op een tablet, en volledig bruikbaar zonder verbinding
 npm install
 npm run dev     # ontwikkelserver
 npm run build   # typecheck + productiebuild inclusief service worker
-npm test        # 74 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 82 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -24,6 +25,7 @@ npm test        # 74 tests: domein, opslag, sync, rotatie, analyse, schermen, ex
 | Domein | `src/domain` | Types, scoutingprotocol, validatieregels, zonelogica, logische klok |
 | Opslag | `src/db` | IndexedDB-schema, transacties, repositories per entiteit |
 | Sync | `src/sync` | Outbox, samenvoegen (LWW), sync-engine, transport-contract |
+| Koppeling | `src/sync/peer` | Live meelezen tussen twee apparaten (WebRTC) |
 | Analyse | `src/analysis` | Tellingen per speler, actietype, zone en rotatie |
 | Export | `src/export` | JSON (canoniek) en CSV (voor Excel) |
 | App | `src/app` | React-schermen, invoerstroom, PWA-registratie |
@@ -74,6 +76,15 @@ invoer ('Cijfers'):
 
 Elk getal is een telling uit de ingevoerde acties, geen schatting.
 
+**Meelezen (scherm A read-only)** — een tweede apparaat kijkt live mee met de
+invoerder. Bij het openen van een wedstrijd kiest een apparaat zijn rol: tikken
+op de wedstrijd is invoeren, de knop 'Meelezen' is meekijken. Die keuze wordt per
+wedstrijd onthouden, dus na een herstart belandt de coach niet opeens in het
+invoerscherm.
+
+Het meeleesscherm toont dezelfde rally-keten en stand, de laatste rally's, en de
+cijfers die tijdens een time-out tellen — zonder één invoerknop.
+
 ### Dezelfde stappen in code
 
 ```ts
@@ -120,19 +131,26 @@ tooltipFor('attack', 'good');
 // { title: 'Aanval — Goed', principle: '...', criterion: '...', example: '...' }
 ```
 
-### Synchronisatie
+### Synchronisatie en koppelen
 
-`SyncEngine` praat met een `SyncTransport`. Er zit één transport in de repo:
-`LoopbackHub`, een hub in het geheugen die de tests draait en de vorm vastlegt
-die de latere relay over het lokale netwerk (v3, live meelezen) moet aannemen.
+`SyncEngine` praat met een `SyncTransport`. Mislukt een ronde, dan blijft alles
+in de outbox staan, loopt de wachttijd exponentieel op en gaat invoeren gewoon
+door.
 
-```ts
-const engine = new SyncEngine(store, hub.transport(), { matchId: match.id });
-engine.start(); // probeert periodiek en meteen bij 'online'
-```
+Twee transports zitten in de repo: `LoopbackHub` (in het geheugen, voor tests) en
+`PeerClient` over een WebRTC-datakanaal — dat laatste is wat live meelezen
+mogelijk maakt.
 
-Mislukt een ronde, dan blijft alles in de outbox staan, loopt de wachttijd
-exponentieel op en gaat invoeren gewoon door.
+**Koppelen zonder server.** Een browser kan geen server zijn, dus twee tablets
+vinden elkaar niet vanzelf. Wat wél kan is een rechtstreekse verbinding waarbij
+de apparaten eenmalig een koppelcode uitwisselen: de invoerder maakt een code, de
+meelezer plakt hem en geeft een antwoordcode terug. Daarna loopt alles vanzelf.
+Er komt geen server aan te pas — ook geen STUN-server, want die zou internet
+vereisen en op een lokaal netwerk niets toevoegen.
+
+Wat je nodig hebt: beide apparaten op hetzelfde netwerk (de wifi van de sporthal
+of een hotspot vanaf één van de telefoons), en op allebei de app al een keer
+geopend zodat hij lokaal staat. Internet is niet nodig.
 
 ## Ontwerpkeuzes
 
@@ -158,7 +176,7 @@ hervat.
 
 ## Volgende stap
 
-Fase v3 uit de projectbrief: live meelezen tussen invoerder en coach over het
-lokale netwerk. Het transport-contract en de sync-engine liggen er al; wat nog
-ontbreekt is een relay over het lokale netwerk en het meelees-scherm met de
-rolkeuze.
+Fase v4 uit de projectbrief: het opponent-dossier — aanvalszones, zwaktes en
+tactisch advies over meerdere wedstrijden tegen dezelfde tegenstander. De data
+ligt er al (`matches.by_opponent` plus de analysefuncties); het is vooral een
+kwestie van optellen over wedstrijden heen.

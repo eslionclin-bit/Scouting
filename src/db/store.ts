@@ -13,7 +13,7 @@ import { applyRemoteChanges, type MergeResult } from '../sync/merge';
 import type { ChangeEnvelope } from '../sync/types';
 import { openScoutingDb, type ScoutingDb, type OpenOptions } from './database';
 import { Mutex } from './mutex';
-import type { WriteContext } from './mutations';
+import type { WriteContext, WriteOp } from './mutations';
 import { META_KEYS } from './schema';
 import { ActionRepository } from './repositories/actions';
 import { LineupRepository, SubstitutionRepository } from './repositories/lineups';
@@ -39,10 +39,10 @@ export class ScoutingStore {
   readonly lineups: LineupRepository;
   readonly substitutions: SubstitutionRepository;
 
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Set<(ops: readonly WriteOp[]) => void>();
 
   private constructor(private readonly ctx: WriteContext) {
-    ctx.onCommit = () => this.emit();
+    ctx.onCommit = (ops) => this.emit(ops);
     this.teams = new TeamRepository(ctx);
     this.players = new PlayerRepository(ctx);
     this.matches = new MatchRepository(ctx);
@@ -76,13 +76,13 @@ export class ScoutingStore {
    * Meelezen met wijzigingen. De UI hoeft niet te pollen: elke geslaagde
    * transactie — lokaal ingevoerd of binnengekomen via sync — meldt zich hier.
    */
-  subscribe(listener: () => void): () => void {
+  subscribe(listener: (ops: readonly WriteOp[]) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  private emit(): void {
-    for (const listener of this.listeners) listener();
+  private emit(ops: readonly WriteOp[] = []): void {
+    for (const listener of this.listeners) listener(ops);
   }
 
   get db(): ScoutingDb {
@@ -120,6 +120,15 @@ export class ScoutingStore {
 
   async setDeviceRole(role: DeviceRole): Promise<void> {
     await this.setMeta(META_KEYS.deviceRole, role);
+  }
+
+  /** Rolkeuze geldt per wedstrijd: dezelfde tablet kan de ene keer invoeren en de andere keer meelezen. */
+  async getMatchRole(matchId: string): Promise<DeviceRole | null> {
+    return (await this.getMeta<DeviceRole>(`${META_KEYS.deviceRole}.${matchId}`)) ?? null;
+  }
+
+  async setMatchRole(matchId: string, role: DeviceRole): Promise<void> {
+    await this.setMeta(`${META_KEYS.deviceRole}.${matchId}`, role);
   }
 
   async getActiveMatchId(): Promise<string | null> {

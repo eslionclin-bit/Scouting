@@ -5,16 +5,36 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ScoringScreen } from './ScoringScreen';
 import { StoreProvider } from '../StoreProvider';
 import { openTestStore, seedMatch } from '../../test/factory';
+import type { PeerSession } from '../hooks/usePeerSession';
 import type { ScoutingStore } from '../../db/store';
 
 afterEach(cleanup);
+
+/** Geen gekoppeld apparaat: koppelen is een aparte laag en hoort hier niet in de weg te zitten. */
+const idleSession: PeerSession = {
+  supported: false,
+  status: 'idle',
+  peers: 0,
+  lastUpdateAt: null,
+  error: null,
+  code: null,
+  invite: async () => {},
+  confirm: async () => {},
+  answer: async () => {},
+  disconnect: () => {},
+};
 
 async function renderScoring(): Promise<{ store: ScoutingStore; matchId: string; setId: string }> {
   const store = await openTestStore();
   const fixture = await seedMatch(store);
   render(
     <StoreProvider store={store}>
-      <ScoringScreen matchId={fixture.match.id} onExit={() => {}} onOpenDashboard={() => {}} />
+      <ScoringScreen
+        matchId={fixture.match.id}
+        session={idleSession}
+        onExit={() => {}}
+        onOpenDashboard={() => {}}
+      />
     </StoreProvider>,
   );
   await screen.findByText(/Nog geen acties in deze rally/);
