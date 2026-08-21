@@ -29,6 +29,8 @@ export interface SyncEngineOptions {
   maxBackoffMs?: number;
   /** Beperkt de sync tot één wedstrijd (live meelezen). */
   matchId?: string | null;
+  /** Hoe lang wachten na een eigen wijziging voordat we hem doorsturen. */
+  pushDelayMs?: number;
   now?: () => number;
 }
 
@@ -45,6 +47,8 @@ export class SyncEngine {
 
   private readonly listeners = new Set<SyncListener>();
   private timer: ReturnType<typeof setInterval> | null = null;
+  private soonTimer: ReturnType<typeof setTimeout> | null = null;
+  private unsubscribeStore: (() => void) | null = null;
   private running = false;
   private nextAttemptAt = 0;
   private matchId: string | null;
@@ -66,6 +70,7 @@ export class SyncEngine {
       intervalMs: options.intervalMs ?? 15_000,
       retryBaseMs: options.retryBaseMs ?? 2_000,
       maxBackoffMs: options.maxBackoffMs ?? 60_000,
+      pushDelayMs: options.pushDelayMs ?? 250,
       now: options.now ?? (() => Date.now()),
     };
   }
@@ -89,13 +94,33 @@ export class SyncEngine {
     if (this.timer) return;
     this.timer = setInterval(() => void this.syncNow(), this.options.intervalMs);
     globalThis.addEventListener?.('online', this.onOnline);
+
+    // Wachten op de volgende tik zou live meelezen traag maken; een eigen
+    // wijziging gaat daarom vrijwel meteen mee. Binnengekomen wijzigingen
+    // tellen niet: die hoeven niet teruggestuurd te worden.
+    this.unsubscribeStore = this.store.subscribe((ops) => {
+      if (ops.some((op) => !op.skipOutbox)) this.scheduleSoon();
+    });
+
     void this.syncNow();
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.soonTimer) clearTimeout(this.soonTimer);
+    this.soonTimer = null;
+    this.unsubscribeStore?.();
+    this.unsubscribeStore = null;
     globalThis.removeEventListener?.('online', this.onOnline);
+  }
+
+  private scheduleSoon(): void {
+    if (this.soonTimer) return;
+    this.soonTimer = setTimeout(() => {
+      this.soonTimer = null;
+      void this.syncNow({ force: true });
+    }, this.options.pushDelayMs);
   }
 
   /**

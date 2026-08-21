@@ -4,10 +4,10 @@ Offline-first scouting-app voor volleybal: rally's actie-voor-actie invoeren op 
 tablet in de sporthal, zonder internet, met synchronisatie zodra er weer een
 netwerk is.
 
-Wat er nu draait: **v1 tot en met v4** — rally-invoer, analysedashboard met
-rotatie- en wisselbeheer, live meelezen tussen twee apparaten, en het
-opponent-dossier. Installeerbaar op een tablet, en volledig bruikbaar zonder
-verbinding.
+Wat er nu draait: **v1 tot en met v5** — rally-invoer, analysedashboard met
+rotatie- en wisselbeheer, live meelezen, het opponent-dossier, en twee
+invoerders die tegelijk aan dezelfde wedstrijd werken. Installeerbaar op een
+tablet, en volledig bruikbaar zonder verbinding.
 
 ## Aan de slag
 
@@ -16,7 +16,7 @@ npm install
 npm run dev     # ontwikkelserver
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 92 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 98 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -77,14 +77,25 @@ invoer ('Cijfers'):
 
 Elk getal is een telling uit de ingevoerde acties, geen schatting.
 
-**Meelezen (scherm A read-only)** — een tweede apparaat kijkt live mee met de
-invoerder. Bij het openen van een wedstrijd kiest een apparaat zijn rol: tikken
-op de wedstrijd is invoeren, de knop 'Meelezen' is meekijken. Die keuze wordt per
-wedstrijd onthouden, dus na een herstart belandt de coach niet opeens in het
-invoerscherm.
+**Rolkeuze** — bij het openen van een wedstrijd kiest een apparaat wat het doet.
+Die keuze wordt per wedstrijd onthouden, dus na een herstart belandt de coach
+niet opeens in het invoerscherm.
+
+| Rol | Wat het apparaat doet |
+|---|---|
+| Ik voer in | Hoofdinvoerder: legt rally's vast en bepaalt wanneer een rally of set klaar is. |
+| Ik vul aan | Tweede invoerder: vult acties aan in de rally die openstaat. |
+| Ik lees mee | Ziet live wat er wordt ingevoerd, plus de cijfers. Voert zelf niets in. |
 
 Het meeleesscherm toont dezelfde rally-keten en stand, de laatste rally's, en de
 cijfers die tijdens een time-out tellen — zonder één invoerknop.
+
+**Twee invoerders tegelijk** — de hoofdinvoerder bepaalt het verloop, de
+assistent vult aan. Dat onderscheid is er niet voor de vorm: zouden twee
+apparaten allebei een rally kunnen afronden, dan ontstaan er twee rally's en twee
+standen. De assistent ziet daarom geen 'punt wij', geen 'set afronden' en geen
+'undo rally'; wat hij invoert verschijnt binnen een seconde bij de ander. Wie
+welke kant van het net invoert, spreek je zelf af — de app bewaakt dat niet.
 
 **Opponent-dossier (scherm C)** — via de knop 'Dossier' bij een wedstrijd: alles
 wat we van deze tegenstander weten, over alle wedstrijden heen. Head-to-head,

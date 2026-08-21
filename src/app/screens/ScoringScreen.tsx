@@ -34,6 +34,12 @@ import type { Player, Quality, TeamSide, Zone } from '../../domain/types';
 export interface ScoringScreenProps {
   matchId: string;
   session: PeerSession;
+  /**
+   * De hoofdinvoerder bepaalt het verloop; een assistent vult alleen acties aan
+   * in de rally die openstaat. Zo kan er nooit een tweede rally of een tweede
+   * setstand ontstaan doordat twee apparaten tegelijk iets afronden.
+   */
+  role: 'scorer' | 'assistant';
   onExit: () => void;
   onOpenDashboard: () => void;
 }
@@ -41,9 +47,11 @@ export interface ScoringScreenProps {
 export function ScoringScreen({
   matchId,
   session,
+  role,
   onExit,
   onOpenDashboard,
 }: ScoringScreenProps): ReactElement {
+  const leads = role === 'scorer';
   const store = useStore();
   const { messages, push, dismiss } = useToasts();
   const [entry, dispatch] = useReducer(entryReducer, initialEntryState('us'));
@@ -65,9 +73,15 @@ export function ScoringScreen({
       const set = sets.filter((item) => item.status === 'live').at(-1) ?? sets.at(-1);
       if (!set) return { match, ownTeam, opponent, ownPlayers, opponentPlayers, sets, set: null };
 
-      // De invoer heeft altijd een openstaande rally nodig; die maken we hier
-      // aan zodat de invoerder er nooit zelf aan hoeft te denken.
-      const rally = await instance.rallies.start({ setId: set.id });
+      // De hoofdinvoerder krijgt altijd een openstaande rally; die maken we hier
+      // aan zodat hij er nooit zelf aan hoeft te denken. Een assistent wacht op
+      // de rally van de hoofdinvoerder — hij mag er zelf geen beginnen.
+      const rally = leads
+        ? await instance.rallies.start({ setId: set.id })
+        : await instance.rallies.open(set.id);
+      if (!rally) {
+        return { match, ownTeam, opponent, ownPlayers, opponentPlayers, sets, set, rally: null };
+      }
       const [actions, lineup, substitutions] = await Promise.all([
         instance.actions.listByRally(rally.id),
         instance.lineups.forSet(set.id),
@@ -87,7 +101,7 @@ export function ScoringScreen({
         substitutions,
       };
     },
-    [matchId],
+    [matchId, leads],
   );
 
   const players: readonly Player[] =
@@ -110,7 +124,15 @@ export function ScoringScreen({
 
   if (error) return <ErrorState message={error.message} onExit={onExit} />;
   if (!data) return <div className="boot">Wedstrijd laden…</div>;
-  if (!data.set || !data.rally) return <ErrorState message="Deze wedstrijd heeft nog geen set." onExit={onExit} />;
+  if (!data.set) return <ErrorState message="Deze wedstrijd heeft nog geen set." onExit={onExit} />;
+  if (!data.rally) {
+    return (
+      <ErrorState
+        message="Wachten op de hoofdinvoerder: er staat nog geen rally open."
+        onExit={onExit}
+      />
+    );
+  }
 
   const { match, opponent, set, sets, rally, actions } = data;
 
@@ -125,7 +147,11 @@ export function ScoringScreen({
 
       // Fout, ace of kill: de rally is volgens het protocol voorbij. Meteen
       // afronden scheelt een tik, en de uitslag is niet voor twee uitleg vatbaar.
-      if (isTerminalAction(action)) {
+      // Alleen de hoofdinvoerder doet dat; anders zouden twee apparaten dezelfde
+      // rally afronden.
+      if (isTerminalAction(action) && !leads) {
+        push('info', 'Punt genoteerd — de hoofdinvoerder rondt de rally af.');
+      } else if (isTerminalAction(action)) {
         const { rally: completed } = await store.rallies.complete(data.rally.id);
         const next = await store.rallies.start({ setId: data.set!.id });
         dispatch({ kind: 'rallyStarted', servingTeam: next.servingTeam });
@@ -158,6 +184,13 @@ export function ScoringScreen({
     if (current.length > 0) {
       await store.actions.undoLast(data.rally.id);
       dispatch({ kind: 'reset' });
+      return;
+    }
+
+    // Terug over de rallygrens betekent een afgeronde rally heropenen; dat hoort
+    // bij de hoofdinvoerder, anders draaien twee apparaten dezelfde stand terug.
+    if (!leads) {
+      push('info', 'Deze rally is leeg — verder terug kan alleen de hoofdinvoerder.');
       return;
     }
 
@@ -240,6 +273,7 @@ export function ScoringScreen({
             {set.pointsUs} <span>–</span> {set.pointsThem}
           </strong>
           <span className="topbar__meta">
+            {leads ? '' : 'assistent · '}
             {match.homeAway === 'home' ? 'thuis' : 'uit'} tegen {opponent?.name ?? 'onbekend'} · rally{' '}
             {rally.sequence} · opslag {TEAM_SIDE_LABELS[rally.servingTeam].toLowerCase()} · rotatie R
             {rally.rotationUs ?? 1}
@@ -257,17 +291,21 @@ export function ScoringScreen({
             className={`button button--ghost ${session.peers > 0 ? 'button--live' : ''}`}
             onClick={() => setShowPairing(true)}
           >
-            {session.peers > 0 ? `Meelezen (${session.peers})` : 'Koppelen'}
+            {session.peers > 0 ? `Gekoppeld (${session.peers})` : 'Koppelen'}
           </button>
-          <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
-            Opstelling
-          </button>
+          {leads && (
+            <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
+              Opstelling
+            </button>
+          )}
           <button type="button" className="button button--ghost" onClick={onOpenDashboard}>
             Cijfers
           </button>
-          <button type="button" className="button button--ghost" onClick={() => void nextSet()}>
-            Set afronden
-          </button>
+          {leads && (
+            <button type="button" className="button button--ghost" onClick={() => void nextSet()}>
+              Set afronden
+            </button>
+          )}
         </div>
       </header>
 
@@ -324,21 +362,31 @@ export function ScoringScreen({
       </main>
 
       <footer className="bottombar">
-        <button type="button" className="button button--us" onClick={() => void finishRally('us')}>
-          Punt wij
-        </button>
-        <button type="button" className="button button--them" onClick={() => void finishRally('them')}>
-          Punt zij
-        </button>
+        {leads && (
+          <>
+            <button type="button" className="button button--us" onClick={() => void finishRally('us')}>
+              Punt wij
+            </button>
+            <button
+              type="button"
+              className="button button--them"
+              onClick={() => void finishRally('them')}
+            >
+              Punt zij
+            </button>
+          </>
+        )}
         <button type="button" className="button button--ghost" onClick={() => dispatch({ kind: 'back' })}>
           ← Stap terug
         </button>
         <button type="button" className="button button--ghost" onClick={() => void undoLastAction()}>
           Undo actie
         </button>
-        <button type="button" className="button button--danger" onClick={() => void undoRally()}>
-          Undo rally
-        </button>
+        {leads && (
+          <button type="button" className="button button--danger" onClick={() => void undoRally()}>
+            Undo rally
+          </button>
+        )}
       </footer>
 
       {showPairing && (

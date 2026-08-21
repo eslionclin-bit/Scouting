@@ -8,6 +8,7 @@ import { toMatchJson } from '../../export/json';
 import type { DeviceRole } from '../../domain/types';
 import { pendingCount } from '../../sync/outbox';
 import { PairingSheet } from '../components/PairingSheet';
+import { RoleSheet } from '../components/RoleSheet';
 import type { PeerSession } from '../hooks/usePeerSession';
 import { useQuery, useStore } from '../StoreProvider';
 
@@ -29,6 +30,7 @@ export function HomeScreen({
 }: HomeScreenProps): ReactElement {
   const store = useStore();
   const [showPairing, setShowPairing] = useState(false);
+  const [choosingRole, setChoosingRole] = useState<{ id: string; label: string } | null>(null);
 
   const { data } = useQuery(async (instance) => {
     const matches = await instance.matches.list();
@@ -67,8 +69,7 @@ export function HomeScreen({
           <h1>Volleybal scouting</h1>
           <p className="home__sub">
             Alles wordt op dit apparaat opgeslagen. Zonder verbinding werkt de app gewoon door. Tik
-            een wedstrijd aan om in te voeren, of kies 'meelezen' om mee te kijken met een ander
-            apparaat.
+            een wedstrijd aan en kies wat je op dit apparaat doet: invoeren, aanvullen of meelezen.
           </p>
         </div>
         <div className="home__actions">
@@ -78,7 +79,7 @@ export function HomeScreen({
             className={`button ${session.status === 'connected' ? 'button--live' : ''}`}
             onClick={() => setShowPairing(true)}
           >
-            {session.status === 'connected' ? 'Verbonden' : 'Meelezen met ander apparaat'}
+            {session.status === 'connected' ? 'Verbonden' : 'Koppelen met ander apparaat'}
           </button>
           <button type="button" className="button button--primary" onClick={onNewMatch}>
             + Nieuwe wedstrijd
@@ -96,7 +97,11 @@ export function HomeScreen({
       <ul className="matchlist">
         {data?.matches.map(({ match, opponent, earlier, sets }) => (
           <li key={match.id} className="matchlist__item">
-            <button type="button" className="matchlist__open" onClick={() => onOpenMatch(match.id, 'scorer')}>
+            <button
+              type="button"
+              className="matchlist__open"
+              onClick={() => setChoosingRole({ id: match.id, label: `${opponent} · ${match.date}` })}
+            >
               <span className="matchlist__opponent">{opponent}</span>
               <span className="matchlist__meta">
                 {match.date} · {match.homeAway === 'home' ? 'thuis' : 'uit'} ·{' '}
@@ -109,13 +114,6 @@ export function HomeScreen({
               </span>
             </button>
             <div className="matchlist__actions">
-              <button
-                type="button"
-                className="button button--ghost"
-                onClick={() => onOpenMatch(match.id, 'viewer')}
-              >
-                Meelezen
-              </button>
               <button
                 type="button"
                 className="button button--ghost"
@@ -150,6 +148,17 @@ export function HomeScreen({
       </ul>
       {showPairing && (
         <PairingSheet role="viewer" session={session} onClose={() => setShowPairing(false)} />
+      )}
+
+      {choosingRole && (
+        <RoleSheet
+          matchLabel={choosingRole.label}
+          onChoose={(role) => {
+            onOpenMatch(choosingRole.id, role);
+            setChoosingRole(null);
+          }}
+          onClose={() => setChoosingRole(null)}
+        />
       )}
     </div>
   );

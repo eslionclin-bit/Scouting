@@ -44,8 +44,14 @@ export type Zone = 1 | 2 | 3 | 4 | 5 | 6;
 
 export const ZONES: readonly Zone[] = [1, 2, 3, 4, 5, 6] as const;
 
-/** Rol van dit apparaat binnen een wedstrijd (projectbrief §6). */
-export type DeviceRole = 'scorer' | 'viewer';
+/**
+ * Rol van dit apparaat binnen een wedstrijd (projectbrief §6).
+ *
+ * - `scorer`    — hoofdinvoerder: voert in én bepaalt het verloop (rally's, sets).
+ * - `assistant` — tweede invoerder: vult acties aan in de lopende rally.
+ * - `viewer`    — leest mee, schrijft niets.
+ */
+export type DeviceRole = 'scorer' | 'assistant' | 'viewer';
 
 /**
  * Sync-metadata die elk opgeslagen record draagt.

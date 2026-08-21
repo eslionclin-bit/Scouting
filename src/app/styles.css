@@ -1418,3 +1418,35 @@ button {
 .matchhistory__result--lost {
   color: var(--error);
 }
+
+/* Rolkeuze */
+
+.roles {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.roles__option {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  text-align: left;
+}
+
+.roles__option:hover,
+.roles__option:focus-visible {
+  border-color: var(--accent);
+}
+
+.roles__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.roles__description {
+  color: var(--muted);
+  font-size: 0.85rem;
+}

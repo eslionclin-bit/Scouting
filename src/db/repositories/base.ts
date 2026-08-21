@@ -11,8 +11,18 @@ export function alive<T extends BaseRecord>(records: readonly T[]): T[] {
   return records.filter((record) => record.deletedAt === null);
 }
 
-export function bySequence<T extends { sequence: number }>(a: T, b: T): number {
-  return a.sequence - b.sequence;
+/**
+ * Volgorde binnen een rally of set.
+ *
+ * Twee invoerders die tegelijk een actie toevoegen, berekenen allebei hetzelfde
+ * volgnummer — ze weten immers niet van elkaar. De revisie breekt die gelijkstand,
+ * en omdat revisies overal hetzelfde sorteren, zien beide apparaten dezelfde
+ * keten in dezelfde volgorde.
+ */
+export function bySequence<T extends { sequence: number; rev?: string }>(a: T, b: T): number {
+  if (a.sequence !== b.sequence) return a.sequence - b.sequence;
+  if (a.rev == null || b.rev == null) return 0;
+  return a.rev < b.rev ? -1 : a.rev > b.rev ? 1 : 0;
 }
 
 export function nextSequence(records: readonly { sequence: number }[]): number {

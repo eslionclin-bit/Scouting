@@ -141,3 +141,111 @@ async function waitFor(condition: () => Promise<boolean>, timeoutMs = 1_000): Pr
   }
   throw new Error('Voorwaarde werd niet gehaald binnen de tijd.');
 }
+
+/**
+ * Twee invoerders tegelijk (projectbrief v5): de hoofdinvoerder bepaalt het
+ * verloop van de rally, een assistent vult acties aan. Beide apparaten moeten
+ * op dezelfde keten uitkomen, in dezelfde volgorde.
+ */
+describe('twee invoerders tegelijk', () => {
+  let lead: ScoutingStore;
+  let assistant: ScoutingStore;
+  let host: PeerHost;
+  let client: PeerClient;
+  let engine: SyncEngine;
+  let fixture: TestMatchFixture;
+
+  beforeEach(async () => {
+    lead = await openTestStore('device-lead');
+    assistant = await openTestStore('device-assistant');
+    fixture = await seedMatch(lead);
+    host = new PeerHost(lead, { matchId: fixture.match.id });
+
+    const [hostChannel, peerChannel] = createMemoryChannelPair();
+    host.attach(hostChannel);
+    client = new PeerClient(assistant, peerChannel, { matchId: fixture.match.id });
+    engine = new SyncEngine(assistant, client, { retryBaseMs: 0 });
+    await engine.syncNow({ force: true });
+  });
+
+  afterEach(() => {
+    engine.stop();
+    client.close();
+    host.stop();
+    lead.close();
+    assistant.close();
+  });
+
+  it('laat de assistent acties aanvullen in de rally van de hoofdinvoerder', async () => {
+    const rally = await lead.rallies.start({ setId: fixture.set.id });
+    await lead.actions.append({
+      rallyId: rally.id,
+      team: 'us',
+      type: 'serve',
+      quality: 'good',
+      playerId: fixture.players[0]!.id,
+      zoneFrom: 1,
+    });
+    await waitFor(async () => (await assistant.rallies.get(rally.id)) !== undefined);
+
+    // De assistent schrijft in zijn eigen database en stuurt dat door.
+    await assistant.actions.append({
+      rallyId: rally.id,
+      team: 'them',
+      type: 'reception',
+      quality: 'poor',
+    });
+    await engine.syncNow({ force: true });
+
+    await waitFor(async () => (await lead.actions.listByRally(rally.id)).length === 2);
+    const onLead = await lead.actions.listByRally(rally.id);
+    expect(onLead.map((action) => action.type)).toStrictEqual(['serve', 'reception']);
+  });
+
+  it('houdt de volgorde gelijk als beide tegelijk hetzelfde volgnummer pakken', async () => {
+    const rally = await lead.rallies.start({ setId: fixture.set.id });
+    await waitFor(async () => (await assistant.rallies.get(rally.id)) !== undefined);
+
+    // Geen van beide weet van de ander: allebei denken ze actie 1 toe te voegen.
+    await Promise.all([
+      lead.actions.append({
+        rallyId: rally.id,
+        team: 'us',
+        type: 'serve',
+        quality: 'good',
+        playerId: fixture.players[0]!.id,
+        zoneFrom: 1,
+      }),
+      assistant.actions.append({
+        rallyId: rally.id,
+        team: 'them',
+        type: 'reception',
+        quality: 'good',
+      }),
+    ]);
+    await engine.syncNow({ force: true });
+    await waitFor(async () => (await lead.actions.listByRally(rally.id)).length === 2);
+    await waitFor(async () => (await assistant.actions.listByRally(rally.id)).length === 2);
+
+    const onLead = (await lead.actions.listByRally(rally.id)).map((action) => action.id);
+    const onAssistant = (await assistant.actions.listByRally(rally.id)).map((action) => action.id);
+    expect(onLead).toStrictEqual(onAssistant);
+  });
+
+  it('stuurt een eigen wijziging vanzelf door zodra de engine draait', async () => {
+    const rally = await lead.rallies.start({ setId: fixture.set.id });
+    await waitFor(async () => (await assistant.rallies.get(rally.id)) !== undefined);
+
+    engine.start();
+    await assistant.actions.append({
+      rallyId: rally.id,
+      team: 'them',
+      type: 'attack',
+      quality: 'error',
+      zoneFrom: 4,
+    });
+
+    // Zonder handmatige sync: de engine merkt de eigen wijziging op.
+    await waitFor(async () => (await lead.actions.listByRally(rally.id)).length === 1, 3_000);
+  });
+});

@@ -17,7 +17,7 @@ import { useStore } from './StoreProvider';
 type View =
   | { name: 'home' }
   | { name: 'new' }
-  | { name: 'scoring'; matchId: string }
+  | { name: 'scoring'; matchId: string; role: 'scorer' | 'assistant' }
   | { name: 'viewer'; matchId: string }
   | { name: 'dashboard'; matchId: string }
   | { name: 'opponent'; opponentId: string };
@@ -49,9 +49,13 @@ export function App(): ReactElement {
       if (matchId && (await store.matches.get(matchId))) {
         // Ook de rolkeuze wordt hervat: een meelezer hoort niet opeens in het
         // invoerscherm te belanden nadat de tablet op slot is geweest.
-        const role = await store.getMatchRole(matchId);
-        setScope({ matchId, role: role ?? 'scorer' });
-        setView(role === 'viewer' ? { name: 'viewer', matchId } : { name: 'scoring', matchId });
+        const stored = (await store.getMatchRole(matchId)) ?? 'scorer';
+        setScope({ matchId, role: stored });
+        setView(
+          stored === 'viewer'
+            ? { name: 'viewer', matchId }
+            : { name: 'scoring', matchId, role: stored },
+        );
       }
       setRestored(true);
     })();
@@ -68,7 +72,7 @@ export function App(): ReactElement {
         <NewMatchScreen
           onCreated={(matchId) => {
             setScope({ matchId, role: 'scorer' });
-            setView({ name: 'scoring', matchId });
+            setView({ name: 'scoring', matchId, role: 'scorer' });
           }}
           onCancel={() => setView({ name: 'home' })}
         />
@@ -78,6 +82,7 @@ export function App(): ReactElement {
         <ScoringScreen
           matchId={view.matchId}
           session={session}
+          role={view.role}
           onOpenDashboard={() => setView({ name: 'dashboard', matchId: view.matchId })}
           onExit={() => {
             void store.setActiveMatchId(null);
@@ -94,7 +99,7 @@ export function App(): ReactElement {
           onSwitchToScoring={() => {
             void store.setMatchRole(view.matchId, 'scorer');
             setScope({ matchId: view.matchId, role: 'scorer' });
-            setView({ name: 'scoring', matchId: view.matchId });
+            setView({ name: 'scoring', matchId: view.matchId, role: 'scorer' });
           }}
           onExit={() => {
             void store.setActiveMatchId(null);
@@ -108,7 +113,7 @@ export function App(): ReactElement {
         <DashboardScreen
           matchId={view.matchId}
           onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
-          onExit={() => setView({ name: 'scoring', matchId: view.matchId })}
+          onExit={() => setView({ name: 'scoring', matchId: view.matchId, role: 'scorer' })}
         />
       );
     case 'opponent':
@@ -131,7 +136,11 @@ export function App(): ReactElement {
             void store.setActiveMatchId(matchId);
             void store.setMatchRole(matchId, role);
             setScope({ matchId, role });
-            setView(role === 'viewer' ? { name: 'viewer', matchId } : { name: 'scoring', matchId });
+            setView(
+              role === 'viewer'
+                ? { name: 'viewer', matchId }
+                : { name: 'scoring', matchId, role },
+            );
           }}
         />
       );

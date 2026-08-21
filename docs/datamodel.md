@@ -296,10 +296,51 @@ De drempels zelf (40% voor een zoneconcentratie, 20% voor aanvalsfouten, en zo
 verder) staan bij elkaar bovenin `analysis/opponent.ts`, zodat ze te verstellen
 zijn zonder de rest aan te raken.
 
-## 15. Wat hier bewust nog niet zit
+## 15. Twee invoerders tegelijk
 
-- Meerdere gelijktijdige invoerders (v5): `PeerHost` verwerkt al een binnenkomende
-  `push`, dus een tweede invoerder is vooral een kwestie van UI en van afspreken
-  wie wat invoert.
+De koppeling uit §13 draagt al verkeer in beide richtingen: `PeerHost` verwerkt
+een binnenkomende `push` en stuurt die meteen door naar de andere gekoppelde
+apparaten. Wat v5 daaraan toevoegt is niet het transport, maar het antwoord op de
+vraag *wie wat mag*.
+
+### Eén apparaat leidt
+
+Acties zijn append-only, dus twee invoerders die allebei een actie toevoegen
+leveren twee acties op — geen conflict. De structuur eromheen is dat wél: zouden
+twee apparaten allebei een rally kunnen afronden of een nieuwe kunnen beginnen,
+dan ontstaan er twee openstaande rally's in één set, met twee standen.
+
+Daarom leidt precies één apparaat het verloop:
+
+- **`scorer`** start en beëindigt rally's en sets, beheert de opstelling.
+- **`assistant`** voegt acties toe aan de rally die openstaat, en kan zijn eigen
+  laatste actie ongedaan maken. Verder niets: geen punt toekennen, geen set
+  afronden, geen undo van een hele rally.
+- **`viewer`** schrijft niets.
+
+De rol zit in de UI, niet in de opslag. Dat is een bewuste keuze: de datalaag
+blijft daarmee simpel en symmetrisch (elk apparaat mag alles wat het protocol
+toelaat), en de rolverdeling is een afspraak tussen mensen die de app
+ondersteunt in plaats van afdwingt. Wat de app wél garandeert is dat de data van
+twee invoerders correct samenkomt.
+
+### Gelijke volgnummers
+
+Twee invoerders die tegelijk een actie toevoegen, berekenen allebei hetzelfde
+volgnummer — ze weten immers niet van elkaar. De revisie breekt die gelijkstand
+(`bySequence` in `db/repositories/base.ts`), en omdat revisies overal hetzelfde
+sorteren, zien beide apparaten dezelfde keten in dezelfde volgorde.
+
+### Direct doorsturen
+
+Wachten op de volgende sync-ronde zou aanvullen traag maken. Een draaiende
+`SyncEngine` luistert daarom op de store en stuurt een eigen wijziging na een
+kwart seconde door. Binnengekomen wijzigingen tellen daarbij niet mee — die
+hoeven niet teruggestuurd te worden, anders blijft hetzelfde bericht heen en weer
+kaatsen.
+
+## 16. Wat hier bewust nog niet zit
+
 - Video-invoer: `Action.videoTimestampMs` ligt klaar in het model, maar er is nog
   geen scherm dat een video naast de invoer zet.
+- Voice-invoer: staat in de projectbrief als 'later, optioneel'.
