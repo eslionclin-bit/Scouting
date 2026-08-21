@@ -10,6 +10,8 @@
  */
 
 import { useEffect, useState, type ReactElement } from 'react';
+import { PLAYER_ROLES, PLAYER_ROLE_LABELS } from '../../domain/players';
+import type { PlayerRole } from '../../domain/types';
 import { useQuery, useStore } from '../StoreProvider';
 
 export interface NewMatchScreenProps {
@@ -20,9 +22,10 @@ export interface NewMatchScreenProps {
 interface PlayerRow {
   number: string;
   name: string;
+  role?: PlayerRole | '';
 }
 
-const EMPTY_ROWS: PlayerRow[] = Array.from({ length: 8 }, () => ({ number: '', name: '' }));
+const EMPTY_ROWS: PlayerRow[] = Array.from({ length: 8 }, () => ({ number: '', name: '', role: '' }));
 const EMPTY_OPPONENT_ROWS: PlayerRow[] = Array.from({ length: 6 }, () => ({ number: '', name: '' }));
 
 /** Het team waar deze app voor gemaakt is; aan te passen voor elk ander team. */
@@ -52,7 +55,11 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
     setOwnTeamName(existing.ownTeam.name);
     setRows(
       existing.players.length > 0
-        ? existing.players.map((player) => ({ number: String(player.number), name: player.name }))
+        ? existing.players.map((player) => ({
+          number: String(player.number),
+          name: player.name,
+          role: player.role ?? '',
+        }))
         : EMPTY_ROWS,
     );
   }, [existing]);
@@ -82,10 +89,19 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
 
       const known = new Map((existing?.players ?? []).map((player) => [player.number, player]));
       const newPlayers = rows
-        .map((row) => ({ number: Number(row.number), name: row.name.trim() }))
+        .map((row) => ({
+          number: Number(row.number),
+          name: row.name.trim(),
+          role: row.role || null,
+        }))
         .filter((row) => Number.isInteger(row.number) && row.name.length > 0)
         .filter((row) => !known.has(row.number))
-        .map((row) => ({ teamId: ownTeam.id, number: row.number, name: row.name }));
+        .map((row) => ({
+          teamId: ownTeam.id,
+          number: row.number,
+          name: row.name,
+          role: row.role,
+        }));
       if (newPlayers.length > 0) await store.players.createMany(newPlayers);
 
       const opponent = await store.teams.findOrCreateOpponent(opponentName.trim());
@@ -172,7 +188,10 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
       </div>
 
       <h2 className="setup__subtitle">Spelers eigen team</h2>
-      <p className="setup__hint">Blijven bewaard voor volgende wedstrijden.</p>
+      <p className="setup__hint">
+        Blijven bewaard voor volgende wedstrijden. De rol is optioneel; alleen bij een libero maakt
+        het verschil, want die serveert niet.
+      </p>
       <div className="roster">
         {rows.map((row, index) => (
           <div key={index} className="roster__row">
@@ -191,12 +210,26 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
               placeholder="Naam"
               aria-label={`Naam speler ${index + 1}`}
             />
+            {/* De rol is alleen voor de libero echt nodig: die serveert niet. */}
+            <select
+              className="roster__role"
+              value={row.role ?? ''}
+              onChange={(event) => updateRow(index, { role: event.target.value as PlayerRole | '' })}
+              aria-label={`Rol speler ${index + 1}`}
+            >
+              <option value="">Rol</option>
+              {PLAYER_ROLES.map((role) => (
+                <option key={role} value={role}>
+                  {PLAYER_ROLE_LABELS[role]}
+                </option>
+              ))}
+            </select>
           </div>
         ))}
         <button
           type="button"
           className="button button--ghost"
-          onClick={() => setRows((current) => [...current, { number: '', name: '' }])}
+          onClick={() => setRows((current) => [...current, { number: '', name: '', role: '' }])}
         >
           + Speler
         </button>

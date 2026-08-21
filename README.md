@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 123 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 135 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -48,8 +48,11 @@ Het eigen team blijft bewaard, dus meestal hoef je alleen nog een tegenstander i
 te tikken.
 
 Wie begint met serveren staat hier bewust níét: dat weet je pas na de toss aan
-het eind van de warming-up. Die vraag stelt het invoerscherm, per set, vlak voor
-de eerste rally.
+het eind van de warming-up. Die vraag stelt het invoerscherm — en alleen voor
+set 1 en de beslissende set, want daartussen wisselen de teams om en om.
+
+Bij een speler kun je een rol kiezen. Dat is optioneel; alleen bij een libero
+maakt het verschil, want die serveert niet.
 
 **Rally-invoer** — het scherm waar het tijdens de wedstrijd om draait. Eén vraag
 tegelijk, in de volgorde waarin je een rally ziet:
@@ -72,6 +75,14 @@ keer achter elkaar mag nu eenmaal niet, behalve na een blok.
 
 Bovenin staat steeds wat er al gekozen is; elk stukje is aan te tikken om terug
 te gaan. Onderaan 'punt wij' / 'punt zij', undo actie en undo rally.
+
+De set eindigt op de telling, niet op een knop: bij 25 punten met twee verschil
+(15 in de beslissende set) vraagt de app één keer ter bevestiging. Klopt de stand
+niet, dan kies je 'nog niet' en corrigeer je eerst. Ging een set per ongeluk
+dicht, dan zet undo hem weer open op het punt ervoor.
+
+Er worden altijd vier sets gespeeld — ook bij 3-0 — en een vijfde bij 2-2. Zie
+[`docs/spelregels.md`](docs/spelregels.md) voor de regels die de app kent.
 
 Raakt de invoerder een rally kwijt, dan tel je het punt bij via **'Stand'**: het
 telt mee voor de stand én de rotatie, maar staat in de data als 'niet ingevoerd'

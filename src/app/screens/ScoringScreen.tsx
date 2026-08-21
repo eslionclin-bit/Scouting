@@ -20,6 +20,7 @@ import { useToasts } from '../hooks/useToasts';
 import { useQuery, useStore } from '../StoreProvider';
 import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryReducer';
 import { positionsAt } from '../../domain/rotation';
+import { matchStatus, rulesOf, setOutcome } from '../../domain/scoring';
 import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
 import type { Player, Quality, TeamSide, Zone } from '../../domain/types';
@@ -54,6 +55,8 @@ export function ScoringScreen({
   const [showLineup, setShowLineup] = useState(false);
   const [showPairing, setShowPairing] = useState(false);
   const [showScoreFix, setShowScoreFix] = useState(false);
+  /** Bij welke stand de invoerder 'nog niet' zei tegen het sluiten van de set. */
+  const [dismissedAt, setDismissedAt] = useState<string | null>(null);
 
   const { data, error } = useQuery(
     async (instance) => {
@@ -118,15 +121,19 @@ export function ScoringScreen({
   const expectedServerId = useMemo(() => {
     const open = data?.rally;
     if (!open || open.servingTeam !== 'us') return null;
-    if (data?.lineup) {
-      return positionsAt(data.lineup, open.rotationUs ?? 1, data.substitutions ?? [])[1];
-    }
-    return (
-      (data?.setActions ?? [])
-        .filter((action) => action.team === 'us' && action.type === 'serve')
-        .at(-1)?.playerId ?? null
-    );
-  }, [data?.rally, data?.lineup, data?.substitutions, data?.setActions]);
+
+    const candidate = data?.lineup
+      ? positionsAt(data.lineup, open.rotationUs ?? 1, data.substitutions ?? [])[1]
+      : ((data?.setActions ?? [])
+          .filter((action) => action.team === 'us' && action.type === 'serve')
+          .at(-1)?.playerId ?? null);
+
+    // Een libero serveert niet. Staat die toch op de serveerplek, dan klopt de
+    // opstelling niet en vult de app liever niets in dan iets onmogelijks.
+    const player = candidate ? data?.ownPlayers.find((entry) => entry.id === candidate) : undefined;
+    if (player?.role === 'libero') return null;
+    return candidate;
+  }, [data?.rally, data?.lineup, data?.substitutions, data?.setActions, data?.ownPlayers]);
 
   // Bij een eigen service staat de server al vast; die hoef je niet te kiezen.
   // Corrigeren kan altijd door bovenin op 'Wie' te tikken.
@@ -152,6 +159,14 @@ export function ScoringScreen({
   }
 
   const { match, opponent, set, sets, rally, actions } = data;
+
+  const rules = rulesOf(match.rules);
+  const outcome = setOutcome(set.pointsUs, set.pointsThem, set.setNumber, rules);
+  const status = matchStatus(sets, rules);
+  const scoreKey = `${set.id}:${set.pointsUs}-${set.pointsThem}`;
+  // De set is volgens de telling uit, maar de invoerder bevestigt het: er kan
+  // een punt te veel zijn ingevoerd.
+  const askCloseSet = outcome.complete && set.status === 'live' && dismissedAt !== scoreKey;
 
   /** Twee keer achter elkaar de bal raken mag niet — behalve na een blok. */
   const lastAction = actions?.at(-1);
@@ -217,6 +232,11 @@ export function ScoringScreen({
       return;
     }
 
+    if (await undoAcrossSets()) {
+      push('info', 'Vorige set weer open, terug op setpoint.');
+      return;
+    }
+
     const previous = (await store.rallies.listBySet(data.set.id))
       .filter((item) => item.wonBy !== null)
       .at(-1);
@@ -244,6 +264,24 @@ export function ScoringScreen({
     dispatch({ kind: 'reset' });
   }
 
+  async function closeSet(): Promise<void> {
+    if (!data?.set) return;
+    try {
+      await store.sets.finish(data.set.id);
+      // Bij ons worden altijd vier sets gespeeld, en een vijfde bij 2-2. Is de
+      // wedstrijd uit, dan begint er geen nieuwe set meer.
+      // De set die we net sluiten telt mee voor de vraag of er nog een volgt.
+      const played = data.sets.map((item) =>
+        item.id === data.set!.id ? { ...item, status: 'finished' as const } : item,
+      );
+      const next = matchStatus(played, rulesOf(data.match.rules));
+      if (!next.complete) await store.sets.start({ matchId });
+      dispatch({ kind: 'reset' });
+    } catch (cause) {
+      push('error', cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function chooseStartingServe(side: TeamSide): Promise<void> {
     if (!data?.set) return;
     try {
@@ -267,13 +305,9 @@ export function ScoringScreen({
   async function addPlayer(input: NewPlayerInput): Promise<void> {
     if (!data) return;
     const teamId = input.team === 'us' ? data.match.ownTeamId : data.match.opponentTeamId;
-    const player = await store.players.create({
-      teamId,
-      number: input.number,
-      name: input.name,
-    });
-    // Meteen doorgaan met de speler die je net toevoegde.
-    dispatch({ kind: 'player', playerId: player.id });
+    // Bewust niet meteen doorspringen: aan het begin tik je vaak een paar
+    // rugnummers achter elkaar in, en dan is doorschieten hinderlijk.
+    await store.players.create({ teamId, number: input.number, name: input.name });
   }
 
   async function saveLineup(positions: Record<Zone, string | null>): Promise<void> {
@@ -297,16 +331,34 @@ export function ScoringScreen({
     }
   }
 
-  async function nextSet(): Promise<void> {
-    if (!data?.set) return;
-    try {
-      await store.sets.finish(data.set.id);
-      // Ook voor een nieuwe set geldt: wie begint, vraagt het scherm zo meteen.
-      await store.sets.start({ matchId });
-      dispatch({ kind: 'reset' });
-    } catch (cause) {
-      push('error', cause instanceof Error ? cause.message : String(cause));
-    }
+  /**
+   * Undo over de setgrens. Ging de set net dicht terwijl er nog een punt te
+   * corrigeren was, dan moet je terug kunnen naar het setpoint ervoor — niet
+   * vastzitten in een lege nieuwe set.
+   */
+  async function undoAcrossSets(): Promise<boolean> {
+    if (!data?.set) return false;
+    const currentRallies = await store.rallies.listBySet(data.set.id);
+    if (currentRallies.some((rally) => rally.wonBy !== null)) return false;
+
+    const previous = data.sets
+      .filter((item) => item.id !== data.set!.id && item.status === 'finished')
+      .at(-1);
+    if (!previous) return false;
+
+    const previousRallies = await store.rallies.listBySet(previous.id);
+    const last = previousRallies.filter((rally) => rally.wonBy !== null).at(-1);
+    if (!last) return false;
+
+    // De lege nieuwe set verdwijnt, de vorige gaat weer open, en het laatste
+    // punt wordt teruggedraaid: je staat weer op setpoint.
+    for (const rally of currentRallies) await store.rallies.remove(rally.id);
+    await store.sets.remove(data.set.id);
+    await store.sets.reopen(previous.id);
+    await store.rallies.reopen(last.id);
+    setDismissedAt(null);
+    dispatch({ kind: 'reset' });
+    return true;
   }
 
   return (
@@ -317,7 +369,9 @@ export function ScoringScreen({
         </button>
 
         <div className="topbar__score">
-          <span className="topbar__set">Set {set.setNumber}</span>
+          <span className="topbar__set">
+            Set {set.setNumber} · sets {status.setsUs}–{status.setsThem}
+          </span>
           <strong className="topbar__points">
             {set.pointsUs} <span>–</span> {set.pointsThem}
           </strong>
@@ -356,8 +410,8 @@ export function ScoringScreen({
             </button>
           )}
           {leads && (
-            <button type="button" className="button button--ghost" onClick={() => void nextSet()}>
-              Set afronden
+            <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
+              Wissel
             </button>
           )}
         </div>
@@ -365,7 +419,45 @@ export function ScoringScreen({
 
       <RallyChain actions={actions ?? []} playersById={playersById} onUndoLast={() => void undoLastAction()} />
 
-      {needsServeChoice ? (
+      {status.complete ? (
+        <section className="step step--done">
+          <h2 className="step__title">Wedstrijd klaar</h2>
+          <p className="step__hint">
+            {status.setsUs}–{status.setsThem} in sets. Alles staat vast; de cijfers vind je onder
+            'Cijfers'.
+          </p>
+          <div className="step__actions">
+            <button type="button" className="button button--primary" onClick={onOpenDashboard}>
+              Naar de cijfers
+            </button>
+            <button type="button" className="button button--ghost" onClick={onExit}>
+              Wedstrijden
+            </button>
+          </div>
+        </section>
+      ) : askCloseSet ? (
+        <section className="step step--close">
+          <h2 className="step__title">
+            Set {set.setNumber} klaar? {set.pointsUs}–{set.pointsThem}
+          </h2>
+          <p className="step__hint">
+            {outcome.winner === 'us' ? 'Wij winnen' : 'Zij winnen'} deze set. Klopt de stand niet,
+            kies dan 'nog niet' en corrigeer hem eerst.
+          </p>
+          <div className="step__actions">
+            <button type="button" className="button button--primary" onClick={() => void closeSet()}>
+              Set sluiten
+            </button>
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => setDismissedAt(scoreKey)}
+            >
+              Nog niet
+            </button>
+          </div>
+        </section>
+      ) : needsServeChoice ? (
         /* Na de toss, aan het eind van de warming-up: pas dan weet je dit. */
         <section className="step step--serve">
           <h2 className="step__title">Wie begint met serveren?</h2>

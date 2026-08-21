@@ -1,11 +1,15 @@
 # Spelregels als fundament
 
-Voorstel, nog niet gebouwd. Aanleiding: de app volgt de basisregels van volleybal
-op te veel plekken niet, waardoor de invoerder werk doet dat de app zelf kan
-weten — en waardoor er dingen mogelijk zijn die in het veld niet kunnen.
+Aanleiding: de app volgde de basisregels van volleybal op te veel plekken niet,
+waardoor de invoerder werk deed dat de app zelf kan weten — en er dingen mogelijk
+waren die in het veld niet kunnen.
 
-Dit document zet eerst de regels op een rij, dan wat de app nu fout doet, dan wat
-er moet veranderen. Onderaan staan de vragen die ik niet zelf kan beantwoorden.
+Dit document zet de regels op een rij, wat de app ermee doet, en wat er nog open
+staat. De regels zelf staan als code in `src/domain/scoring.ts`.
+
+**De wedstrijdvorm van dit team:** er worden **altijd vier sets gespeeld**, ook
+bij 3-0 — dus geen best of five. Staat het na vier sets 2-2, dan volgt een
+vijfde set tot 15. De sets ervoor gaan tot 25. Alles met twee punten verschil.
 
 ## 1. De regels die ertoe doen
 
@@ -15,8 +19,8 @@ er moet veranderen. Onderaan staan de vragen die ik niet zelf kan beantwoorden.
 - Een set gaat tot **25 punten met minimaal 2 punten verschil**. Bij 24-24 gaat
   het door tot één team twee punten voorsprong heeft (26-24, 27-25, …).
 - De **beslissende vijfde set gaat tot 15**, ook met 2 punten verschil.
-- De wedstrijd is best of five: wie **3 sets** wint, wint de wedstrijd. Er wordt
-  dus nooit een zesde set gespeeld, en bij 3-0 of 3-1 stopt het.
+- Er worden **altijd vier sets gespeeld**; een vijfde alleen bij 2-2. De app mag
+  dus niet stoppen bij drie gewonnen sets.
 
 ### Wie serveert
 
@@ -74,7 +78,30 @@ serveerbeurt die in het veld niet bestaat.
 | Geen einde aan de wedstrijd | Bij drie gewonnen sets is het klaar |
 | Na 'speler toevoegen' springt het scherm door | Aan het begin wil je drie rugnummers achter elkaar intikken |
 
-## 3. Wat er moet veranderen
+## 3. Wat er nu in zit
+
+Gebouwd:
+
+- **Puntentelling** in `domain/scoring.ts`: 25 punten, beslissende set 15, twee
+  punten verschil, vier vaste sets en een vijfde bij 2-2. De regels staan als
+  veld op de wedstrijd, dus een andere competitie is een instelling.
+- **Set sluiten op de telling**: bij 25 (met verschil) vraagt de app één keer ter
+  bevestiging — 'Set 1 klaar? 25-19' — met 'nog niet' als de stand nog gecorrigeerd
+  moet worden. De losse knop 'Set afronden' is verdwenen.
+- **Beginservice**: alleen set 1 en de beslissende set vragen om de toss; set 2
+  t/m 4 leidt de app af uit de vorige set.
+- **Undo over de setgrens**: is de set net gesloten, dan zet undo hem weer open
+  op het punt ervoor.
+- **Wedstrijd klaar**: na de laatste set stopt de invoer en verwijst het scherm
+  naar de cijfers.
+- **Server staat klaar**: met een opstelling weet de app wie in zone 1 staat.
+  Een **libero wordt daarbij overgeslagen** — die serveert niet.
+- **Rollen** bij spelers: spelverdeler, midden, passer-loper, diagonaal, libero.
+- **Wisselen** vanuit het invoerscherm, met het aantal wissels van deze set erbij.
+- Alleen tellen wat is afgesloten: een set die na undo weer openstaat, telt niet
+  als gewonnen.
+
+## 4. Wat er nog moet veranderen
 
 ### Datamodel
 
@@ -108,7 +135,7 @@ serveerbeurt die in het veld niet bestaat.
 Per wedstrijd: de opstelling van set 1 en de toss. Per set daarna: alleen de
 opstelling. In de beslissende set opnieuw de toss. Verder rekent de app.
 
-## 4. Voorstel: invoeren op het veld
+## 5. Voorstel: invoeren op het veld
 
 Dit is de vraag 'kan het intuïtiever' uit een eerder gesprek, nu concreet.
 
@@ -142,15 +169,13 @@ Wat het kost:
   veld met zes zones zonder namen, wat voor de analyse (aanvalszones) precies
   genoeg is.
 
-## 5. Vragen die ik niet zelf kan beantwoorden
+## 6. Wat nog openstaat
 
-1. **Welke competitie?** Ik ga uit van best of five, 25 punten, beslissende set
-   tot 15. Klopt dat voor jullie?
-2. **Mag de libero bij jullie serveren?** De internationale regel zegt van niet;
-   een aantal nationale competities staat het in één rotatiepositie wel toe.
-3. **Hoeveel wissels per set**, en wil je dat de app het maximum bewaakt of
-   alleen registreert?
-4. **Welke rollen** wil je kunnen kiezen bij een speler? Voorstel: spelverdeler,
-   midden, passer-loper, diagonaal, libero.
-5. **Veldinvoer**: als hoofdscherm op de tablet, met de stapsgewijze invoer als
-   terugval op de telefoon — of overal het veld?
+- **Wisselquotum**: de app telt de wissels van een set, maar bewaakt geen
+  maximum. Zodra duidelijk is welk aantal in jullie competitie geldt, is dat een
+  waarschuwing erbij.
+- **Liberowissels**: de libero serveert niet, en dat zit erin. De rest van de
+  liberoregels — dat hij een achterspeler vervangt zonder dat het een wissel is,
+  en eruit gaat als hij naar voren draait — zit nog niet in het model.
+- **Invoeren op het veld** (hoofdstuk 5): besproken, bewust uitgesteld tot de
+  regels staan.

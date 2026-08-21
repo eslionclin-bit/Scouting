@@ -138,6 +138,10 @@ export function LineupSheet({
           <>
             <p className="sheet__principle">
               Rotatie R{rotation}. Kies wie eruit gaat, daarna wie erin komt.
+              {' '}
+              {substitutions.length === 0
+                ? 'Nog geen wissels deze set.'
+                : `${substitutions.length} ${substitutions.length === 1 ? 'wissel' : 'wissels'} deze set.`}
             </p>
 
             <h4 className="sheet__subtitle">In het veld</h4>

@@ -1,6 +1,6 @@
 /** Spelers, per team. Rugnummer is uniek binnen een team. */
 
-import type { Player } from '../../domain/types';
+import type { Player, PlayerRole } from '../../domain/types';
 import { buildRecord, commit, reviseRecord, type WriteContext } from '../mutations';
 import { alive, isAlive, NotFoundError, ValidationError } from './base';
 
@@ -8,6 +8,7 @@ export interface PlayerInput {
   teamId: string;
   number: number;
   name: string;
+  role?: PlayerRole | null;
   position?: string | null;
   active?: boolean;
 }
@@ -25,6 +26,7 @@ export class PlayerRepository {
       teamId: input.teamId,
       number: input.number,
       name: input.name,
+      role: input.role ?? null,
       position: input.position ?? null,
       active: input.active ?? true,
     });
@@ -54,6 +56,7 @@ export class PlayerRepository {
         teamId: input.teamId,
         number: input.number,
         name: input.name,
+        role: input.role ?? null,
         position: input.position ?? null,
         active: input.active ?? true,
       }),

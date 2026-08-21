@@ -308,8 +308,27 @@ button {
 
 .roster__row {
   display: grid;
-  grid-template-columns: 5rem 1fr;
+  grid-template-columns: 4.5rem 1fr 8rem;
   gap: 0.5rem;
+}
+
+@media (max-width: 30rem) {
+  .roster__row {
+    grid-template-columns: 4rem 1fr;
+  }
+
+  .roster__role {
+    grid-column: 1 / -1;
+  }
+}
+
+.roster__role {
+  min-height: var(--tap);
+  padding: 0 0.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
 }
 
 .roster input {
@@ -1920,4 +1939,14 @@ button {
 .servespots__net {
   text-align: center;
   margin-top: 0.4rem;
+}
+
+/* Set sluiten en wedstrijd klaar */
+
+.step--close {
+  border-color: var(--accent);
+}
+
+.step--done {
+  border-color: var(--perfect);
 }

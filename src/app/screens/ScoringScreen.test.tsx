@@ -232,9 +232,12 @@ describe('ScoringScreen: regels van het spel', () => {
     await user.click(screen.getByRole('button', { name: 'Pass' }));
     await user.click(screen.getByRole('button', { name: /^Goed/ }));
 
-    // Terug naar de spelerstap voor de volgende actie in dezelfde rally.
+    // Terug naar de spelerstap voor de volgende actie in dezelfde rally. De
+    // spelerslijst komt uit de opslag, dus even wachten tot die is bijgewerkt.
     await waitFor(() => expect(screen.getByText('Wie speelde de bal?')).toBeDefined());
-    expect(screen.getByRole('button', { name: '#4 Sanne' })).toHaveProperty('disabled', true);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '#4 Sanne' })).toHaveProperty('disabled', true),
+    );
     expect(screen.getByRole('button', { name: '#7 Noor' })).toHaveProperty('disabled', false);
   });
 
@@ -263,5 +266,100 @@ describe('ScoringScreen: regels van het spel', () => {
     // Wij beginnen met serveren, dus de app slaat de spelerstap over: #9 staat
     // in zone 1 en is dus aan de beurt.
     expect(await screen.findByText('Wat deed #9 Fem?')).toBeDefined();
+  });
+});
+
+describe('ScoringScreen: setverloop', () => {
+  /** Speelt punten tot de gevraagde stand, met gemiste punten (snel en zonder acties). */
+  async function playTo(
+    store: ScoutingStore,
+    setId: string,
+    pointsUs: number,
+    pointsThem: number,
+  ): Promise<void> {
+    for (let i = 0; i < pointsUs; i++) {
+      await store.rallies.addMissedPoint({ setId, wonBy: 'us' });
+    }
+    for (let i = 0; i < pointsThem; i++) {
+      await store.rallies.addMissedPoint({ setId, wonBy: 'them' });
+    }
+  }
+
+  it('vraagt bij 25 om bevestiging in plaats van zelf te sluiten', async () => {
+    const user = userEvent.setup();
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    await playTo(store, fixture.set.id, 25, 19);
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    expect(await screen.findByText('Set 1 klaar? 25–19')).toBeDefined();
+    // De set staat nog open tot de invoerder het bevestigt.
+    expect((await store.sets.require(fixture.set.id)).status).toBe('live');
+
+    await user.click(screen.getByRole('button', { name: 'Set sluiten' }));
+
+    await waitFor(async () => {
+      expect((await store.sets.require(fixture.set.id)).status).toBe('finished');
+    });
+    // En er staat meteen een volgende set klaar, met de service aan de andere kant.
+    const sets = await store.sets.listByMatch(fixture.match.id);
+    expect(sets).toHaveLength(2);
+    expect(sets[1]?.startingServe).toBe('them');
+  });
+
+  it('sluit niet bij 25-24, want er moeten twee punten verschil zijn', async () => {
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    await playTo(store, fixture.set.id, 25, 24);
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    expect(await screen.findByText('Wie speelde de bal?')).toBeDefined();
+    expect(screen.queryByText(/klaar\?/)).toBeNull();
+  });
+
+  it('laat de set met "nog niet" openstaan om de stand te corrigeren', async () => {
+    const user = userEvent.setup();
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    await playTo(store, fixture.set.id, 25, 10);
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Nog niet' }));
+
+    expect(await screen.findByText('Wie speelde de bal?')).toBeDefined();
+    expect((await store.sets.require(fixture.set.id)).status).toBe('live');
   });
 });

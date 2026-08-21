@@ -1,11 +1,14 @@
 /** Wedstrijden. Verwijderen gebeurt cascaderend, maar altijd als tombstone. */
 
+import type { MatchRules } from '../../domain/scoring';
 import type { Match, MatchStatus } from '../../domain/types';
 import { buildRecord, commit, reviseRecord, type WriteContext, type WriteOp } from '../mutations';
 import { alive, isAlive, NotFoundError } from './base';
 
 export interface MatchInput {
   date: string;
+  /** Laat weg voor de standaardregels (vier sets tot 25, beslissende set tot 15). */
+  rules?: MatchRules | null;
   ownTeamId: string;
   opponentTeamId: string;
   homeAway: 'home' | 'away';
@@ -21,6 +24,7 @@ export class MatchRepository {
   async create(input: MatchInput): Promise<Match> {
     const record = buildRecord(this.ctx, 'matches', {
       date: input.date,
+      rules: input.rules ?? null,
       ownTeamId: input.ownTeamId,
       opponentTeamId: input.opponentTeamId,
       homeAway: input.homeAway,

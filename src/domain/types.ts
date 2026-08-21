@@ -13,8 +13,10 @@
  *   een verdwenen rij niet. Undo van een actie is dus gewoon een tombstone.
  */
 
-/** Kant van het net. 'us' = eigen team, 'them' = tegenstander. */
-export type TeamSide = 'us' | 'them';
+import type { MatchRules } from './scoring';
+import type { TeamSide } from './teams';
+
+export type { TeamSide };
 
 /** Actietypes uit het scoutingprotocol. */
 export type ActionType =
@@ -85,11 +87,18 @@ export interface Team extends BaseRecord {
   level?: string | null;
 }
 
+/**
+ * Rol in het team. Alleen de libero verandert het gedrag van de app: die
+ * serveert niet en staat alleen achterin.
+ */
+export type PlayerRole = 'setter' | 'middle' | 'outside' | 'opposite' | 'libero';
+
 export interface Player extends BaseRecord {
   teamId: string;
   /** Rugnummer; uniek binnen een team. */
   number: number;
   name: string;
+  role?: PlayerRole | null;
   position?: string | null;
   active: boolean;
 }
@@ -99,6 +108,12 @@ export type MatchStatus = 'planned' | 'live' | 'finished';
 export interface Match extends BaseRecord {
   /** ISO-datum (YYYY-MM-DD) van de wedstrijd. */
   date: string;
+  /**
+   * Puntentelling van deze competitie. Ontbreekt het veld, dan gelden de
+   * standaardregels uit `domain/scoring.ts` — zo blijven oudere wedstrijden
+   * gewoon werken.
+   */
+  rules?: MatchRules | null;
   ownTeamId: string;
   opponentTeamId: string;
   homeAway: 'home' | 'away';

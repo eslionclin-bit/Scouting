@@ -1,6 +1,23 @@
 /** Hoe een speler op het scherm heet. */
 
-import type { Player } from './types';
+import type { Player, PlayerRole } from './types';
+
+/** Rollen zoals ze in de zaal heten. */
+export const PLAYER_ROLE_LABELS: Record<PlayerRole, string> = {
+  setter: 'Spelverdeler',
+  middle: 'Midden',
+  outside: 'Passer-loper',
+  opposite: 'Diagonaal',
+  libero: 'Libero',
+};
+
+export const PLAYER_ROLES: readonly PlayerRole[] = [
+  'setter',
+  'middle',
+  'outside',
+  'opposite',
+  'libero',
+] as const;
 
 /**
  * Bij de tegenstander ken je meestal alleen een rugnummer. Dan is '#7' de naam;

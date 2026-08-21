@@ -7,6 +7,7 @@
  * leveren zo altijd dezelfde stand op.
  */
 
+import { rulesOf, startingServeFor } from '../../domain/scoring';
 import type { MatchSet, SetStatus, TeamSide } from '../../domain/types';
 import { buildRecord, commit, reviseRecord, type WriteContext, type WriteOp } from '../mutations';
 import { alive, isAlive, NotFoundError, ValidationError } from './base';
@@ -46,13 +47,22 @@ export class SetRepository {
       ]);
     }
 
+    // Wie begint, volgt uit de vorige set: teams wisselen dat om en om. Alleen
+    // set 1 en de beslissende set zijn een toss, en die vraagt het scherm.
+    const match = await this.ctx.db.get('matches', input.matchId);
+    const rules = rulesOf(match?.rules);
+    const derived =
+      input.startingServe === undefined
+        ? startingServeFor(setNumber, existing, rules)
+        : input.startingServe;
+
     const record = buildRecord(this.ctx, 'sets', {
       matchId: input.matchId,
       setNumber,
       pointsUs: 0,
       pointsThem: 0,
       status: 'live' as SetStatus,
-      startingServe: input.startingServe ?? null,
+      startingServe: derived ?? null,
     });
     await commit(this.ctx, [{ entity: 'sets', record }]);
     return record;
@@ -78,6 +88,29 @@ export class SetRepository {
   async current(matchId: string): Promise<MatchSet | undefined> {
     const sets = await this.listByMatch(matchId);
     return sets.filter((set) => set.status === 'live').at(-1) ?? sets.at(-1);
+  }
+
+  /** Zet een afgeronde set weer open, bijvoorbeeld na een undo over de setgrens. */
+  async reopen(id: string): Promise<MatchSet> {
+    const current = await this.require(id);
+    const record = reviseRecord(this.ctx, current, { status: 'live' as SetStatus });
+    await commit(this.ctx, [{ entity: 'sets', record }]);
+    return record;
+  }
+
+  /** Verwijdert een set die per ongeluk is begonnen; alleen als hij leeg is. */
+  async remove(id: string): Promise<void> {
+    return this.ctx.lock.run(async () => {
+      const set = await this.require(id);
+      const rallies = alive(await this.ctx.db.getAllFromIndex('rallies', 'by_set', id));
+      if (rallies.length > 0) {
+        throw new ValidationError('Deze set bevat al rally\'s.', [
+          { code: 'set_not_empty', message: 'Verwijder eerst de rally\'s.' },
+        ]);
+      }
+      const record = reviseRecord(this.ctx, set, { deletedAt: this.ctx.now().toISOString() });
+      await commit(this.ctx, [{ entity: 'sets', record }]);
+    });
   }
 
   /** Wie begint met serveren; kan pas na de warming-up bekend zijn. */

@@ -43,6 +43,10 @@ jobs:
 
   deploy:
     needs: build
+    # Alleen vanaf de hoofdbranch: de github-pages-omgeving weigert deploys vanaf
+    # een andere branch, en dat leverde bij elke push een foutmail op. Tests en
+    # build draaien wél op elke branch — dat signaal is juist nuttig.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
