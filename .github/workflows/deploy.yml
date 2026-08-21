@@ -1,8 +1,9 @@
 # Zet de app online op GitHub Pages, zodat er een echte, installeerbare versie is
 # om te laten zien. Draait bij elke push naar de ontwikkelbranch.
 #
-# Eenmalig aanzetten: repo → Settings → Pages → Source: "GitHub Actions".
-# Daarna staat de app op https://<gebruiker>.github.io/<repo>/
+# De workflow zet Pages zelf aan (`enablement: true`), dus er hoeft niets met de
+# hand geconfigureerd te worden. De app komt op
+# https://<gebruiker>.github.io/<repo>/ te staan.
 
 name: Deploy
 
@@ -31,9 +32,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Pages aanzetten en instellingen ophalen
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: Bouwen
-        # De app draait onder /<repo>/ op Pages, niet op de root.
-        run: BASE_PATH="/${GITHUB_REPOSITORY#*/}/" npm run build
+        # Het pad waaronder de app straks draait komt uit Pages zelf, zodat het
+        # ook goed gaat bij een eigen domein op de root.
+        run: BASE_PATH="${{ steps.pages.outputs.base_path }}/" npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
