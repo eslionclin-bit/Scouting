@@ -135,6 +135,16 @@ export interface Rally extends BaseRecord {
   pointsThemAfter: number | null;
   /** Rotatiestand van het eigen team (1-6) tijdens deze rally, indien bijgehouden. */
   rotationUs?: number | null;
+  /**
+   * Is deze rally echt ingevoerd, of alleen als punt bijgeteld?
+   *
+   * Tijdens een wedstrijd raakt een invoerder wel eens een rally kwijt — een bal
+   * die te snel gaat, even niet opletten. Zo'n punt telt gewoon mee voor de
+   * stand en voor de rotatie (anders loopt de app uit de pas met het veld), maar
+   * er hangen geen acties aan. `false` maakt dat expliciet in plaats van het te
+   * verzwijgen. Ontbreekt het veld, dan is de rally gewoon ingevoerd.
+   */
+  scouted?: boolean;
 }
 
 export interface Action extends BaseRecord {

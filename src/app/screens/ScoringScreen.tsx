@@ -11,6 +11,7 @@ import { useEffect, useMemo, useReducer, useState, type ReactElement } from 'rea
 import { EntryPanel, type NewPlayerInput } from '../components/EntryPanel';
 import { LineupSheet } from '../components/LineupSheet';
 import { PairingSheet } from '../components/PairingSheet';
+import { ScoreFixSheet } from '../components/ScoreFixSheet';
 import { ProtocolSheet } from '../components/ProtocolSheet';
 import { RallyChain } from '../components/RallyChain';
 import { Toasts } from '../components/Toasts';
@@ -49,6 +50,7 @@ export function ScoringScreen({
   const [explain, setExplain] = useState<Quality | null>(null);
   const [showLineup, setShowLineup] = useState(false);
   const [showPairing, setShowPairing] = useState(false);
+  const [showScoreFix, setShowScoreFix] = useState(false);
 
   const { data, error } = useQuery(
     async (instance) => {
@@ -202,6 +204,16 @@ export function ScoringScreen({
     dispatch({ kind: 'reset' });
   }
 
+  async function addMissedPoint(wonBy: TeamSide): Promise<void> {
+    if (!data?.set) return;
+    try {
+      await store.rallies.addMissedPoint({ setId: data.set.id, wonBy });
+      dispatch({ kind: 'reset' });
+    } catch (cause) {
+      push('error', cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function addPlayer(input: NewPlayerInput): Promise<void> {
     if (!data) return;
     const teamId = input.team === 'us' ? data.match.ownTeamId : data.match.opponentTeamId;
@@ -292,6 +304,11 @@ export function ScoringScreen({
             Cijfers
           </button>
           {leads && (
+            <button type="button" className="button button--ghost" onClick={() => setShowScoreFix(true)}>
+              Stand
+            </button>
+          )}
+          {leads && (
             <button type="button" className="button button--ghost" onClick={() => void nextSet()}>
               Set afronden
             </button>
@@ -335,6 +352,15 @@ export function ScoringScreen({
           </button>
         )}
       </footer>
+
+      {showScoreFix && (
+        <ScoreFixSheet
+          pointsUs={set.pointsUs}
+          pointsThem={set.pointsThem}
+          onAdd={addMissedPoint}
+          onClose={() => setShowScoreFix(false)}
+        />
+      )}
 
       {showPairing && (
         <PairingSheet role="scorer" session={session} onClose={() => setShowPairing(false)} />

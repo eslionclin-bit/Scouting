@@ -46,12 +46,43 @@ export function CoachScreen({
   const [showTimeout, setShowTimeout] = useState(false);
   const [timeoutMark, setTimeoutMark] = useState<TimeoutMark | null>(null);
 
-  const { data } = useQuery(async (store) => loadMatchBundle(store, matchId), [matchId]);
-  const briefing = useMemo(() => (data ? buildCoachBriefing(data) : null), [data]);
+  const { data } = useQuery(
+    async (instance) => {
+      const bundle = await loadMatchBundle(instance, matchId);
+
+      // Wat we eerder zagen telt mee, maar het hoeft niet compleet te zijn: de
+      // laatste paar wedstrijden zeggen genoeg en houden dit scherm snel.
+      const againstOpponent = (await instance.matches.listByOpponent(bundle.match.opponentTeamId))
+        .filter((match) => match.id !== matchId)
+        .slice(0, 5);
+      const ownRecent = (await instance.matches.list())
+        .filter((match) => match.id !== matchId && match.ownTeamId === bundle.match.ownTeamId)
+        .slice(0, 8);
+
+      const [opponentHistory, ownHistory] = await Promise.all([
+        Promise.all(againstOpponent.map((match) => loadMatchBundle(instance, match.id))),
+        Promise.all(ownRecent.map((match) => loadMatchBundle(instance, match.id))),
+      ]);
+
+      return { bundle, opponentHistory, ownHistory };
+    },
+    [matchId],
+  );
+
+  const briefing = useMemo(
+    () =>
+      data
+        ? buildCoachBriefing(data.bundle, {
+            opponentHistory: data.opponentHistory,
+            ownHistory: data.ownHistory,
+          })
+        : null,
+    [data],
+  );
 
   const recent = useMemo(() => {
     if (!data) return [];
-    const sets = data.sets;
+    const sets = data.bundle.sets;
     const current = sets.filter((set) => set.set.status === 'live').at(-1) ?? sets.at(-1);
     return (current?.rallies ?? [])
       .filter((entry) => entry.rally.wonBy !== null)
@@ -59,7 +90,7 @@ export function CoachScreen({
       .reverse();
   }, [data]);
 
-  const setId = data?.sets.filter((set) => set.set.status === 'live').at(-1)?.set.id ?? null;
+  const setId = data?.bundle.sets.filter((set) => set.set.status === 'live').at(-1)?.set.id ?? null;
   const markKey = setId ? `coach.timeout.${setId}` : null;
 
   // De markering staat lokaal: hij hoort bij deze bank, niet bij de wedstrijd.
@@ -83,9 +114,11 @@ export function CoachScreen({
 
   if (!data || !briefing) return <div className="boot">Wedstrijd laden…</div>;
 
-  const urgent = briefing.cues.filter((cue) => cue.tone === 'urgent');
-  const watch = briefing.cues.filter((cue) => cue.tone === 'watch');
-  const good = briefing.cues.filter((cue) => cue.tone === 'good');
+  const live = briefing.cues.filter((cue) => cue.source === 'live');
+  const urgent = live.filter((cue) => cue.tone === 'urgent');
+  const watch = live.filter((cue) => cue.tone === 'watch');
+  const good = live.filter((cue) => cue.tone === 'good');
+  const history = briefing.cues.filter((cue) => cue.source === 'history');
 
   return (
     <div className="coach">
@@ -100,7 +133,7 @@ export function CoachScreen({
             {briefing.pointsThem}
           </strong>
           <span className="coach__meta">
-            set {briefing.setNumber ?? 1} · tegen {data.opponent?.name ?? 'onbekend'}
+            set {briefing.setNumber ?? 1} · tegen {data.bundle.opponent?.name ?? 'onbekend'}
             {briefing.serving ? ` · service ${briefing.serving === 'us' ? 'wij' : 'zij'}` : ''}
             {briefing.rotation ? ` · rotatie R${briefing.rotation}` : ''}
           </span>
@@ -142,10 +175,10 @@ export function CoachScreen({
 
       {/* Wat er nu aan de hand is. Dit is de reden dat dit scherm bestaat. */}
       <section className="cues">
-        {briefing.cues.length === 0 ? (
+        {live.length === 0 ? (
           <p className="cues__empty">
-            Nog te weinig gespeeld om iets te durven zeggen. Zodra er genoeg rally's in staan,
-            verschijnt hier wat opvalt.
+            Nog te weinig gespeeld in deze wedstrijd om iets te durven zeggen. Zodra er genoeg
+            rally's in staan, verschijnt hier wat opvalt.
           </p>
         ) : (
           <>
@@ -158,6 +191,15 @@ export function CoachScreen({
           </>
         )}
       </section>
+
+      {history.length > 0 && (
+        <section className="cues cues--history">
+          <h2 className="cues__heading">Uit eerdere wedstrijden</h2>
+          {history.slice(0, 3).map((cue) => (
+            <CueCard key={cue.code + cue.title} cue={cue} />
+          ))}
+        </section>
+      )}
 
       <section className="coach__numbers">
         <Figure
@@ -254,11 +296,11 @@ export function CoachScreen({
         <button type="button" className="button button--ghost" onClick={onOpenDashboard}>
           Alle cijfers
         </button>
-        {data.opponent && (
+        {data.bundle.opponent && (
           <button
             type="button"
             className="button button--ghost"
-            onClick={() => onOpenOpponent(data.opponent!.id)}
+            onClick={() => onOpenOpponent(data.bundle.opponent!.id)}
           >
             Dossier
           </button>
@@ -281,7 +323,8 @@ export function CoachScreen({
 
 function CueCard({ cue }: { cue: CoachCue }): ReactElement {
   return (
-    <article className={`cue cue--${cue.tone}`}>
+    <article className={`cue cue--${cue.tone} ${cue.source === 'history' ? 'cue--history' : ''}`}>
+      {cue.source === 'history' && <span className="cue__source">eerder gezien</span>}
       <h3 className="cue__title">{cue.title}</h3>
       <p className="cue__detail">{cue.detail}</p>
     </article>

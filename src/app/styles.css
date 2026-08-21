@@ -1816,3 +1816,74 @@ button {
 .rotbars__next {
   margin: 0.75rem 0 0;
 }
+
+/* Stand bijstellen */
+
+.scorefix__score {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.scorefix__score span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.scorefix__score strong {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.scorefix__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.scorefix__buttons .button {
+  min-height: 3.5rem;
+  font-size: 1.05rem;
+}
+
+/* Wat we eerder zagen staat apart en herkenbaar: waardevol, maar wat er nu
+   gebeurt gaat voor. */
+
+.cues--history {
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  border: 1px dashed var(--line);
+}
+
+.cues__heading {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.cue--history {
+  background: transparent;
+}
+
+.cue__source {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.stats__good {
+  color: var(--perfect);
+}
+
+.stats__bad {
+  color: var(--error);
+}

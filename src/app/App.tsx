@@ -11,6 +11,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { NewMatchScreen } from './screens/NewMatchScreen';
 import { OpponentScreen } from './screens/OpponentScreen';
 import { ScoringScreen } from './screens/ScoringScreen';
+import { TeamScreen } from './screens/TeamScreen';
 import { CoachScreen } from './screens/CoachScreen';
 import { useStore } from './StoreProvider';
 
@@ -20,7 +21,8 @@ type View =
   | { name: 'scoring'; matchId: string; role: 'scorer' | 'assistant' }
   | { name: 'viewer'; matchId: string }
   | { name: 'dashboard'; matchId: string }
-  | { name: 'opponent'; opponentId: string };
+  | { name: 'opponent'; opponentId: string }
+  | { name: 'team' };
 
 export function App(): ReactElement {
   const store = useStore();
@@ -117,6 +119,13 @@ export function App(): ReactElement {
           onExit={() => setView({ name: 'scoring', matchId: view.matchId, role: 'scorer' })}
         />
       );
+    case 'team':
+      return (
+        <TeamScreen
+          onOpenMatch={(matchId) => setView({ name: 'dashboard', matchId })}
+          onExit={() => setView({ name: 'home' })}
+        />
+      );
     case 'opponent':
       return (
         <OpponentScreen
@@ -133,6 +142,7 @@ export function App(): ReactElement {
           onNewMatch={() => setView({ name: 'new' })}
           onOpenDashboard={(matchId) => setView({ name: 'dashboard', matchId })}
           onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
+          onOpenTeam={() => setView({ name: 'team' })}
           onOpenMatch={(matchId, role) => {
             void store.setActiveMatchId(matchId);
             void store.setMatchRole(matchId, role);

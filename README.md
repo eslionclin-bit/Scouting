@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 111 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 120 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -60,6 +60,10 @@ tegelijk, in de volgorde waarin je een rally ziet:
 
 Bovenin staat steeds wat er al gekozen is; elk stukje is aan te tikken om terug
 te gaan. Onderaan 'punt wij' / 'punt zij', undo actie en undo rally.
+
+Raakt de invoerder een rally kwijt, dan tel je het punt bij via **'Stand'**: het
+telt mee voor de stand én de rotatie, maar staat in de data als 'niet ingevoerd'
+— zonder te doen alsof er acties bekend zijn.
 
 De termen op de knoppen komen uit de zaal, niet uit het protocoldocument: dat
 schrijft 'opslag', 'receptie' en 'toets', maar niemand zegt dat langs de lijn.
@@ -115,6 +119,9 @@ Daar zoek je iets op; hier word je iets verteld:
   zie je zo, zonder te tellen;
 - de vier cijfers die er tijdens een set toe doen, sideout per rotatie, en wat je
   na de volgende sideout te wachten staat;
+- onderaan **wat we eerder zagen**: de zwaktes van deze tegenstander uit vorige
+  ontmoetingen, en ons eigen hardnekkigste patroon — apart gezet, want wat er nú
+  gebeurt gaat voor;
 - een **time-out-knop** die in grote letters hooguit drie zinnen toont om te
   zeggen. Geen zoekwerk terwijl de klok loopt — en daarna laat het scherm zien
   wat de time-out heeft opgeleverd ("sinds je time-out 4–2").
@@ -129,7 +136,12 @@ standen. De assistent ziet daarom geen 'punt wij', geen 'set afronden' en geen
 'undo rally'; wat hij invoert verschijnt binnen een seconde bij de ander. Wie
 welke kant van het net invoert, spreek je zelf af — de app bewaakt dat niet.
 
-**Opponent-dossier (scherm C)** — via de knop 'Dossier' bij een wedstrijd: alles
+**Ons team** — vanaf het startscherm: waar lopen wíj structureel vast, over alle
+wedstrijden heen. Sideout per rotatie, opstellingen vergeleken op puntverschil
+per set, foutpatronen per speler — en per bevinding een advies waar je op kunt
+trainen. Eén slechte set zegt niets; hetzelfde patroon over vijf wedstrijden wel.
+
+**Opponent-dossier** — via de knop 'Dossier' bij een wedstrijd: alles
 wat we van deze tegenstander weten, over alle wedstrijden heen. Head-to-head,
 aanvals- en opslagzones, en een lijst met de belangrijkste patronen.
 

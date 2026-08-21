@@ -5,7 +5,16 @@
  * hebben: wedstrijd → sets → rally's → acties, in speelvolgorde.
  */
 
-import type { Action, Match, MatchSet, Player, Rally, Team } from '../domain/types';
+import type {
+  Action,
+  Lineup,
+  Match,
+  MatchSet,
+  Player,
+  Rally,
+  Substitution,
+  Team,
+} from '../domain/types';
 import type { ScoutingStore } from './store';
 import { NotFoundError } from './repositories/base';
 
@@ -17,6 +26,9 @@ export interface RallyBundle {
 export interface SetBundle {
   set: MatchSet;
   rallies: RallyBundle[];
+  /** Startopstelling van het eigen team, als die is vastgelegd. */
+  lineup: Lineup | undefined;
+  substitutions: Substitution[];
 }
 
 export interface MatchBundle {
@@ -53,9 +65,15 @@ export async function loadMatchBundle(
 
   const setBundles: SetBundle[] = [];
   for (const set of sets) {
-    const rallies = await store.rallies.listBySet(set.id);
+    const [rallies, lineup, substitutions] = await Promise.all([
+      store.rallies.listBySet(set.id),
+      store.lineups.forSet(set.id),
+      store.substitutions.listBySet(set.id),
+    ]);
     setBundles.push({
       set,
+      lineup,
+      substitutions,
       rallies: rallies.map((rally) => ({
         rally,
         actions: actionsByRally.get(rally.id) ?? [],

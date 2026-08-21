@@ -136,7 +136,7 @@ function collectFindings({ byType, attackZones, serveZones, players }: FindingIn
   if (attackZones.total >= MIN_SAMPLE && attackZone && attackZone.share >= 0.4) {
     findings.push({
       code: 'attack_zone_concentration',
-      text: `${percent(attackZone.share)} van de aanvallen komt uit ${ZONE_LABELS[attackZone.zone].toLowerCase()}.`,
+      text: `${percent(attackZone.share)} van de aanvallen komen uit ${ZONE_LABELS[attackZone.zone].toLowerCase()}.`,
       sample: attackZones.total,
       strength: attackZone.share,
     });

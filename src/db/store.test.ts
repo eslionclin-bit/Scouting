@@ -252,6 +252,63 @@ describe('ScoutingStore', () => {
     expect(chain.map((action) => action.sequence)).toStrictEqual([1, 2, 3]);
   });
 
+  it('telt een gemist punt mee voor stand en rotatie, herkenbaar als niet ingevoerd', async () => {
+    // Wij serveren; de tegenstander wint een rally die de invoerder miste.
+    await store.rallies.addMissedPoint({ setId: fixture.set.id, wonBy: 'them' });
+
+    const set = await store.sets.require(fixture.set.id);
+    expect(set.pointsThem).toBe(1);
+
+    const rallies = await store.rallies.listBySet(fixture.set.id);
+    expect(rallies).toHaveLength(1);
+    expect(rallies[0]).toMatchObject({ wonBy: 'them', scouted: false, rotationUs: 1 });
+    expect(await store.actions.listByRally(rallies[0]!.id)).toHaveLength(0);
+
+    // De volgende rally begint bij de tegenstander aan service, precies zoals in
+    // het veld — anders zou de rotatie gaan afwijken van de werkelijkheid.
+    const next = await store.rallies.start({ setId: fixture.set.id });
+    expect(next.servingTeam).toBe('them');
+  });
+
+  it('laat een gemist punt de rotatie doordraaien bij een sideout', async () => {
+    await store.rallies.addMissedPoint({ setId: fixture.set.id, wonBy: 'them' });
+    await store.rallies.addMissedPoint({ setId: fixture.set.id, wonBy: 'us' });
+
+    // Zij serveerden, wij wonnen: doordraaien.
+    const next = await store.rallies.start({ setId: fixture.set.id });
+    expect(next.rotationUs).toBe(2);
+    expect(next.servingTeam).toBe('us');
+  });
+
+  it('gebruikt een lege openstaande rally voor een gemist punt', async () => {
+    const open = await store.rallies.start({ setId: fixture.set.id });
+
+    const missed = await store.rallies.addMissedPoint({ setId: fixture.set.id, wonBy: 'us' });
+
+    expect(missed.id).toBe(open.id);
+    expect(await store.rallies.listBySet(fixture.set.id)).toHaveLength(1);
+  });
+
+  it('laat een rally met acties met rust bij een gemist punt', async () => {
+    const open = await store.rallies.start({ setId: fixture.set.id });
+    await store.actions.append({
+      rallyId: open.id,
+      team: 'us',
+      type: 'serve',
+      quality: 'good',
+      playerId: fixture.players[0]!.id,
+      zoneFrom: 1,
+    });
+
+    await store.rallies.addMissedPoint({ setId: fixture.set.id, wonBy: 'them' });
+
+    const rallies = await store.rallies.listBySet(fixture.set.id);
+    expect(rallies).toHaveLength(2);
+    // De lopende rally blijft open; het gemiste punt staat ernaast.
+    expect(rallies[0]?.wonBy).toBeNull();
+    expect(rallies[1]).toMatchObject({ wonBy: 'them', scouted: false });
+  });
+
   it('onthoudt rol en actieve wedstrijd van dit apparaat', async () => {
     expect(await store.getDeviceRole()).toBe('scorer');
     await store.setDeviceRole('viewer');

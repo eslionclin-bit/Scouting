@@ -117,6 +117,7 @@ describe('opponent-dossier', () => {
 
     expect(finding).toBeDefined();
     expect(finding?.text).toContain('69%');
+    expect(finding?.text).toContain('aanvallen komen uit');
     expect(finding?.text).toContain('zone 4');
     // De bevinding draagt zelf waarop hij berust.
     expect(finding?.sample).toBe(13);

@@ -14,8 +14,10 @@
 import type { MatchBundle } from '../db/bundle';
 import type { TeamSide } from '../domain/types';
 import { ZONE_LABELS } from '../domain/zones';
+import { buildOpponentDossier } from './opponent';
 import { filterActions, toActionRows, toRallyRows, type RallyRow } from './rows';
 import { statsByPlayer, statsByRotation, statsByType, zoneTally, type RotationStats } from './stats';
+import { buildTeamProfile } from './team';
 
 /** Onder deze aantallen zeggen we niets. */
 const MIN_RALLIES = 4;
@@ -26,6 +28,11 @@ export type CueTone = 'urgent' | 'watch' | 'good';
 export interface CoachCue {
   code: string;
   tone: CueTone;
+  /**
+   * Komt dit uit de wedstrijd die nu bezig is, of uit wat we eerder zagen? Dat
+   * verschil bepaalt hoe hard je erop stuurt, dus het staat op het scherm.
+   */
+  source: 'live' | 'history';
   /** De handeling of het patroon, in één regel. */
   title: string;
   /** De telling eronder — zodat je zelf kunt wegen hoe hard dit is. */
@@ -62,7 +69,17 @@ export interface CoachBriefing {
   talkingPoints: string[];
 }
 
-export function buildCoachBriefing(bundle: MatchBundle): CoachBriefing {
+export interface CoachBriefingOptions {
+  /** Eerdere wedstrijden tegen deze tegenstander. */
+  opponentHistory?: readonly MatchBundle[];
+  /** Onze eigen eerdere wedstrijden, ongeacht tegenstander. */
+  ownHistory?: readonly MatchBundle[];
+}
+
+export function buildCoachBriefing(
+  bundle: MatchBundle,
+  options: CoachBriefingOptions = {},
+): CoachBriefing {
   const sets = bundle.sets;
   const current = sets.filter((set) => set.set.status === 'live').at(-1) ?? sets.at(-1) ?? null;
 
@@ -121,11 +138,10 @@ export function buildCoachBriefing(bundle: MatchBundle): CoachBriefing {
     };
   }
 
-  briefing.cues = collectCues(bundle, briefing, {
-    setRallies,
-    oursInSet,
-    receiveRallies,
-  });
+  briefing.cues = [
+    ...collectCues(bundle, briefing, { setRallies, oursInSet, receiveRallies }),
+    ...historyCues(bundle, options),
+  ];
   briefing.talkingPoints = briefing.cues
     .filter((cue) => cue.tone !== 'good')
     .slice(0, 3)
@@ -154,6 +170,7 @@ function collectCues(
     cues.push({
       code: 'streak_against',
       tone: 'urgent',
+      source: 'live',
       title: `${briefing.streak.count} punten op rij tegen`,
       detail: 'Overweeg een time-out of een wissel om de reeks te breken.',
       sample: briefing.streak.count,
@@ -169,6 +186,7 @@ function collectCues(
     cues.push({
       code: 'rotation_sideout',
       tone: isCurrent ? 'urgent' : 'watch',
+      source: 'live',
       title: `Sideout hapert in R${worst.rotation}`,
       detail: `${worst.won} van ${worst.total} gewonnen op hun service${isCurrent ? '; je staat er nu in' : ''}.`,
       sample: worst.total,
@@ -178,6 +196,7 @@ function collectCues(
   if (ourTypes.serve.counts.error >= 3) {
     cues.push({
       code: 'serve_errors',
+      source: 'live',
       tone: 'watch',
       title: 'Service kost punten',
       detail: `${ourTypes.serve.counts.error} servicefouten in deze set.`,
@@ -188,6 +207,7 @@ function collectCues(
   if (ourTypes.attack.total >= MIN_ACTIONS && (ourTypes.attack.efficiency ?? 0) <= 0) {
     cues.push({
       code: 'attack_flat',
+      source: 'live',
       tone: 'watch',
       title: 'Aanval levert niets op',
       detail: `${ourTypes.attack.counts.perfect} punt tegenover ${ourTypes.attack.counts.error} fout op ${ourTypes.attack.total} aanvallen.`,
@@ -200,6 +220,7 @@ function collectCues(
   if (pass.total >= MIN_ACTIONS && shakyPasses / pass.total >= 0.4) {
     cues.push({
       code: 'pass_under_pressure',
+      source: 'live',
       tone: 'watch',
       title: 'Pass staat onder druk',
       detail: `${shakyPasses} van ${pass.total} passes matig of fout.`,
@@ -219,6 +240,7 @@ function collectCues(
     if (theirAttacks.percentages[top] >= 0.45) {
       cues.push({
         code: 'their_attack_zone',
+        source: 'live',
         tone: 'watch',
         title: `Blok naar ${ZONE_LABELS[top].toLowerCase()}`,
         detail: `${theirAttacks.counts[top]} van ${theirAttacks.total} aanvallen komen daarvandaan.`,
@@ -235,6 +257,7 @@ function collectCues(
     if (attack.total >= 6 && (attack.pointPct ?? 0) >= 0.45) {
       cues.push({
         code: 'their_key_player',
+        source: 'live',
         tone: 'watch',
         title: `#${player.number} is hun uitweg`,
         detail: `${attack.counts.perfect} punten uit ${attack.total} aanvallen.`,
@@ -247,6 +270,7 @@ function collectCues(
   if (ourTypes.attack.total >= MIN_ACTIONS && (ourTypes.attack.pointPct ?? 0) >= 0.45) {
     cues.push({
       code: 'attack_running',
+      source: 'live',
       tone: 'good',
       title: 'Aanval loopt',
       detail: `${ourTypes.attack.counts.perfect} punten uit ${ourTypes.attack.total} aanvallen.`,
@@ -256,11 +280,70 @@ function collectCues(
   if (context.receiveRallies.length >= MIN_ACTIONS && (briefing.sideoutPct ?? 0) >= 0.6) {
     cues.push({
       code: 'sideout_good',
+      source: 'live',
       tone: 'good',
       title: 'Sideout staat',
       detail: `${Math.round((briefing.sideoutPct ?? 0) * 100)}% gewonnen op hun service.`,
       sample: context.receiveRallies.length,
     });
+  }
+
+  return cues;
+}
+
+/**
+ * Wat we al wisten voordat deze wedstrijd begon.
+ *
+ * De zwaktes van de tegenstander uit eerdere ontmoetingen, en onze eigen
+ * hardnekkige patronen. Ze staan onderaan en met een eigen label: ze zijn
+ * waardevol, maar wat er nú gebeurt gaat voor.
+ */
+function historyCues(bundle: MatchBundle, options: CoachBriefingOptions): CoachCue[] {
+  const cues: CoachCue[] = [];
+
+  const opponentHistory = (options.opponentHistory ?? []).filter(
+    (entry) => entry.match.id !== bundle.match.id,
+  );
+  if (opponentHistory.length > 0) {
+    const dossier = buildOpponentDossier(
+      opponentHistory,
+      bundle.match.opponentTeamId,
+      bundle.opponent?.name ?? 'tegenstander',
+    );
+    const label =
+      dossier.matches.length === 1 ? 'vorige wedstrijd' : `${dossier.matches.length} eerdere wedstrijden`;
+
+    for (const advice of dossier.advice.slice(0, 2)) {
+      cues.push({
+        code: 'opponent_history',
+        source: 'history',
+        tone: 'watch',
+        title: advice.text,
+        detail: `${advice.because} (${label})`,
+        sample: dossier.totalActions,
+      });
+    }
+  }
+
+  const ownHistory = (options.ownHistory ?? []).filter(
+    (entry) => entry.match.id !== bundle.match.id,
+  );
+  if (ownHistory.length > 0) {
+    const profile = buildTeamProfile(ownHistory, bundle.match.ownTeamId);
+    const finding = profile.findings[0];
+    const advice = profile.advice.find((entry) => entry.because === finding?.text);
+    if (finding && advice) {
+      cues.push({
+        code: 'own_history',
+        source: 'history',
+        tone: 'watch',
+        title: advice.text,
+        detail: `${finding.text} (${profile.matches} eerdere ${
+          profile.matches === 1 ? 'wedstrijd' : 'wedstrijden'
+        }, ${finding.sample} waarnemingen)`,
+        sample: finding.sample,
+      });
+    }
   }
 
   return cues;

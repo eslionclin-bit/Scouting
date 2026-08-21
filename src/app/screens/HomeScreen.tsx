@@ -18,6 +18,7 @@ export interface HomeScreenProps {
   onOpenMatch: (matchId: string, role: DeviceRole) => void;
   onOpenDashboard: (matchId: string) => void;
   onOpenOpponent: (opponentId: string) => void;
+  onOpenTeam: () => void;
   onNewMatch: () => void;
 }
 
@@ -26,6 +27,7 @@ export function HomeScreen({
   onOpenMatch,
   onOpenDashboard,
   onOpenOpponent,
+  onOpenTeam,
   onNewMatch,
 }: HomeScreenProps): ReactElement {
   const store = useStore();
@@ -80,6 +82,9 @@ export function HomeScreen({
             onClick={() => setShowPairing(true)}
           >
             {session.status === 'connected' ? 'Verbonden' : 'Koppelen met ander apparaat'}
+          </button>
+          <button type="button" className="button" onClick={onOpenTeam}>
+            Ons team
           </button>
           <button type="button" className="button button--primary" onClick={onNewMatch}>
             + Nieuwe wedstrijd

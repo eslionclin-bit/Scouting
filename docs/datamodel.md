@@ -374,7 +374,40 @@ De codes in de data (`serve`, `reception`, `set`, …) zijn níét meegewijzigd.
 blijven eerder ingevoerde wedstrijden en exports kloppen, en is een volgende
 naamswijziging opnieuw een kwestie van één tabel in `domain/protocol.ts`.
 
-## 18. Wat hier bewust nog niet zit
+## 18. Gemiste punten
+
+Een invoerder raakt tijdens een wedstrijd wel eens een rally kwijt. Zo'n punt
+wegdenken is geen optie: dan loopt niet alleen de stand achter, maar ook de
+rotatie — en die is de basis van de halve analyse.
+
+`rallies.addMissedPoint()` legt daarom een rally aan zonder acties, met
+`scouted: false`. Die telt mee voor stand, service en rotatie, maar draagt zelf
+geen acties. Ontbreekt het veld (data van vóór deze versie), dan geldt de rally
+als gewoon ingevoerd.
+
+Staat er een lege rally open, dan wordt díé het gemiste punt; een rally waar al
+acties in staan blijft ongemoeid.
+
+## 19. Ons eigen dossier
+
+`analysis/team.ts` is de spiegel van het opponent-dossier: dezelfde
+eerlijkheidsregels, maar dan op onszelf. Twee dingen die het opponent-dossier
+niet heeft:
+
+- **Rotaties over wedstrijden heen.** Per set zijn het er te weinig om iets te
+  zeggen; over een handvol wedstrijden wordt zichtbaar dat R4 structureel
+  achterblijft.
+- **Opstellingen.** Sets met dezelfde zes spelers worden gegroepeerd (op de
+  spelers, niet op wie waar begon) en vergeleken op puntverschil per set. Dat is
+  het enige getal dat opstellingen onderling vergelijkbaar maakt, en het vraagt
+  minstens twee sets per opstelling voordat er iets over gezegd wordt.
+
+Het coachscherm neemt hiervan alleen de scherpste bevinding mee, samen met de
+patronen van de tegenstander uit eerdere ontmoetingen. Die staan in een apart
+blok met het label 'eerder gezien': ze zijn waardevol, maar wat er nu gebeurt
+gaat voor.
+
+## 20. Wat hier bewust nog niet zit
 
 - Video-invoer: `Action.videoTimestampMs` ligt klaar in het model, maar er is nog
   geen scherm dat een video naast de invoer zet.

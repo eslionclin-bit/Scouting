@@ -19,6 +19,12 @@ export interface StartRallyInput {
   rotationUs?: number | null;
 }
 
+export interface MissedPointInput {
+  setId: string;
+  /** Wie het punt kreeg. */
+  wonBy: TeamSide;
+}
+
 export interface CompleteRallyResult {
   rally: Rally;
   warnings: ValidationIssue[];
@@ -60,9 +66,49 @@ export class RallyRepository {
       // De rotatiestand volgt uit de al gespeelde rally's, dus die hoeft niemand
       // bij te houden: één systeem in plaats van rotatie op papier ernaast.
       rotationUs: input.rotationUs ?? rotationForNextRally(rallies, set.startingServe, 'us'),
+      scouted: true,
     });
     await commit(this.ctx, [{ entity: 'rallies', record }]);
     return record;
+  }
+
+  /**
+   * Een punt dat niet is ingevoerd alsnog meetellen. Het levert een rally op
+   * zonder acties, herkenbaar als 'niet ingevoerd', zodat stand én rotatie weer
+   * kloppen met wat er op het scorebord staat.
+   */
+  async addMissedPoint(input: MissedPointInput): Promise<Rally> {
+    return this.ctx.lock.run(async () => {
+      const set = await this.sets.require(input.setId);
+      const rallies = await this.listBySet(input.setId);
+
+      // Staat er een lege rally open, dan wordt dat deze; anders komt er een bij.
+      const open = rallies.find((rally) => rally.wonBy === null);
+      const actions = open
+        ? alive(await this.ctx.db.getAllFromIndex('actions', 'by_rally', open.id))
+        : [];
+
+      const base =
+        open && actions.length === 0
+          ? open
+          : buildRecord(this.ctx, 'rallies', {
+              matchId: set.matchId,
+              setId: set.id,
+              sequence: nextSequence(rallies),
+              servingTeam:
+                rallies.filter((rally) => rally.wonBy !== null).at(-1)?.wonBy ?? set.startingServe,
+              wonBy: null,
+              pointsUsAfter: null,
+              pointsThemAfter: null,
+              rotationUs: rotationForNextRally(rallies, set.startingServe, 'us'),
+              scouted: false,
+            });
+
+      const marked = reviseRecord(this.ctx, base, { scouted: false });
+      const outcome = await this.applyOutcome(marked, input.wonBy);
+      await commit(this.ctx, outcome.writes);
+      return outcome.rally;
+    });
   }
 
   async get(id: string): Promise<Rally | undefined> {
