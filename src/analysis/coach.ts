@@ -49,6 +49,14 @@ export interface CoachBriefing {
   attackTotal: number;
   errorsUs: number;
   rotations: RotationStats[];
+  /**
+   * De rotatie waar je na de volgende sideout in komt. De cijfers ontbreken
+   * zolang je er in deze set nog niet in gestaan hebt — dat is zelf ook een
+   * antwoord.
+   */
+  nextRotation: { rotation: number; stats: RotationStats | null } | null;
+  /** Uitslag van elke afgeronde rally in deze set, op volgorde. */
+  results: TeamSide[];
   cues: CoachCue[];
   /** Maximaal drie zinnen om in de time-out te zeggen. */
   talkingPoints: string[];
@@ -97,9 +105,21 @@ export function buildCoachBriefing(bundle: MatchBundle): CoachBriefing {
     attackTotal: ourTypes.attack.total,
     errorsUs: oursInSet.filter((row) => row.action.quality === 'error').length,
     rotations,
+    nextRotation: null,
+    results: setRallies
+      .map((row) => row.rally.wonBy)
+      .filter((wonBy): wonBy is TeamSide => wonBy !== null),
     cues: [],
     talkingPoints: [],
   };
+
+  if (rotation) {
+    const next = (rotation % 6) + 1;
+    briefing.nextRotation = {
+      rotation: next,
+      stats: rotations.find((entry) => entry.rotation === next) ?? null,
+    };
+  }
 
   briefing.cues = collectCues(bundle, briefing, {
     setRallies,

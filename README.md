@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 110 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 111 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -111,9 +111,13 @@ Daar zoek je iets op; hier word je iets verteld:
 - daaronder **wat er nu aan de hand is**: hoogstens een paar aanwijzingen, elk
   met de telling eronder ("Blok naar zone 4 — 9 van 11 aanvallen komen
   daarvandaan", "Sideout hapert in R2 — 1 van 5");
-- de vier cijfers die er tijdens een set toe doen, en sideout per rotatie;
+- het **verloop van de set** als een rij blokjes, één per rally: een reeks tegen
+  zie je zo, zonder te tellen;
+- de vier cijfers die er tijdens een set toe doen, sideout per rotatie, en wat je
+  na de volgende sideout te wachten staat;
 - een **time-out-knop** die in grote letters hooguit drie zinnen toont om te
-  zeggen. Geen zoekwerk terwijl de klok loopt.
+  zeggen. Geen zoekwerk terwijl de klok loopt — en daarna laat het scherm zien
+  wat de time-out heeft opgeleverd ("sinds je time-out 4–2").
 
 Zolang er te weinig gespeeld is, zwijgt het scherm. Sturen op vier ballen is
 slechter dan niets zeggen.

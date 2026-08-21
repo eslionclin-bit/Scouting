@@ -166,3 +166,29 @@ describe('setstand in de briefing', () => {
     store.close();
   });
 });
+
+describe('verloop en volgende rotatie', () => {
+  it('geeft de uitslag van elke rally op volgorde, voor het verloop', async () => {
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+
+    for (const wonBy of ['us', 'them', 'them', 'us'] as const) {
+      const rally = await store.rallies.start({ setId: fixture.set.id });
+      await store.actions.append({
+        rallyId: rally.id,
+        team: 'us',
+        type: 'set',
+        quality: 'good',
+        playerId: fixture.players[0]!.id,
+      });
+      await store.rallies.complete(rally.id, wonBy);
+    }
+
+    const result = buildCoachBriefing(await loadMatchBundle(store, fixture.match.id));
+    expect(result.results).toStrictEqual(['us', 'them', 'them', 'us']);
+    // Twee op rij tegen is nog geen reeks; drie wel.
+    expect(result.streak).toStrictEqual({ team: 'us', count: 1 });
+
+    store.close();
+  });
+});

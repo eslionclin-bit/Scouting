@@ -10,13 +10,19 @@
  * koppeling met het invoerapparaat.
  */
 
-import { useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { buildCoachBriefing, type CoachCue } from '../../analysis';
 import { loadMatchBundle } from '../../db/bundle';
 import { ACTION_TYPE_LABELS, QUALITY_LABELS } from '../../domain/protocol';
 import { PairingSheet } from '../components/PairingSheet';
 import type { PeerSession } from '../hooks/usePeerSession';
-import { useQuery } from '../StoreProvider';
+import { useQuery, useStore } from '../StoreProvider';
+
+/** Stand op het moment van de laatste time-out, om het effect ervan te zien. */
+interface TimeoutMark {
+  pointsUs: number;
+  pointsThem: number;
+}
 
 export interface CoachScreenProps {
   matchId: string;
@@ -35,8 +41,10 @@ export function CoachScreen({
   onOpenOpponent,
   onSwitchToScoring,
 }: CoachScreenProps): ReactElement {
+  const store = useStore();
   const [showPairing, setShowPairing] = useState(false);
   const [showTimeout, setShowTimeout] = useState(false);
+  const [timeoutMark, setTimeoutMark] = useState<TimeoutMark | null>(null);
 
   const { data } = useQuery(async (store) => loadMatchBundle(store, matchId), [matchId]);
   const briefing = useMemo(() => (data ? buildCoachBriefing(data) : null), [data]);
@@ -50,6 +58,28 @@ export function CoachScreen({
       .slice(-4)
       .reverse();
   }, [data]);
+
+  const setId = data?.sets.filter((set) => set.set.status === 'live').at(-1)?.set.id ?? null;
+  const markKey = setId ? `coach.timeout.${setId}` : null;
+
+  // De markering staat lokaal: hij hoort bij deze bank, niet bij de wedstrijd.
+  useEffect(() => {
+    if (!markKey) return;
+    let cancelled = false;
+    void store.getMeta<TimeoutMark>(markKey).then((mark) => {
+      if (!cancelled) setTimeoutMark(mark ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [store, markKey]);
+
+  async function markTimeout(): Promise<void> {
+    if (!markKey || !briefing) return;
+    const mark = { pointsUs: briefing.pointsUs, pointsThem: briefing.pointsThem };
+    setTimeoutMark(mark);
+    await store.setMeta(markKey, mark);
+  }
 
   if (!data || !briefing) return <div className="boot">Wedstrijd laden…</div>;
 
@@ -83,12 +113,32 @@ export function CoachScreen({
           <button
             type="button"
             className="button button--primary button--timeout"
-            onClick={() => setShowTimeout(true)}
+            onClick={() => {
+              setShowTimeout(true);
+              void markTimeout();
+            }}
           >
             Time-out
           </button>
         </div>
       </header>
+
+      <section className="run">
+        <div className="run__strip" aria-hidden="true">
+          {briefing.results.slice(-28).map((wonBy, index) => (
+            <span key={index} className={`run__tick run__tick--${wonBy}`} />
+          ))}
+          {briefing.results.length === 0 && <span className="run__empty">nog geen rally's</span>}
+        </div>
+        <p className="run__legend">
+          verloop van deze set · elk blokje is een rally
+          {timeoutMark
+            ? ` · sinds je time-out ${briefing.pointsUs - timeoutMark.pointsUs}–${
+                briefing.pointsThem - timeoutMark.pointsThem
+              }`
+            : ''}
+        </p>
+      </section>
 
       {/* Wat er nu aan de hand is. Dit is de reden dat dit scherm bestaat. */}
       <section className="cues">
@@ -99,10 +149,10 @@ export function CoachScreen({
           </p>
         ) : (
           <>
-            {[...urgent, ...watch].map((cue) => (
+            {[...urgent, ...watch].slice(0, 3).map((cue) => (
               <CueCard key={cue.code + cue.title} cue={cue} />
             ))}
-            {good.map((cue) => (
+            {good.slice(0, 1).map((cue) => (
               <CueCard key={cue.code + cue.title} cue={cue} />
             ))}
           </>
@@ -153,6 +203,15 @@ export function CoachScreen({
             );
           })}
         </div>
+        {briefing.nextRotation && (
+          <p className="card__hint rotbars__next">
+            Na de volgende sideout kom je in R{briefing.nextRotation.rotation} —{' '}
+            {briefing.nextRotation.stats?.sideoutPct == null
+              ? 'daar heb je deze set nog niet in gestaan'
+              : `${pct(briefing.nextRotation.stats.sideoutPct)} sideout op ${briefing.nextRotation.stats.receiveRallies} rally's`}
+            .
+          </p>
+        )}
       </section>
 
       <section className="card">

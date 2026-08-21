@@ -1773,3 +1773,46 @@ button {
   font-size: 1.3rem;
   color: var(--muted);
 }
+
+/* Verloop van de set: één blokje per rally, zodat een reeks meteen opvalt. */
+
+.run {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+}
+
+.run__strip {
+  display: flex;
+  gap: 3px;
+  align-items: stretch;
+  min-height: 1.5rem;
+}
+
+.run__tick {
+  flex: 1;
+  min-width: 4px;
+  max-width: 1.4rem;
+  border-radius: 3px;
+}
+
+.run__tick--us {
+  background: var(--us);
+}
+
+.run__tick--them {
+  background: var(--them);
+}
+
+.run__empty,
+.run__legend {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.rotbars__next {
+  margin: 0.75rem 0 0;
+}
