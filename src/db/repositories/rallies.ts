@@ -53,7 +53,9 @@ export class RallyRepository {
     if (open) return open;
 
     const lastCompleted = rallies.filter((rally) => rally.wonBy !== null).at(-1);
-    const servingTeam = input.servingTeam ?? lastCompleted?.wonBy ?? set.startingServe;
+    // Zolang de beginservice onbekend is, gaan we uit van onszelf; de invoerder
+    // legt hem vast voordat de eerste rally begint.
+    const servingTeam = input.servingTeam ?? lastCompleted?.wonBy ?? set.startingServe ?? 'us';
 
     const record = buildRecord(this.ctx, 'rallies', {
       matchId: set.matchId,
@@ -65,7 +67,8 @@ export class RallyRepository {
       pointsThemAfter: null,
       // De rotatiestand volgt uit de al gespeelde rally's, dus die hoeft niemand
       // bij te houden: één systeem in plaats van rotatie op papier ernaast.
-      rotationUs: input.rotationUs ?? rotationForNextRally(rallies, set.startingServe, 'us'),
+      rotationUs:
+        input.rotationUs ?? rotationForNextRally(rallies, set.startingServe ?? 'us', 'us'),
       scouted: true,
     });
     await commit(this.ctx, [{ entity: 'rallies', record }]);
@@ -96,11 +99,13 @@ export class RallyRepository {
               setId: set.id,
               sequence: nextSequence(rallies),
               servingTeam:
-                rallies.filter((rally) => rally.wonBy !== null).at(-1)?.wonBy ?? set.startingServe,
+                rallies.filter((rally) => rally.wonBy !== null).at(-1)?.wonBy ??
+                set.startingServe ??
+                'us',
               wonBy: null,
               pointsUsAfter: null,
               pointsThemAfter: null,
-              rotationUs: rotationForNextRally(rallies, set.startingServe, 'us'),
+              rotationUs: rotationForNextRally(rallies, set.startingServe ?? 'us', 'us'),
               scouted: false,
             });
 

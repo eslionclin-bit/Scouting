@@ -15,6 +15,7 @@ import {
   TEAM_SIDE_LABELS,
   tooltipFor,
 } from '../../domain/protocol';
+import { playerLabel } from '../../domain/players';
 import { requiresZoneFrom } from '../../domain/rules';
 import { ACTION_TYPES, QUALITIES, type Player, type Quality, type TeamSide, type Zone } from '../../domain/types';
 import { COURT_GRID, ZONE_LABELS } from '../../domain/zones';
@@ -32,6 +33,11 @@ export interface EntryPanelProps {
   dispatch: (event: EntryEvent) => void;
   ownPlayers: readonly Player[];
   opponentPlayers: readonly Player[];
+  /**
+   * Speler die zojuist de bal speelde en hem dus niet nog een keer mag raken.
+   * Na een blok mag dat wél, dus dan staat hier niets.
+   */
+  blockedPlayerId?: string | null;
   onCommit: (quality: Quality) => void;
   onExplain: (quality: Quality) => void;
   onAddPlayer: (input: NewPlayerInput) => Promise<void>;
@@ -48,7 +54,12 @@ export function EntryPanel(props: EntryPanelProps): ReactElement {
 
       {state.step === 'player' && <PlayerStep {...props} players={players} />}
       {state.step === 'type' && <TypeStep state={state} dispatch={dispatch} chosen={chosen} />}
-      {state.step === 'zone' && <ZoneStep state={state} dispatch={dispatch} />}
+      {state.step === 'zone' &&
+        (state.type === 'serve' ? (
+          <ServeSpotStep state={state} dispatch={dispatch} />
+        ) : (
+          <ZoneStep state={state} dispatch={dispatch} />
+        ))}
       {state.step === 'quality' && (
         <QualityStep state={state} onCommit={props.onCommit} onExplain={props.onExplain} />
       )}
@@ -62,11 +73,7 @@ function DraftBar({
   dispatch,
   chosen,
 }: EntryPanelProps & { chosen: Player | undefined }): ReactElement {
-  const playerLabel = !state.playerChosen
-    ? null
-    : chosen
-      ? `#${chosen.number} ${chosen.name}`
-      : 'onbekende speler';
+  const who = !state.playerChosen ? null : chosen ? playerLabel(chosen) : 'onbekende speler';
 
   return (
     <div className="draft">
@@ -78,7 +85,7 @@ function DraftBar({
         <span className="draft__label">Wie</span>
         <span className="draft__value">
           {TEAM_SIDE_LABELS[state.team]}
-          {playerLabel ? ` · ${playerLabel}` : ''}
+          {who ? ` · ${who}` : ''}
         </span>
       </button>
 
@@ -138,6 +145,7 @@ function PlayerStep({
   state,
   dispatch,
   players,
+  blockedPlayerId,
   onAddPlayer,
 }: EntryPanelProps & { players: readonly Player[] }): ReactElement {
   const [adding, setAdding] = useState(false);
@@ -159,18 +167,25 @@ function PlayerStep({
       </div>
 
       <div className="grid grid--players">
-        {players.map((player) => (
-          <button
-            key={player.id}
-            type="button"
-            className={`tile tile--player ${state.playerId === player.id ? 'tile--selected' : ''}`}
-            aria-label={`#${player.number} ${player.name}`}
-            onClick={() => dispatch({ kind: 'player', playerId: player.id })}
-          >
-            <span className="tile__number">{player.number}</span>
-            <span className="tile__name">{player.name}</span>
-          </button>
-        ))}
+        {players.map((player) => {
+          // Twee keer achter elkaar de bal raken mag niet; die speler staat er
+          // dus wel, maar is niet te kiezen.
+          const blocked = blockedPlayerId === player.id;
+          return (
+            <button
+              key={player.id}
+              type="button"
+              className={`tile tile--player ${state.playerId === player.id ? 'tile--selected' : ''}`}
+              aria-label={playerLabel(player)}
+              disabled={blocked}
+              title={blocked ? 'Speelde zojuist de bal' : undefined}
+              onClick={() => dispatch({ kind: 'player', playerId: player.id })}
+            >
+              <span className="tile__number">{player.number}</span>
+              <span className="tile__name">{player.name || '\u00a0'}</span>
+            </button>
+          );
+        })}
 
         {/* Een invaller of een rugnummer dat je pas tijdens de wedstrijd ziet,
             hoort geen reden te zijn om de invoer te onderbreken. */}
@@ -240,7 +255,8 @@ function AddPlayerDialog({
     setBusy(true);
     try {
       // Bij de tegenstander ken je meestal alleen het nummer; dat is genoeg.
-      await onSave({ team, number: parsed, name: name.trim() || `#${parsed}` });
+      // De naam blijft dan leeg, zodat er nergens '#7 #7' komt te staan.
+      await onSave({ team, number: parsed, name: name.trim() });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -300,7 +316,7 @@ function TypeStep({
   dispatch: (event: EntryEvent) => void;
   chosen: Player | undefined;
 }): ReactElement {
-  const who = chosen ? `#${chosen.number} ${chosen.name}` : TEAM_SIDE_LABELS[state.team].toLowerCase();
+  const who = chosen ? playerLabel(chosen) : TEAM_SIDE_LABELS[state.team].toLowerCase();
 
   return (
     <StepCard title={`Wat deed ${who}?`}>
@@ -321,6 +337,43 @@ function TypeStep({
           </button>
         ))}
       </div>
+    </StepCard>
+  );
+}
+
+/**
+ * Bij een service sta je achter de achterlijn, niet op een van de zes posities
+ * in het veld. Drie plekken volstaan, en ze komen overeen met de zones waar de
+ * server vandaan komt: links (5), midden (6) en rechts (1).
+ */
+const SERVE_SPOTS: { zone: Zone; label: string }[] = [
+  { zone: 5, label: 'Links' },
+  { zone: 6, label: 'Midden' },
+  { zone: 1, label: 'Rechts' },
+];
+
+function ServeSpotStep({
+  state,
+  dispatch,
+}: {
+  state: EntryState;
+  dispatch: (event: EntryEvent) => void;
+}): ReactElement {
+  return (
+    <StepCard title="Waar vandaan geserveerd?" hint="Achter de achterlijn.">
+      <div className="servespots">
+        {SERVE_SPOTS.map((spot) => (
+          <button
+            key={spot.zone}
+            type="button"
+            className={`tile tile--spot ${state.zoneFrom === spot.zone ? 'tile--selected' : ''}`}
+            onClick={() => dispatch({ kind: 'zoneFrom', zone: spot.zone })}
+          >
+            {spot.label}
+          </button>
+        ))}
+      </div>
+      <p className="step__hint servespots__net">↑ richting het net</p>
     </StepCard>
   );
 }

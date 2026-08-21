@@ -118,8 +118,14 @@ export interface MatchSet extends BaseRecord {
   pointsUs: number;
   pointsThem: number;
   status: SetStatus;
-  /** Wie begint met serveren in deze set. */
-  startingServe: TeamSide;
+  /**
+   * Wie begint met serveren in deze set.
+   *
+   * `null` zolang het nog niet bekend is: bij de toss weet je het vaak pas aan
+   * het eind van de warming-up, en dan is een vast ingevulde waarde erger dan
+   * een lege — die zou stilzwijgend de rotatie verschuiven.
+   */
+  startingServe: TeamSide | null;
 }
 
 export interface Rally extends BaseRecord {

@@ -56,7 +56,8 @@ describe('ScoringScreen', () => {
 
     await user.click(screen.getByRole('button', { name: '#4 Sanne' }));
     await user.click(screen.getByRole('button', { name: 'Service' }));
-    await user.click(screen.getByRole('button', { name: 'Zone 1 (rechtsachter)' }));
+    // Bij een service kies je een plek achter de achterlijn, geen veldzone.
+    await user.click(screen.getByRole('button', { name: 'Rechts' }));
     await user.click(screen.getByRole('button', { name: /^Goed/ }));
 
     await waitFor(async () => {
@@ -180,5 +181,87 @@ describe('ScoringScreen als assistent', () => {
 
     expect(await screen.findByText(/Wachten op de hoofdinvoerder/)).toBeDefined();
     expect(await store.rallies.listBySet(fixture.set.id)).toHaveLength(0);
+  });
+});
+
+describe('ScoringScreen: regels van het spel', () => {
+  it('vraagt eerst wie begint met serveren als dat nog niet bekend is', async () => {
+    const user = userEvent.setup();
+    const store = await openTestStore();
+    const ownTeam = await store.teams.create({ name: 'VCH DS 1', isOwnTeam: true });
+    const opponent = await store.teams.findOrCreateOpponent('VC Noord');
+    await store.players.createMany([{ teamId: ownTeam.id, number: 4, name: 'Sanne' }]);
+    const match = await store.matches.create({
+      date: '2026-09-12',
+      ownTeamId: ownTeam.id,
+      opponentTeamId: opponent.id,
+      homeAway: 'home',
+      status: 'live',
+    });
+    // Zonder beginservice: die weet je pas na de warming-up.
+    const set = await store.sets.start({ matchId: match.id });
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    expect(await screen.findByText('Wie begint met serveren?')).toBeDefined();
+    expect(screen.queryByText('Wie speelde de bal?')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Tegenstander' }));
+
+    await waitFor(async () => {
+      expect((await store.sets.require(set.id)).startingServe).toBe('them');
+    });
+    expect(await screen.findByText('Wie speelde de bal?')).toBeDefined();
+  });
+
+  it('laat dezelfde speler niet twee keer achter elkaar de bal spelen', async () => {
+    const user = userEvent.setup();
+    await renderScoring();
+
+    await user.click(screen.getByRole('button', { name: '#4 Sanne' }));
+    await user.click(screen.getByRole('button', { name: 'Pass' }));
+    await user.click(screen.getByRole('button', { name: /^Goed/ }));
+
+    // Terug naar de spelerstap voor de volgende actie in dezelfde rally.
+    await waitFor(() => expect(screen.getByText('Wie speelde de bal?')).toBeDefined());
+    expect(screen.getByRole('button', { name: '#4 Sanne' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: '#7 Noor' })).toHaveProperty('disabled', false);
+  });
+
+  it('zet bij een eigen service de speler uit zone 1 al klaar', async () => {
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    const [sanne, noor, fem] = fixture.players;
+
+    await store.lineups.set({
+      setId: fixture.set.id,
+      positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
+    });
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    // Wij beginnen met serveren, dus de app slaat de spelerstap over: #9 staat
+    // in zone 1 en is dus aan de beurt.
+    expect(await screen.findByText('Wat deed #9 Fem?')).toBeDefined();
   });
 });

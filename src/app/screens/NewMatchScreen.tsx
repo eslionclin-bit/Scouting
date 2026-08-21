@@ -1,7 +1,12 @@
 /**
- * Wedstrijd opzetten: eigen team met spelers, tegenstander, datum en wie begint
- * met serveren. Zo weinig mogelijk velden — dit gebeurt vlak voor de eerste
- * service, meestal staand met een tablet in de hand.
+ * Wedstrijd opzetten: eigen team met spelers, tegenstander en datum.
+ *
+ * Wie begint met serveren staat hier bewust níét: dat weet je pas na de toss aan
+ * het eind van de warming-up. Die vraag komt in het invoerscherm, vlak voor de
+ * eerste rally.
+ *
+ * De spelers blijven bewaard bij het team, dus na de eerste keer hoeft er
+ * alleen nog een tegenstander ingevuld te worden.
  */
 
 import { useEffect, useState, type ReactElement } from 'react';
@@ -17,16 +22,20 @@ interface PlayerRow {
   name: string;
 }
 
-const EMPTY_ROWS: PlayerRow[] = Array.from({ length: 6 }, () => ({ number: '', name: '' }));
+const EMPTY_ROWS: PlayerRow[] = Array.from({ length: 8 }, () => ({ number: '', name: '' }));
+const EMPTY_OPPONENT_ROWS: PlayerRow[] = Array.from({ length: 6 }, () => ({ number: '', name: '' }));
+
+/** Het team waar deze app voor gemaakt is; aan te passen voor elk ander team. */
+const DEFAULT_TEAM_NAME = 'VCH DS 1';
 
 export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): ReactElement {
   const store = useStore();
-  const [ownTeamName, setOwnTeamName] = useState('');
+  const [ownTeamName, setOwnTeamName] = useState(DEFAULT_TEAM_NAME);
   const [opponentName, setOpponentName] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [homeAway, setHomeAway] = useState<'home' | 'away'>('home');
-  const [startingServe, setStartingServe] = useState<'us' | 'them'>('us');
   const [rows, setRows] = useState<PlayerRow[]>(EMPTY_ROWS);
+  const [opponentRows, setOpponentRows] = useState<PlayerRow[]>(EMPTY_OPPONENT_ROWS);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -52,6 +61,12 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
     setRows((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
 
+  function updateOpponentRow(index: number, patch: Partial<PlayerRow>): void {
+    setOpponentRows((current) =>
+      current.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  }
+
   async function save(): Promise<void> {
     setError(null);
     if (!ownTeamName.trim()) return setError('Vul de naam van het eigen team in.');
@@ -74,6 +89,22 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
       if (newPlayers.length > 0) await store.players.createMany(newPlayers);
 
       const opponent = await store.teams.findOrCreateOpponent(opponentName.trim());
+
+      // Rugnummers van de tegenstander mogen nu al, zodat je tijdens de wedstrijd
+      // niet hoeft te stoppen om ze toe te voegen. Een naam is niet nodig.
+      const knownOpponents = new Map(
+        (await store.players.listByTeam(opponent.id, { includeInactive: true })).map((player) => [
+          player.number,
+          player,
+        ]),
+      );
+      const newOpponents = opponentRows
+        .map((row) => ({ number: Number(row.number), name: row.name.trim() }))
+        .filter((row) => Number.isInteger(row.number) && row.number > 0)
+        .filter((row) => !knownOpponents.has(row.number))
+        .map((row) => ({ teamId: opponent.id, number: row.number, name: row.name }));
+      if (newOpponents.length > 0) await store.players.createMany(newOpponents);
+
       const match = await store.matches.create({
         date,
         ownTeamId: ownTeam.id,
@@ -81,7 +112,8 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
         homeAway,
         status: 'live',
       });
-      await store.sets.start({ matchId: match.id, startingServe });
+      // Zonder beginservice: die vraagt het invoerscherm na de warming-up.
+      await store.sets.start({ matchId: match.id });
       await store.setActiveMatchId(match.id);
       onCreated(match.id);
     } catch (cause) {
@@ -136,25 +168,11 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
           </div>
         </fieldset>
 
-        <fieldset className="field">
-          <span>Eerste service</span>
-          <div className="choices">
-            {(['us', 'them'] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={`chip ${startingServe === option ? 'chip--active' : ''}`}
-                onClick={() => setStartingServe(option)}
-              >
-                {option === 'us' ? 'Wij' : 'Tegenstander'}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+
       </div>
 
       <h2 className="setup__subtitle">Spelers eigen team</h2>
-      <p className="setup__hint">Rugnummer en naam. Lege regels worden overgeslagen.</p>
+      <p className="setup__hint">Blijven bewaard voor volgende wedstrijden.</p>
       <div className="roster">
         {rows.map((row, index) => (
           <div key={index} className="roster__row">
@@ -181,6 +199,37 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
           onClick={() => setRows((current) => [...current, { number: '', name: '' }])}
         >
           + Speler
+        </button>
+      </div>
+
+      <h2 className="setup__subtitle">Rugnummers tegenstander</h2>
+      <p className="setup__hint">Optioneel, en een naam hoeft niet.</p>
+      <div className="roster">
+        {opponentRows.map((row, index) => (
+          <div key={index} className="roster__row">
+            <input
+              className="roster__number"
+              inputMode="numeric"
+              value={row.number}
+              onChange={(event) => updateOpponentRow(index, { number: event.target.value })}
+              placeholder="#"
+              aria-label={`Rugnummer tegenstander ${index + 1}`}
+            />
+            <input
+              className="roster__name"
+              value={row.name}
+              onChange={(event) => updateOpponentRow(index, { name: event.target.value })}
+              placeholder="Naam (optioneel)"
+              aria-label={`Naam tegenstander ${index + 1}`}
+            />
+          </div>
+        ))}
+        <button
+          type="button"
+          className="button button--ghost"
+          onClick={() => setOpponentRows((current) => [...current, { number: '', name: '' }])}
+        >
+          + Rugnummer
         </button>
       </div>
 

@@ -8,6 +8,7 @@
 
 import { useState, type ReactElement } from 'react';
 import { positionsAt } from '../../domain/rotation';
+import { playerLabel } from '../../domain/players';
 import type { Lineup, Player, Substitution, Zone } from '../../domain/types';
 import { ZONES } from '../../domain/types';
 import { COURT_GRID, ZONE_LABELS } from '../../domain/zones';
@@ -100,7 +101,7 @@ export function LineupSheet({
                       >
                         <span className="lineupcell__zone">{zone}</span>
                         <span className="lineupcell__player">
-                          {player ? `#${player.number} ${player.name}` : '—'}
+                          {player ? playerLabel(player) : '—'}
                         </span>
                       </button>
                     );
@@ -115,7 +116,7 @@ export function LineupSheet({
                   key={player.id}
                   type="button"
                   className="tile tile--player"
-                  aria-label={`#${player.number} ${player.name}`}
+                  aria-label={playerLabel(player)}
                   onClick={() => assign(player.id)}
                 >
                   <span className="tile__number">{player.number}</span>
@@ -150,7 +151,7 @@ export function LineupSheet({
                     key={zone}
                     type="button"
                     className={`tile tile--player ${playerOut === player.id ? 'tile--selected' : ''}`}
-                    aria-label={`#${player.number} ${player.name} uit zone ${zone}`}
+                    aria-label={`${playerLabel(player)} uit zone ${zone}`}
                     onClick={() => setPlayerOut(player.id)}
                   >
                     <span className="tile__number">{player.number}</span>
@@ -170,7 +171,7 @@ export function LineupSheet({
                   type="button"
                   className="tile tile--player"
                   disabled={playerOut === null}
-                  aria-label={`#${player.number} ${player.name} erin`}
+                  aria-label={`${playerLabel(player)} erin`}
                   onClick={() => playerOut && onSubstitute(playerOut, player.id)}
                 >
                   <span className="tile__number">{player.number}</span>

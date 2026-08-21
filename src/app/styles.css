@@ -1887,3 +1887,37 @@ button {
 .stats__bad {
   color: var(--error);
 }
+
+/* Beginservice en serviceplek */
+
+.step--serve .teamswitch {
+  margin-top: 0.5rem;
+}
+
+.teamswitch__button--us {
+  border-color: var(--us);
+  color: var(--us);
+}
+
+.teamswitch__button--them {
+  border-color: var(--them);
+  color: var(--them);
+}
+
+/* Bij een service sta je achter de achterlijn: drie plekken, geen zes vakken. */
+.servespots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.tile--spot {
+  min-height: 5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.servespots__net {
+  text-align: center;
+  margin-top: 0.4rem;
+}

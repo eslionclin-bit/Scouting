@@ -16,7 +16,8 @@ export const MAX_SETS = 5;
 export interface StartSetInput {
   matchId: string;
   setNumber?: number;
-  startingServe: TeamSide;
+  /** Weglaten als nog niet bekend is wie begint met serveren. */
+  startingServe?: TeamSide | null;
 }
 
 export interface SetScore {
@@ -51,7 +52,7 @@ export class SetRepository {
       pointsUs: 0,
       pointsThem: 0,
       status: 'live' as SetStatus,
-      startingServe: input.startingServe,
+      startingServe: input.startingServe ?? null,
     });
     await commit(this.ctx, [{ entity: 'sets', record }]);
     return record;
@@ -77,6 +78,14 @@ export class SetRepository {
   async current(matchId: string): Promise<MatchSet | undefined> {
     const sets = await this.listByMatch(matchId);
     return sets.filter((set) => set.status === 'live').at(-1) ?? sets.at(-1);
+  }
+
+  /** Wie begint met serveren; kan pas na de warming-up bekend zijn. */
+  async setStartingServe(id: string, startingServe: TeamSide): Promise<MatchSet> {
+    const current = await this.require(id);
+    const record = reviseRecord(this.ctx, current, { startingServe });
+    await commit(this.ctx, [{ entity: 'sets', record }]);
+    return record;
   }
 
   async finish(id: string): Promise<MatchSet> {

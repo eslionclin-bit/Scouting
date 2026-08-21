@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 120 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 123 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -42,9 +42,14 @@ npm test        # 120 tests: domein, opslag, sync, rotatie, analyse, schermen, e
 **Startscherm** — wedstrijden openen of een nieuwe beginnen, en per wedstrijd
 exporteren naar JSON of CSV. Staat er nog iets in de outbox, dan zie je dat hier.
 
-**Nieuwe wedstrijd** — eigen team met spelers, tegenstander, datum, thuis/uit en
-wie begint met serveren. Een bestaand eigen team wordt voorgevuld, zodat er
-meestal alleen nog een tegenstander hoeft te worden ingetikt.
+**Nieuwe wedstrijd** — eigen team met spelers, tegenstander, datum en thuis/uit.
+Rugnummers van de tegenstander kun je hier alvast invullen; een naam hoeft niet.
+Het eigen team blijft bewaard, dus meestal hoef je alleen nog een tegenstander in
+te tikken.
+
+Wie begint met serveren staat hier bewust níét: dat weet je pas na de toss aan
+het eind van de warming-up. Die vraag stelt het invoerscherm, per set, vlak voor
+de eerste rally.
 
 **Rally-invoer** — het scherm waar het tijdens de wedstrijd om draait. Eén vraag
 tegelijk, in de volgorde waarin je een rally ziet:
@@ -53,10 +58,17 @@ tegelijk, in de volgorde waarin je een rally ziet:
    nog niet in staat, voeg je hier toe zonder de wedstrijd te onderbreken.
 2. **Wat deed hij?** — service, pass, set-up, aanval, blok of verdediging. De
    verwachte volgende actie is gemarkeerd, maar nooit voorgeselecteerd.
-3. **Waar stond hij?** — mini-veld met zes vakken. Verplicht bij een service en
-   een aanval, overslaan mag bij de rest.
+3. **Waar stond hij?** — mini-veld met zes vakken. Bij een service drie plekken
+   achter de achterlijn, want daar sta je bij een service. Verplicht bij service
+   en aanval, overslaan mag bij de rest.
 4. **Hoe pakte het uit?** — vier kleurgecodeerde knoppen; lang indrukken toont
    het criterium uit het protocol met een voorbeeld.
+
+Twee dingen die de app zelf weet, scheelt dat invoerwerk: bij een eigen service
+staat de speler uit zone 1 al klaar (met een opstelling weet de app precies wie,
+anders blijft dezelfde speler serveren zolang wij aan service blijven), en de
+speler die net de bal raakte is niet te kiezen voor de volgende actie — twee
+keer achter elkaar mag nu eenmaal niet, behalve na een blok.
 
 Bovenin staat steeds wat er al gekozen is; elk stukje is aan te tikken om terug
 te gaan. Onderaan 'punt wij' / 'punt zij', undo actie en undo rally.

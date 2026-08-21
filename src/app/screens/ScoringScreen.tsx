@@ -7,7 +7,7 @@
  * mis, en dan moet het in één tik recht te zetten zijn.
  */
 
-import { useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState, type ReactElement } from 'react';
 import { EntryPanel, type NewPlayerInput } from '../components/EntryPanel';
 import { LineupSheet } from '../components/LineupSheet';
 import { PairingSheet } from '../components/PairingSheet';
@@ -19,6 +19,7 @@ import type { PeerSession } from '../hooks/usePeerSession';
 import { useToasts } from '../hooks/useToasts';
 import { useQuery, useStore } from '../StoreProvider';
 import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryReducer';
+import { positionsAt } from '../../domain/rotation';
 import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
 import type { Player, Quality, TeamSide, Zone } from '../../domain/types';
@@ -44,6 +45,8 @@ export function ScoringScreen({
   onOpenDashboard,
 }: ScoringScreenProps): ReactElement {
   const leads = role === 'scorer';
+  /** Per rally hoogstens één keer de server voorinvullen. */
+  const prefilledRallyRef = useRef<string | null>(null);
   const store = useStore();
   const { messages, push, dismiss } = useToasts();
   const [entry, dispatch] = useReducer(entryReducer, initialEntryState('us'));
@@ -75,10 +78,11 @@ export function ScoringScreen({
       if (!rally) {
         return { match, ownTeam, opponent, ownPlayers, opponentPlayers, sets, set, rally: null };
       }
-      const [actions, lineup, substitutions] = await Promise.all([
+      const [actions, lineup, substitutions, setActions] = await Promise.all([
         instance.actions.listByRally(rally.id),
         instance.lineups.forSet(set.id),
         instance.substitutions.listBySet(set.id),
+        instance.actions.listBySet(set.id),
       ]);
       return {
         match,
@@ -92,6 +96,7 @@ export function ScoringScreen({
         actions,
         lineup,
         substitutions,
+        setActions,
       };
     },
     [matchId, leads],
@@ -104,6 +109,35 @@ export function ScoringScreen({
     }
     return map;
   }, [data?.ownPlayers, data?.opponentPlayers]);
+
+  /**
+   * Wie er hoort te serveren. Met een opstelling weet de app dat exact: dat is
+   * wie er in deze rotatie in zone 1 staat. Zonder opstelling blijft dezelfde
+   * speler serveren zolang wij aan service blijven — precies zoals in het veld.
+   */
+  const expectedServerId = useMemo(() => {
+    const open = data?.rally;
+    if (!open || open.servingTeam !== 'us') return null;
+    if (data?.lineup) {
+      return positionsAt(data.lineup, open.rotationUs ?? 1, data.substitutions ?? [])[1];
+    }
+    return (
+      (data?.setActions ?? [])
+        .filter((action) => action.team === 'us' && action.type === 'serve')
+        .at(-1)?.playerId ?? null
+    );
+  }, [data?.rally, data?.lineup, data?.substitutions, data?.setActions]);
+
+  // Bij een eigen service staat de server al vast; die hoef je niet te kiezen.
+  // Corrigeren kan altijd door bovenin op 'Wie' te tikken.
+  useEffect(() => {
+    const open = data?.rally;
+    if (!open || prefilledRallyRef.current === open.id) return;
+    if ((data?.actions?.length ?? 0) > 0 || open.servingTeam !== 'us' || !expectedServerId) return;
+
+    prefilledRallyRef.current = open.id;
+    dispatch({ kind: 'player', playerId: expectedServerId });
+  }, [data?.rally, data?.actions, expectedServerId]);
 
   if (error) return <ErrorState message={error.message} onExit={onExit} />;
   if (!data) return <div className="boot">Wedstrijd laden…</div>;
@@ -118,6 +152,12 @@ export function ScoringScreen({
   }
 
   const { match, opponent, set, sets, rally, actions } = data;
+
+  /** Twee keer achter elkaar de bal raken mag niet — behalve na een blok. */
+  const lastAction = actions?.at(-1);
+  const blockedPlayerId = lastAction && lastAction.type !== 'block' ? lastAction.playerId : null;
+
+  const needsServeChoice = set.startingServe === null;
 
   async function commitAction(quality: Quality): Promise<void> {
     const draft = toActionDraft(entry, quality);
@@ -204,6 +244,16 @@ export function ScoringScreen({
     dispatch({ kind: 'reset' });
   }
 
+  async function chooseStartingServe(side: TeamSide): Promise<void> {
+    if (!data?.set) return;
+    try {
+      await store.sets.setStartingServe(data.set.id, side);
+      dispatch({ kind: 'rallyStarted', servingTeam: side });
+    } catch (cause) {
+      push('error', cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function addMissedPoint(wonBy: TeamSide): Promise<void> {
     if (!data?.set) return;
     try {
@@ -251,11 +301,8 @@ export function ScoringScreen({
     if (!data?.set) return;
     try {
       await store.sets.finish(data.set.id);
-      await store.sets.start({
-        matchId,
-        // Teams beginnen om beurten met serveren in een nieuwe set.
-        startingServe: data.set.startingServe === 'us' ? 'them' : 'us',
-      });
+      // Ook voor een nieuwe set geldt: wie begint, vraagt het scherm zo meteen.
+      await store.sets.start({ matchId });
       dispatch({ kind: 'reset' });
     } catch (cause) {
       push('error', cause instanceof Error ? cause.message : String(cause));
@@ -318,15 +365,43 @@ export function ScoringScreen({
 
       <RallyChain actions={actions ?? []} playersById={playersById} onUndoLast={() => void undoLastAction()} />
 
-      <EntryPanel
-        state={entry}
-        dispatch={dispatch}
-        ownPlayers={data.ownPlayers}
-        opponentPlayers={data.opponentPlayers}
-        onCommit={(quality) => void commitAction(quality)}
-        onExplain={setExplain}
-        onAddPlayer={addPlayer}
-      />
+      {needsServeChoice ? (
+        /* Na de toss, aan het eind van de warming-up: pas dan weet je dit. */
+        <section className="step step--serve">
+          <h2 className="step__title">Wie begint met serveren?</h2>
+          <p className="step__hint">
+            Zonder dit klopt de rotatie niet, dus dit is het eerste wat de app wil weten van deze
+            set.
+          </p>
+          <div className="teamswitch">
+            <button
+              type="button"
+              className="teamswitch__button teamswitch__button--us"
+              onClick={() => void chooseStartingServe('us')}
+            >
+              Wij
+            </button>
+            <button
+              type="button"
+              className="teamswitch__button teamswitch__button--them"
+              onClick={() => void chooseStartingServe('them')}
+            >
+              Tegenstander
+            </button>
+          </div>
+        </section>
+      ) : (
+        <EntryPanel
+          state={entry}
+          dispatch={dispatch}
+          ownPlayers={data.ownPlayers}
+          opponentPlayers={data.opponentPlayers}
+          blockedPlayerId={blockedPlayerId}
+          onCommit={(quality) => void commitAction(quality)}
+          onExplain={setExplain}
+          onAddPlayer={addPlayer}
+        />
+      )}
 
       <footer className="bottombar">
         {leads && (
