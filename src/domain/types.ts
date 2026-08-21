@@ -18,11 +18,11 @@ export type TeamSide = 'us' | 'them';
 
 /** Actietypes uit het scoutingprotocol. */
 export type ActionType =
-  | 'serve' // opslag
-  | 'reception' // receptie
-  | 'set' // toets / opbouw
+  | 'serve' // service
+  | 'reception' // pass (receptie)
+  | 'set' // set-up (toets)
   | 'attack' // aanval
-  | 'block' // block
+  | 'block' // blok
   | 'dig'; // verdediging
 
 export const ACTION_TYPES: readonly ActionType[] = [

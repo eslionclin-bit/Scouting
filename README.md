@@ -4,19 +4,25 @@ Offline-first scouting-app voor volleybal: rally's actie-voor-actie invoeren op 
 tablet in de sporthal, zonder internet, met synchronisatie zodra er weer een
 netwerk is.
 
-Wat er nu draait: **v1 tot en met v5** — rally-invoer, analysedashboard met
-rotatie- en wisselbeheer, live meelezen, het opponent-dossier, en twee
-invoerders die tegelijk aan dezelfde wedstrijd werken. Installeerbaar op een
-tablet, en volledig bruikbaar zonder verbinding.
+Twee kanten van hetzelfde verhaal:
+
+- **Invoeren** — één iemand legt de rally's vast, actie voor actie, in één vraag
+  tegelijk.
+- **Coachen** — op de bank een scherm dat zegt wát je nu moet doen en zeggen,
+  niet een scherm om in te zoeken.
+
+Daaromheen: analysedashboard, opponent-dossier, rotatie- en wisselbeheer, en
+live koppelen tussen apparaten. Installeerbaar op een tablet, en volledig
+bruikbaar zonder verbinding.
 
 ## Aan de slag
 
 ```bash
 npm install
-npm run dev     # ontwikkelserver
+npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 98 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 110 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -40,14 +46,25 @@ exporteren naar JSON of CSV. Staat er nog iets in de outbox, dan zie je dat hier
 wie begint met serveren. Een bestaand eigen team wordt voorgevuld, zodat er
 meestal alleen nog een tegenstander hoeft te worden ingetikt.
 
-**Rally-invoer (scherm A)** — het scherm waar het tijdens de wedstrijd om draait:
+**Rally-invoer** — het scherm waar het tijdens de wedstrijd om draait. Eén vraag
+tegelijk, in de volgorde waarin je een rally ziet:
 
-- bovenin set, stand en de rally-keten als pilletjes met pijltjes ertussen;
-- daaronder de vaste volgorde actie → speler → zone → kwalificatie, waarbij de
-  actieve stap oplicht;
-- de vier kwalificatieknoppen zijn kleurgecodeerd en tonen het criterium uit het
-  protocol; lang indrukken opent de volledige uitleg met voorbeeld;
-- onderaan 'punt wij' / 'punt zij', stap terug, undo actie en undo rally.
+1. **Wie speelde de bal?** — kant van het net, dan de speler. Een speler die er
+   nog niet in staat, voeg je hier toe zonder de wedstrijd te onderbreken.
+2. **Wat deed hij?** — service, pass, set-up, aanval, blok of verdediging. De
+   verwachte volgende actie is gemarkeerd, maar nooit voorgeselecteerd.
+3. **Waar stond hij?** — mini-veld met zes vakken. Verplicht bij een service en
+   een aanval, overslaan mag bij de rest.
+4. **Hoe pakte het uit?** — vier kleurgecodeerde knoppen; lang indrukken toont
+   het criterium uit het protocol met een voorbeeld.
+
+Bovenin staat steeds wat er al gekozen is; elk stukje is aan te tikken om terug
+te gaan. Onderaan 'punt wij' / 'punt zij', undo actie en undo rally.
+
+De termen op de knoppen komen uit de zaal, niet uit het protocoldocument: dat
+schrijft 'opslag', 'receptie' en 'toets', maar niemand zegt dat langs de lijn.
+De codes in de data blijven ongewijzigd, dus eerder ingevoerde wedstrijden
+kloppen nog.
 
 Twee dingen nemen werk uit handen tijdens live invoer: na een opslag zet de app
 de receptie van de tegenpartij klaar (en zo verder door de keten), en een actie
@@ -87,8 +104,19 @@ niet opeens in het invoerscherm.
 | Ik vul aan | Tweede invoerder: vult acties aan in de rally die openstaat. |
 | Ik lees mee | Ziet live wat er wordt ingevoerd, plus de cijfers. Voert zelf niets in. |
 
-Het meeleesscherm toont dezelfde rally-keten en stand, de laatste rally's, en de
-cijfers die tijdens een time-out tellen — zonder één invoerknop.
+**Coachscherm** — voor op de bank, en bewust iets anders dan het dashboard.
+Daar zoek je iets op; hier word je iets verteld:
+
+- bovenaan de stand, van een afstand leesbaar;
+- daaronder **wat er nu aan de hand is**: hoogstens een paar aanwijzingen, elk
+  met de telling eronder ("Blok naar zone 4 — 9 van 11 aanvallen komen
+  daarvandaan", "Sideout hapert in R2 — 1 van 5");
+- de vier cijfers die er tijdens een set toe doen, en sideout per rotatie;
+- een **time-out-knop** die in grote letters hooguit drie zinnen toont om te
+  zeggen. Geen zoekwerk terwijl de klok loopt.
+
+Zolang er te weinig gespeeld is, zwijgt het scherm. Sturen op vier ballen is
+slechter dan niets zeggen.
 
 **Twee invoerders tegelijk** — de hoofdinvoerder bepaalt het verloop, de
 assistent vult aan. Dat onderscheid is er niet voor de vorm: zouden twee
@@ -194,6 +222,16 @@ ook op zonder enige verbinding; de wedstrijddata staat toch al in IndexedDB. Op
 een tablet is de app te installeren als icoon op het startscherm, zonder
 appstore-traject. Een wedstrijd die openstond, wordt bij het opnieuw openen
 hervat.
+
+## De app ergens neerzetten
+
+Er zit een GitHub Actions-workflow bij die de app na elke push naar GitHub Pages
+zet. Eenmalig aanzetten: **Settings → Pages → Source: GitHub Actions**. Daarna
+staat hij op `https://<gebruiker>.github.io/<repo>/` — een echte URL die je op
+een tablet kunt openen en via 'Zet op beginscherm' kunt installeren.
+
+Zelf hosten kan ook: `npm run build` en de map `dist/` op een willekeurige
+statische host zetten.
 
 ## Volgende stap
 

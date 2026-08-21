@@ -4,27 +4,26 @@ import {
   initialEntryState,
   isReadyToCommit,
   toActionDraft,
+  type EntryEvent,
   type EntryState,
 } from './entryReducer';
 
-function run(state: EntryState, ...events: Parameters<typeof entryReducer>[1][]): EntryState {
+function run(state: EntryState, ...events: EntryEvent[]): EntryState {
   return events.reduce(entryReducer, state);
 }
 
 describe('entryReducer', () => {
-  it('loopt de volgorde speler → zone → kwalificatie af', () => {
-    const state = run(
-      initialEntryState('us'),
-      { kind: 'type', type: 'attack' },
-      { kind: 'player', playerId: 'p1' },
-    );
-    expect(state.step).toBe('zone');
-    expect(isReadyToCommit(state)).toBe(false);
+  it('loopt de volgorde wie → wat → waar → hoe af', () => {
+    const afterPlayer = entryReducer(initialEntryState('us'), { kind: 'player', playerId: 'p1' });
+    expect(afterPlayer.step).toBe('type');
 
-    const withZone = entryReducer(state, { kind: 'zoneFrom', zone: 4 });
-    expect(withZone.step).toBe('quality');
-    expect(isReadyToCommit(withZone)).toBe(true);
-    expect(toActionDraft(withZone, 'perfect')).toStrictEqual({
+    const afterType = entryReducer(afterPlayer, { kind: 'type', type: 'attack' });
+    expect(afterType.step).toBe('zone');
+    expect(isReadyToCommit(afterType)).toBe(false);
+
+    const afterZone = entryReducer(afterType, { kind: 'zoneFrom', zone: 4 });
+    expect(afterZone.step).toBe('quality');
+    expect(toActionDraft(afterZone, 'perfect')).toStrictEqual({
       team: 'us',
       type: 'attack',
       quality: 'perfect',
@@ -34,11 +33,22 @@ describe('entryReducer', () => {
     });
   });
 
+  it('rekent een onbekende speler als gemaakte keuze', () => {
+    const state = run(
+      initialEntryState('them'),
+      { kind: 'player', playerId: null },
+      { kind: 'type', type: 'reception' },
+    );
+    expect(state.playerChosen).toBe(true);
+    expect(state.step).toBe('quality');
+    expect(isReadyToCommit(state)).toBe(true);
+  });
+
   it('laat de zone bij een aanval niet overslaan', () => {
     const state = run(
       initialEntryState('us'),
-      { kind: 'type', type: 'attack' },
       { kind: 'player', playerId: 'p1' },
+      { kind: 'type', type: 'attack' },
       { kind: 'skipZone' },
     );
     expect(state.step).toBe('zone');
@@ -47,37 +57,38 @@ describe('entryReducer', () => {
   it('laat de zone bij een verdediging wel overslaan', () => {
     const state = run(
       initialEntryState('us'),
-      { kind: 'type', type: 'dig' },
       { kind: 'player', playerId: 'p1' },
+      { kind: 'type', type: 'dig' },
       { kind: 'skipZone' },
     );
     expect(state.step).toBe('quality');
     expect(isReadyToCommit(state)).toBe(true);
   });
 
-  it('slaat de zonestap over bij een receptie', () => {
+  it('slaat de zonestap over bij een pass', () => {
     const state = run(
       initialEntryState('us'),
-      { kind: 'type', type: 'reception' },
       { kind: 'player', playerId: 'p1' },
+      { kind: 'type', type: 'reception' },
     );
     expect(state.step).toBe('quality');
   });
 
-  it('zet na een opslag de receptie van de tegenpartij klaar', () => {
+  it('zet na een service de pass van de tegenpartij als verwachting klaar', () => {
     const state = entryReducer(initialEntryState('us'), {
       kind: 'committed',
       last: { team: 'us', type: 'serve', quality: 'good' },
     });
-    expect(state).toMatchObject({ team: 'them', type: 'reception', step: 'player' });
+    // Het team klopt en de verwachting staat klaar, maar de invoerder kiest zelf.
+    expect(state).toMatchObject({ team: 'them', suggestion: 'reception', step: 'player', type: null });
   });
 
-  it('zet bij een nieuwe rally de opslag van de winnaar klaar', () => {
+  it('zet bij een nieuwe rally de service van de winnaar klaar', () => {
     const state = entryReducer(initialEntryState('us'), {
       kind: 'rallyStarted',
       servingTeam: 'them',
     });
-    expect(state).toMatchObject({ team: 'them', type: 'serve', step: 'player' });
+    expect(state).toMatchObject({ team: 'them', suggestion: 'serve', step: 'player' });
   });
 
   it('begint na een beëindigende actie weer bij nul', () => {
@@ -91,28 +102,42 @@ describe('entryReducer', () => {
   it('laat bij een teamwissel de spelerselectie los', () => {
     const state = run(
       initialEntryState('us'),
-      { kind: 'type', type: 'dig' },
       { kind: 'player', playerId: 'p1' },
+      { kind: 'type', type: 'dig' },
       { kind: 'team', team: 'them' },
     );
-    expect(state).toMatchObject({ team: 'them', playerId: null, type: 'dig', step: 'player' });
+    expect(state).toMatchObject({ team: 'them', playerId: null, playerChosen: false, step: 'player' });
   });
 
-  it('gaat stap voor stap terug', () => {
+  it('gaat stap voor stap terug en wist wat bij die stap hoort', () => {
     const ready = run(
       initialEntryState('us'),
-      { kind: 'type', type: 'serve' },
       { kind: 'player', playerId: 'p1' },
+      { kind: 'type', type: 'serve' },
       { kind: 'zoneFrom', zone: 1 },
     );
+
     const backToZone = entryReducer(ready, { kind: 'back' });
     expect(backToZone).toMatchObject({ step: 'zone', zoneFrom: null });
 
-    const backToPlayer = entryReducer(backToZone, { kind: 'back' });
-    expect(backToPlayer).toMatchObject({ step: 'player', playerId: null });
-
-    const backToType = entryReducer(backToPlayer, { kind: 'back' });
+    const backToType = entryReducer(backToZone, { kind: 'back' });
     expect(backToType).toMatchObject({ step: 'type', type: null });
-    expect(entryReducer(backToType, { kind: 'back' })).toStrictEqual(backToType);
+
+    const backToPlayer = entryReducer(backToType, { kind: 'back' });
+    expect(backToPlayer).toMatchObject({ step: 'player', playerId: null, playerChosen: false });
+
+    // Verder terug dan de eerste stap bestaat niet.
+    expect(entryReducer(backToPlayer, { kind: 'back' })).toStrictEqual(backToPlayer);
+  });
+
+  it('springt terug naar een eerdere stap zonder de invoer te wissen', () => {
+    const ready = run(
+      initialEntryState('us'),
+      { kind: 'player', playerId: 'p1' },
+      { kind: 'type', type: 'serve' },
+      { kind: 'zoneFrom', zone: 1 },
+    );
+    const jumped = entryReducer(ready, { kind: 'goTo', step: 'player' });
+    expect(jumped).toMatchObject({ step: 'player', playerId: 'p1', type: 'serve', zoneFrom: 1 });
   });
 });

@@ -28,7 +28,7 @@ export function requiresZoneFrom(type: ActionType): boolean {
 
 /**
  * Actietypes die bij kwalificatie 'perfect' de rally direct beëindigen met een
- * punt voor het uitvoerende team. Een perfecte receptie of toets levert immers
+ * punt voor het uitvoerende team. Een perfecte pass of set-up levert immers
  * geen punt op — die zetten alleen de volgende speler goed.
  */
 const POINT_ON_PERFECT: readonly ActionType[] = ['serve', 'attack', 'block'] as const;
@@ -95,7 +95,7 @@ export function validateAction(
       severity: 'error',
       code: 'zone_from_required',
       field: 'zoneFrom',
-      message: 'Vertrekzone is verplicht bij opslag en aanval.',
+      message: 'Vertrekzone is verplicht bij een service en een aanval.',
     });
   }
   for (const [field, value] of [
@@ -135,7 +135,7 @@ export function validateAction(
       severity: 'warning',
       code: 'reception_after_ace',
       message:
-        "Na een ace wordt geen aparte receptie geregistreerd. Was de bal wél haalbaar, zet de opslag dan op 'goed' of 'matig'.",
+        "Na een ace wordt geen aparte pass geregistreerd. Was de bal wél haalbaar, zet de service dan op 'goed' of 'matig'.",
     });
   }
 
@@ -143,7 +143,7 @@ export function validateAction(
     issues.push({
       severity: 'warning',
       code: 'reception_without_serve',
-      message: 'Een receptie volgt normaal op een opslag; bij een aanval hoort verdediging.',
+      message: 'Een pass volgt normaal op een service; na een aanval hoort verdediging.',
     });
   }
 
@@ -151,7 +151,7 @@ export function validateAction(
     issues.push({
       severity: 'warning',
       code: 'serve_not_first',
-      message: 'Een opslag hoort de eerste actie van de rally te zijn.',
+      message: 'Een service hoort de eerste actie van de rally te zijn.',
     });
   }
 
@@ -159,7 +159,7 @@ export function validateAction(
     issues.push({
       severity: 'warning',
       code: 'block_own_attack',
-      message: 'Een block volgt op een aanval van de tegenpartij.',
+      message: 'Een blok volgt op een aanval van de tegenpartij.',
     });
   }
 
@@ -197,7 +197,7 @@ export function validateRallyCompletion(
  * Voorstel voor de volgende actie in de keten.
  *
  * Puur invoergemak: na een opslag volgt aan de andere kant meestal een receptie,
- * daarna een toets, daarna een aanval. De invoerder kan het altijd overrulen —
+ * daarna een set-up, daarna een aanval. De invoerder kan het altijd overrulen —
  * daarom is dit een voorstel en geen regel.
  */
 export function suggestNextAction(

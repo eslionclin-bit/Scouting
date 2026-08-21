@@ -83,9 +83,9 @@ export function OpponentScreen({ opponentId, onExit, onOpenMatch }: OpponentScre
           hint={`${dossier.byType.attack.total} aanvallen gezien`}
         />
         <StatTile
-          label="Fout bij opslag"
+          label="Fout bij service"
           value={dossier.byType.serve.total === 0 ? '—' : formatPct(dossier.byType.serve.errorPct)}
-          hint={`${dossier.byType.serve.total} opslagen gezien`}
+          hint={`${dossier.byType.serve.total} services gezien`}
         />
       </div>
 
@@ -135,7 +135,7 @@ export function OpponentScreen({ opponentId, onExit, onOpenMatch }: OpponentScre
         <p className="card__hint">Waar de tegenstander vandaan aanvalt en serveert, over alle wedstrijden.</p>
         <div className="heatmaps">
           <ZoneHeatmap title="Aanval" subtitle="vertrekzone" tally={dossier.attackZones} />
-          <ZoneHeatmap title="Opslag" subtitle="vertrekzone" tally={dossier.serveZones} />
+          <ZoneHeatmap title="Service" subtitle="vertrekzone" tally={dossier.serveZones} />
         </div>
       </section>
 

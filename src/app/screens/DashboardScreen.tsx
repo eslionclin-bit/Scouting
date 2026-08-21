@@ -178,7 +178,7 @@ export function DashboardScreen({
         <StatTile
           label="Sideout"
           value={view.sideoutPct === null ? '—' : formatPct(view.sideoutPct)}
-          hint="rally's gewonnen op opslag tegenstander"
+          hint="rally's gewonnen op service tegenstander"
         />
       </div>
 
@@ -191,8 +191,8 @@ export function DashboardScreen({
               <tr>
                 <th scope="col">Speler</th>
                 <th scope="col">Acties</th>
-                <th scope="col">Opslag</th>
-                <th scope="col">Receptie</th>
+                <th scope="col">Service</th>
+                <th scope="col">Pass</th>
                 <th scope="col">Aanval</th>
                 <th scope="col">Fout%</th>
                 <th scope="col">Verdeling</th>
@@ -289,7 +289,7 @@ export function DashboardScreen({
         <h2>Per rotatie</h2>
         <p className="card__hint">
           R1 is de startopstelling van de set; daarna draait het team door na elke gewonnen rally op
-          de opslag van de tegenstander.
+          de service van de tegenstander.
         </p>
         <div className="tablewrap">
           <table className="stats">
@@ -300,7 +300,7 @@ export function DashboardScreen({
                 <th scope="col">Voor</th>
                 <th scope="col">Tegen</th>
                 <th scope="col">Sideout</th>
-                <th scope="col">Punt op eigen opslag</th>
+                <th scope="col">Punt op eigen service</th>
               </tr>
             </thead>
             <tbody>
@@ -367,13 +367,13 @@ function FilterChip({
 
 type Stats = ReturnType<typeof summarize>;
 
-/** Opslag, aanval, block: puntpercentage en rendement zeggen het meest. */
+/** Service, aanval, blok: puntpercentage en rendement zeggen het meest. */
 function describeScoring(stats: Stats): string {
   if (stats.total === 0) return '—';
   return `${stats.total} · ${formatPct(stats.pointPct ?? 0)} pt · ${formatPct(stats.errorPct)} fout`;
 }
 
-/** Receptie, toets, verdediging: hoe vaak bleef de bal goed bruikbaar. */
+/** Pass, set-up, verdediging: hoe vaak bleef de bal goed bruikbaar. */
 function describePassing(stats: Stats): string {
   if (stats.total === 0) return '—';
   return `${stats.total} · ${formatPct(stats.positivePct)} positief`;

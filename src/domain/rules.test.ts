@@ -86,7 +86,7 @@ describe('scoutingprotocol', () => {
 
   it('levert een complete tooltip voor een kwalificatieknop', () => {
     const tooltip = tooltipFor('serve', 'perfect');
-    expect(tooltip.title).toBe('Opslag — Perfect');
+    expect(tooltip.title).toBe('Service — Perfect');
     expect(tooltip.criterion).toContain('Ace');
   });
 });

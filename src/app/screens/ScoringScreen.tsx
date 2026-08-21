@@ -8,26 +8,17 @@
  */
 
 import { useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
+import { EntryPanel, type NewPlayerInput } from '../components/EntryPanel';
 import { LineupSheet } from '../components/LineupSheet';
 import { PairingSheet } from '../components/PairingSheet';
 import { ProtocolSheet } from '../components/ProtocolSheet';
-import { ActionTypePicker } from '../components/ActionTypePicker';
-import { CourtPicker } from '../components/CourtPicker';
-import { PlayerGrid } from '../components/PlayerGrid';
-import { QualityButtons } from '../components/QualityButtons';
 import { RallyChain } from '../components/RallyChain';
 import { Toasts } from '../components/Toasts';
 import type { PeerSession } from '../hooks/usePeerSession';
 import { useToasts } from '../hooks/useToasts';
 import { useQuery, useStore } from '../StoreProvider';
-import {
-  entryReducer,
-  initialEntryState,
-  isReadyToCommit,
-  needsZoneStep,
-  toActionDraft,
-} from '../entry/entryReducer';
-import { isTerminalAction, requiresZoneFrom } from '../../domain/rules';
+import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryReducer';
+import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
 import type { Player, Quality, TeamSide, Zone } from '../../domain/types';
 
@@ -104,9 +95,6 @@ export function ScoringScreen({
     [matchId, leads],
   );
 
-  const players: readonly Player[] =
-    (entry.team === 'us' ? data?.ownPlayers : data?.opponentPlayers) ?? [];
-
   const playersById = useMemo(() => {
     const map = new Map<string, Player>();
     for (const player of [...(data?.ownPlayers ?? []), ...(data?.opponentPlayers ?? [])]) {
@@ -114,13 +102,6 @@ export function ScoringScreen({
     }
     return map;
   }, [data?.ownPlayers, data?.opponentPlayers]);
-
-  // Bij de tegenstander zonder spelerslijst heeft de spelerstap geen inhoud.
-  useEffect(() => {
-    if (entry.step === 'player' && entry.team === 'them' && players.length === 0) {
-      dispatch({ kind: 'player', playerId: null });
-    }
-  }, [entry.step, entry.team, players.length]);
 
   if (error) return <ErrorState message={error.message} onExit={onExit} />;
   if (!data) return <div className="boot">Wedstrijd laden…</div>;
@@ -221,6 +202,18 @@ export function ScoringScreen({
     dispatch({ kind: 'reset' });
   }
 
+  async function addPlayer(input: NewPlayerInput): Promise<void> {
+    if (!data) return;
+    const teamId = input.team === 'us' ? data.match.ownTeamId : data.match.opponentTeamId;
+    const player = await store.players.create({
+      teamId,
+      number: input.number,
+      name: input.name,
+    });
+    // Meteen doorgaan met de speler die je net toevoegde.
+    dispatch({ kind: 'player', playerId: player.id });
+  }
+
   async function saveLineup(positions: Record<Zone, string | null>): Promise<void> {
     if (!data?.set) return;
     try {
@@ -257,9 +250,6 @@ export function ScoringScreen({
     }
   }
 
-  const zoneRequired = entry.type ? requiresZoneFrom(entry.type) : false;
-  const showZone = entry.type ? needsZoneStep(entry.type) : false;
-
   return (
     <div className="scoring">
       <header className="topbar">
@@ -275,7 +265,7 @@ export function ScoringScreen({
           <span className="topbar__meta">
             {leads ? '' : 'assistent · '}
             {match.homeAway === 'home' ? 'thuis' : 'uit'} tegen {opponent?.name ?? 'onbekend'} · rally{' '}
-            {rally.sequence} · opslag {TEAM_SIDE_LABELS[rally.servingTeam].toLowerCase()} · rotatie R
+            {rally.sequence} · service {TEAM_SIDE_LABELS[rally.servingTeam].toLowerCase()} · rotatie R
             {rally.rotationUs ?? 1}
           </span>
         </div>
@@ -311,55 +301,15 @@ export function ScoringScreen({
 
       <RallyChain actions={actions ?? []} playersById={playersById} onUndoLast={() => void undoLastAction()} />
 
-      <div className="teamswitch" role="group" aria-label="Team">
-        {(['us', 'them'] as const).map((side) => (
-          <button
-            key={side}
-            type="button"
-            className={`teamswitch__button ${entry.team === side ? 'teamswitch__button--active' : ''}`}
-            onClick={() => dispatch({ kind: 'team', team: side })}
-            aria-pressed={entry.team === side}
-          >
-            {TEAM_SIDE_LABELS[side]}
-          </button>
-        ))}
-      </div>
-
-      <main className="entry">
-        <ActionTypePicker
-          value={entry.type}
-          active={entry.step === 'type'}
-          onChange={(type) => dispatch({ kind: 'type', type })}
-        />
-
-        <PlayerGrid
-          players={players}
-          value={entry.playerId}
-          team={entry.team}
-          active={entry.step === 'player'}
-          onChange={(playerId) => dispatch({ kind: 'player', playerId })}
-        />
-
-        {showZone && (
-          <CourtPicker
-            zoneFrom={entry.zoneFrom}
-            zoneTo={entry.zoneTo}
-            required={zoneRequired}
-            active={entry.step === 'zone'}
-            onZoneFrom={(zone) => dispatch({ kind: 'zoneFrom', zone })}
-            onZoneTo={(zone) => dispatch({ kind: 'zoneTo', zone })}
-            onSkip={() => dispatch({ kind: 'skipZone' })}
-          />
-        )}
-
-        <QualityButtons
-          actionType={entry.type}
-          active={entry.step === 'quality'}
-          disabled={!isReadyToCommit(entry)}
-          onPick={(quality) => void commitAction(quality)}
-          onExplain={setExplain}
-        />
-      </main>
+      <EntryPanel
+        state={entry}
+        dispatch={dispatch}
+        ownPlayers={data.ownPlayers}
+        opponentPlayers={data.opponentPlayers}
+        onCommit={(quality) => void commitAction(quality)}
+        onExplain={setExplain}
+        onAddPlayer={addPlayer}
+      />
 
       <footer className="bottombar">
         {leads && (
@@ -376,9 +326,6 @@ export function ScoringScreen({
             </button>
           </>
         )}
-        <button type="button" className="button button--ghost" onClick={() => dispatch({ kind: 'back' })}>
-          ← Stap terug
-        </button>
         <button type="button" className="button button--ghost" onClick={() => void undoLastAction()}>
           Undo actie
         </button>

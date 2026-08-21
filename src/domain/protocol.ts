@@ -15,13 +15,18 @@ import type { ActionType, Quality, TeamSide } from './types';
 
 export const PROTOCOL_VERSION = '1.0.0';
 
-/** Nederlandse labels — code is Engels, de invoerder ziet Nederlands. */
+/**
+ * Wat de invoerder op de knop ziet. De termen komen uit de zaal, niet uit het
+ * protocoldocument: dat schrijft 'opslag', 'receptie' en 'toets', maar niemand
+ * zegt dat langs de lijn. De codes eronder (`serve`, `reception`, `set`) blijven
+ * ongewijzigd, dus eerder ingevoerde wedstrijden blijven gewoon kloppen.
+ */
 export const ACTION_TYPE_LABELS: Record<ActionType, string> = {
-  serve: 'Opslag',
-  reception: 'Receptie',
-  set: 'Toets',
+  serve: 'Service',
+  reception: 'Pass',
+  set: 'Set-up',
   attack: 'Aanval',
-  block: 'Block',
+  block: 'Blok',
   dig: 'Verdediging',
 };
 
@@ -106,21 +111,21 @@ const RECEPTION_CRITERIA: ActionCriteria = {
 export const PROTOCOL_CRITERIA: Record<ActionType, ActionCriteria> = {
   serve: {
     perfect: {
-      criterion: 'Ace: opponent raakt de bal niet of speelt hem niet terug in het veld.',
-      example: 'Bal valt direct in het veld na opslag.',
+      criterion: 'Ace: de tegenstander raakt de bal niet of speelt hem niet terug in het veld.',
+      example: 'Bal valt direct in het veld na de service.',
     },
     good: {
-      criterion: 'Ontvanger kan alle drie de aanvalsopties (links, midden, rechts) nog gebruiken.',
+      criterion: 'De passer kan alle drie de aanvalsopties (links, midden, rechts) nog gebruiken.',
       example: 'Rustige pass op de spelverdeler.',
     },
     poor: {
       criterion:
-        'Ontvanger kan nog maar 1 of 2 aanvalsopties gebruiken, of de spelverdeler moet zelf naar de bal toe.',
+        'De passer kan nog maar 1 of 2 aanvalsopties gebruiken, of de spelverdeler moet zelf naar de bal toe.',
       example: 'Pass komt ver van de 3-meterlijn terecht.',
     },
     error: {
       criterion: 'Bal in het net of buiten het veld, of overtreding (voetfout, tijd).',
-      example: 'Opslag recht in het net.',
+      example: 'Service recht in het net.',
     },
   },
   reception: RECEPTION_CRITERIA,
@@ -129,21 +134,21 @@ export const PROTOCOL_CRITERIA: Record<ActionType, ActionCriteria> = {
     perfect: {
       criterion:
         'Alle afgesproken aanvalsopties zijn voor de aanvaller uitvoerbaar op het gewenste tempo.',
-      example: 'Snelle, precieze toets op de midden.',
+      example: 'Snelle, precieze set-up op de midden.',
     },
     good: {
       criterion:
         'Aanvaller kan de bal aanvallen zoals gepland, met kleine aanpassing in timing of positie.',
-      example: 'Toets iets te laag maar aanval blijft mogelijk.',
+      example: 'Set-up iets te laag maar de aanval blijft mogelijk.',
     },
     poor: {
       criterion:
         'Aanvaller moet een noodslag maken of een andere aanvalsrichting kiezen dan gepland.',
-      example: 'Toets te dicht bij het net, aanvaller moet aanpassen.',
+      example: 'Set-up te dicht bij het net, aanvaller moet aanpassen.',
     },
     error: {
       criterion: 'Bal is niet meer aan te vallen, of overtreding (dubbel, net aangeraakt).',
-      example: 'Toets valt terug over het net.',
+      example: 'Set-up valt terug over het net.',
     },
   },
   attack: {
@@ -213,8 +218,8 @@ export const PROTOCOL_RULES = {
   doubt: 'Bij twijfel: kies de lagere kwalificatie.',
   assignment:
     'Een actie hoort bij de speler die de bal als laatste redelijkerwijs kon beïnvloeden. Kon de speler redelijkerwijs iets anders doen? Dan is het zijn actie. Zo nee, dan schuift de kwalificatie naar de actie ervoor.',
-  ace: "Was de opslag onhoudbaar, dan krijgt de opslag 'perfect' en wordt er géén aparte receptie geregistreerd.",
+  ace: "Was de service onhoudbaar, dan krijgt de service 'perfect' en wordt er géén aparte pass geregistreerd.",
   zoneFrom:
-    'Vertrekzone is verplicht bij opslag en aanval: de zone waar de speler stond op het moment van afzet.',
+    'Vertrekzone is verplicht bij service en aanval: de zone waar de speler stond op het moment van afzet.',
   zoneTo: 'Landingszone is optioneel — alleen invullen als de tijd het toelaat.',
 } as const;

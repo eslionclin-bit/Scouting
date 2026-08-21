@@ -339,7 +339,42 @@ kwart seconde door. Binnengekomen wijzigingen tellen daarbij niet mee — die
 hoeven niet teruggestuurd te worden, anders blijft hetzelfde bericht heen en weer
 kaatsen.
 
-## 16. Wat hier bewust nog niet zit
+## 16. Twee schermen, twee vragen
+
+De invoerkant en de bank hebben niets met elkaar gemeen behalve de data.
+
+**Invoeren** is een handeling onder tijdsdruk. Daarom vraagt het scherm één ding
+tegelijk (wie → wat → waar → hoe), staat bovenin wat er al gekozen is, en is elk
+stuk daarvan aan te tikken om terug te gaan. De vorige opzet toonde alle vier de
+keuzes tegelijk met een randje om de actieve stap; dat leest als een muur van
+knoppen zodra het tempo omhoog gaat.
+
+**Coachen** is een beslissing nemen. Het coachscherm (`analysis/coach.ts` plus
+`app/screens/CoachScreen.tsx`) beantwoordt niet 'hoe deden we het' maar 'wat doe
+ik nu'. Het toont hoogstens een paar aanwijzingen, elk met de telling eronder, en
+een time-out-knop met maximaal drie zinnen om te zeggen.
+
+Dezelfde eerlijkheidsregels als bij het opponent-dossier gelden hier:
+- onder de vier rally's of acht acties zegt het scherm niets;
+- elke aanwijzing draagt zijn aantal;
+- wat goed gaat wordt ook genoemd — dat is wat je in een time-out bevestigt.
+
+Eén verschil met het dossier: patronen van de tegenstander tellen over de hele
+wedstrijd, terwijl de eigen cijfers per set gaan. Een tegenstander verandert zijn
+aanvalsvoorkeur niet halverwege; de vorm van het eigen team kan per set wel
+omslaan.
+
+## 17. Termen
+
+De knoppen zeggen service, pass, set-up, aanval, blok en verdediging. Het
+protocoldocument schrijft opslag, receptie en toets; die woorden gebruikt niemand
+langs de lijn, en een invoerder die moet vertalen maakt fouten.
+
+De codes in de data (`serve`, `reception`, `set`, …) zijn níét meegewijzigd. Zo
+blijven eerder ingevoerde wedstrijden en exports kloppen, en is een volgende
+naamswijziging opnieuw een kwestie van één tabel in `domain/protocol.ts`.
+
+## 18. Wat hier bewust nog niet zit
 
 - Video-invoer: `Action.videoTimestampMs` ligt klaar in het model, maar er is nog
   geen scherm dat een video naast de invoer zet.

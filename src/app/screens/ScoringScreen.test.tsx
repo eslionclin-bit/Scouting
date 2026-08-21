@@ -54,8 +54,8 @@ describe('ScoringScreen', () => {
     const user = userEvent.setup();
     const { store, matchId } = await renderScoring();
 
-    await user.click(screen.getByRole('button', { name: 'Opslag' }));
     await user.click(screen.getByRole('button', { name: '#4 Sanne' }));
+    await user.click(screen.getByRole('button', { name: 'Service' }));
     await user.click(screen.getByRole('button', { name: 'Zone 1 (rechtsachter)' }));
     await user.click(screen.getByRole('button', { name: /^Goed/ }));
 
@@ -65,9 +65,9 @@ describe('ScoringScreen', () => {
       expect(actions[0]).toMatchObject({ type: 'serve', quality: 'good', zoneFrom: 1, team: 'us' });
     });
 
-    // De keten laat de actie zien zoals in het schermontwerp: #4 opslag z1 goed.
+    // De keten laat de actie zien zoals in het schermontwerp: #4 service z1 goed.
     expect(await screen.findByText('#4')).toBeDefined();
-    expect(screen.getByText('opslag')).toBeDefined();
+    expect(screen.getByText('service')).toBeDefined();
     expect(screen.getByText('z1')).toBeDefined();
   });
 
@@ -75,8 +75,8 @@ describe('ScoringScreen', () => {
     const user = userEvent.setup();
     const { store, setId } = await renderScoring();
 
-    await user.click(screen.getByRole('button', { name: 'Aanval' }));
     await user.click(screen.getByRole('button', { name: '#9 Fem' }));
+    await user.click(screen.getByRole('button', { name: 'Aanval' }));
     await user.click(screen.getByRole('button', { name: 'Zone 4 (linksvoor)' }));
     await user.click(screen.getByRole('button', { name: /^Perfect/ }));
 
@@ -96,21 +96,22 @@ describe('ScoringScreen', () => {
     const user = userEvent.setup();
     await renderScoring();
 
-    await user.click(screen.getByRole('button', { name: 'Aanval' }));
     await user.click(screen.getByRole('button', { name: '#7 Noor' }));
+    await user.click(screen.getByRole('button', { name: 'Aanval' }));
 
-    // Zonder zone blijft de kwalificatiestap onbruikbaar, want het protocol
-    // maakt de vertrekzone bij een aanval verplicht.
-    expect(screen.getByRole('button', { name: /^Perfect/ })).toHaveProperty('disabled', true);
+    // De zone is bij een aanval verplicht: overslaan bestaat hier niet, en de
+    // kwalificatiestap komt pas ná de zone in beeld.
     expect(screen.queryByRole('button', { name: 'Zone overslaan' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Perfect/ })).toBeNull();
+    expect(screen.getByText('Waar stond de speler?')).toBeDefined();
   });
 
   it('maakt de laatste actie ongedaan', async () => {
     const user = userEvent.setup();
     const { store, matchId } = await renderScoring();
 
-    await user.click(screen.getByRole('button', { name: 'Receptie' }));
     await user.click(screen.getByRole('button', { name: '#4 Sanne' }));
+    await user.click(screen.getByRole('button', { name: 'Pass' }));
     await user.click(screen.getByRole('button', { name: /^Matig/ }));
     await waitFor(async () => expect(await store.actions.listByMatch(matchId)).toHaveLength(1));
 
@@ -126,8 +127,8 @@ describe('ScoringScreen als assistent', () => {
     const { store, matchId, setId } = await renderScoring('assistant');
 
     // Aanvullen mag.
-    await user.click(screen.getByRole('button', { name: 'Receptie' }));
     await user.click(screen.getByRole('button', { name: '#4 Sanne' }));
+    await user.click(screen.getByRole('button', { name: 'Pass' }));
     await user.click(screen.getByRole('button', { name: /^Goed/ }));
     await waitFor(async () => expect(await store.actions.listByMatch(matchId)).toHaveLength(1));
 
@@ -146,8 +147,8 @@ describe('ScoringScreen als assistent', () => {
     const user = userEvent.setup();
     const { store, setId } = await renderScoring('assistant');
 
-    await user.click(screen.getByRole('button', { name: 'Aanval' }));
     await user.click(screen.getByRole('button', { name: '#9 Fem' }));
+    await user.click(screen.getByRole('button', { name: 'Aanval' }));
     await user.click(screen.getByRole('button', { name: 'Zone 4 (linksvoor)' }));
     await user.click(screen.getByRole('button', { name: /^Fout/ }));
 

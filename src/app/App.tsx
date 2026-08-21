@@ -11,7 +11,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { NewMatchScreen } from './screens/NewMatchScreen';
 import { OpponentScreen } from './screens/OpponentScreen';
 import { ScoringScreen } from './screens/ScoringScreen';
-import { ViewerScreen } from './screens/ViewerScreen';
+import { CoachScreen } from './screens/CoachScreen';
 import { useStore } from './StoreProvider';
 
 type View =
@@ -92,10 +92,11 @@ export function App(): ReactElement {
       );
     case 'viewer':
       return (
-        <ViewerScreen
+        <CoachScreen
           matchId={view.matchId}
           session={session}
           onOpenDashboard={() => setView({ name: 'dashboard', matchId: view.matchId })}
+          onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
           onSwitchToScoring={() => {
             void store.setMatchRole(view.matchId, 'scorer');
             setScope({ matchId: view.matchId, role: 'scorer' });

@@ -1,7 +1,7 @@
 /**
  * Wedstrijd opzetten: eigen team met spelers, tegenstander, datum en wie begint
  * met serveren. Zo weinig mogelijk velden — dit gebeurt vlak voor de eerste
- * opslag, meestal staand met een tablet in de hand.
+ * service, meestal staand met een tablet in de hand.
  */
 
 import { useEffect, useState, type ReactElement } from 'react';
@@ -137,7 +137,7 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
         </fieldset>
 
         <fieldset className="field">
-          <span>Eerste opslag</span>
+          <span>Eerste service</span>
           <div className="choices">
             {(['us', 'them'] as const).map((option) => (
               <button

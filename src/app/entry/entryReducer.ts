@@ -1,62 +1,91 @@
 /**
- * Invoerstroom van één actie: team → actietype → speler → zone → kwalificatie.
+ * Invoerstroom van één actie.
  *
- * Bewust een pure reducer, los van React: de volgorde uit schermontwerp A is het
- * hart van de app en moet te testen zijn zonder een scherm te renderen.
+ * De volgorde volgt hoe je een rally ziet: eerst wie de bal speelde, dan wat hij
+ * deed, dan waar hij stond, dan hoe het uitpakte. Eén vraag tegelijk — tijdens
+ * een rally is er geen tijd om een scherm vol knoppen af te zoeken.
+ *
+ * Bewust een pure reducer, los van React: dit is het hart van de app en moet te
+ * testen zijn zonder een scherm te renderen.
  */
 
 import { requiresZoneFrom, suggestNextAction } from '../../domain/rules';
 import type { Action, ActionType, Quality, TeamSide, Zone } from '../../domain/types';
 
-export type EntryStep = 'type' | 'player' | 'zone' | 'quality';
+export type EntryStep = 'player' | 'type' | 'zone' | 'quality';
 
 export interface EntryState {
   team: TeamSide;
-  type: ActionType | null;
   playerId: string | null;
+  /** Los van `playerId`, omdat 'onbekend' (null) ook een keuze is. */
+  playerChosen: boolean;
+  type: ActionType | null;
   zoneFrom: Zone | null;
   zoneTo: Zone | null;
   step: EntryStep;
+  /** Wat er volgens de rally-keten waarschijnlijk komt; alleen een hint. */
+  suggestion: ActionType | null;
 }
 
 export type EntryEvent =
   | { kind: 'team'; team: TeamSide }
-  | { kind: 'type'; type: ActionType }
   | { kind: 'player'; playerId: string | null }
+  | { kind: 'type'; type: ActionType }
   | { kind: 'zoneFrom'; zone: Zone }
   | { kind: 'zoneTo'; zone: Zone | null }
   | { kind: 'skipZone' }
+  | { kind: 'goTo'; step: EntryStep }
   | { kind: 'back' }
   | { kind: 'reset'; team?: TeamSide }
-  /** Nieuwe rally: de winnaar van de vorige serveert, dus die staat klaar. */
-  | { kind: 'rallyStarted'; servingTeam: TeamSide }
   /** Na het opslaan van een actie: klaarzetten voor de volgende in de keten. */
-  | { kind: 'committed'; last: Pick<Action, 'team' | 'type' | 'quality'> };
+  | { kind: 'committed'; last: Pick<Action, 'team' | 'type' | 'quality'> }
+  /** Nieuwe rally: de winnaar van de vorige serveert, dus die staat klaar. */
+  | { kind: 'rallyStarted'; servingTeam: TeamSide };
 
-export function initialEntryState(team: TeamSide = 'us'): EntryState {
-  return { team, type: null, playerId: null, zoneFrom: null, zoneTo: null, step: 'type' };
+export function initialEntryState(team: TeamSide = 'us', suggestion: ActionType | null = null): EntryState {
+  return {
+    team,
+    playerId: null,
+    playerChosen: false,
+    type: null,
+    zoneFrom: null,
+    zoneTo: null,
+    step: 'player',
+    suggestion,
+  };
 }
 
 /** Is de invoer compleet genoeg om met een kwalificatie te worden vastgelegd? */
 export function isReadyToCommit(state: EntryState): state is EntryState & { type: ActionType } {
-  if (!state.type) return false;
+  if (!state.type || !state.playerChosen) return false;
   return !(requiresZoneFrom(state.type) && state.zoneFrom === null);
+}
+
+/**
+ * Bij welke actietypes tonen we de zonestap? Verplicht bij service en aanval;
+ * bij een blok en de verdediging is de plek vaak nuttig, bij een pass zelden —
+ * die stap slaan we daar over.
+ */
+export function needsZoneStep(type: ActionType): boolean {
+  return type !== 'reception';
 }
 
 export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
   switch (event.kind) {
     case 'team':
       // Van team wisselen betekent een andere spelerslijst: selectie los laten.
-      return { ...state, team: event.team, playerId: null, step: state.type ? 'player' : 'type' };
-
-    case 'type':
-      return { ...state, type: event.type, step: 'player' };
+      return { ...state, team: event.team, playerId: null, playerChosen: false, step: 'player' };
 
     case 'player':
+      return { ...state, playerId: event.playerId, playerChosen: true, step: 'type' };
+
+    case 'type':
       return {
         ...state,
-        playerId: event.playerId,
-        step: state.type && needsZoneStep(state.type) ? 'zone' : 'quality',
+        type: event.type,
+        zoneFrom: null,
+        zoneTo: null,
+        step: needsZoneStep(event.type) ? 'zone' : 'quality',
       };
 
     case 'zoneFrom':
@@ -70,32 +99,27 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
       if (state.type && requiresZoneFrom(state.type)) return state;
       return { ...state, step: 'quality' };
 
+    case 'goTo':
+      return { ...state, step: event.step };
+
     case 'back':
       return stepBack(state);
 
     case 'reset':
-      return initialEntryState(event.team ?? state.team);
-
-    case 'rallyStarted':
-      return { ...initialEntryState(event.servingTeam), type: 'serve', step: 'player' };
+      return initialEntryState(event.team ?? state.team, state.suggestion);
 
     case 'committed': {
       const suggestion = suggestNextAction(event.last);
       if (!suggestion) return initialEntryState(state.team);
-      return { ...initialEntryState(suggestion.team), type: suggestion.type, step: 'player' };
+      return initialEntryState(suggestion.team, suggestion.type);
     }
+
+    case 'rallyStarted':
+      return initialEntryState(event.servingTeam, 'serve');
 
     default:
       return state;
   }
-}
-
-/**
- * Bij welke actietypes tonen we de zonestap? Verplicht bij opslag en aanval;
- * bij de rest optioneel, omdat de landingszone waardevol is als er tijd voor is.
- */
-export function needsZoneStep(type: ActionType): boolean {
-  return type !== 'reception';
 }
 
 function stepBack(state: EntryState): EntryState {
@@ -104,12 +128,12 @@ function stepBack(state: EntryState): EntryState {
       if (state.type && needsZoneStep(state.type)) {
         return { ...state, zoneFrom: null, zoneTo: null, step: 'zone' };
       }
-      return { ...state, playerId: null, step: 'player' };
-    case 'zone':
-      return { ...state, playerId: null, step: 'player' };
-    case 'player':
       return { ...state, type: null, step: 'type' };
+    case 'zone':
+      return { ...state, type: null, zoneFrom: null, zoneTo: null, step: 'type' };
     case 'type':
+      return { ...state, playerId: null, playerChosen: false, step: 'player' };
+    case 'player':
     default:
       return state;
   }

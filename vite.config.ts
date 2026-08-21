@@ -2,7 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Op GitHub Pages draait de app onder /<repo>/; lokaal gewoon op de root.
+const base = process.env.BASE_PATH ?? '/';
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -15,17 +19,18 @@ export default defineConfig({
         short_name: 'Scouting',
         description: 'Rally\'s actie voor actie vastleggen, ook zonder verbinding.',
         lang: 'nl',
-        start_url: '/',
-        scope: '/',
+        // Relatief, zodat de app ook werkt als hij niet op de root staat.
+        start_url: '.',
+        scope: '.',
         display: 'standalone',
         // Een tablet ligt tijdens een wedstrijd in de lengte op tafel.
         orientation: 'landscape',
         background_color: '#0f172a',
         theme_color: '#0f172a',
         icons: [
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

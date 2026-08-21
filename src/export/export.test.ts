@@ -72,7 +72,7 @@ describe('export', () => {
     expect(lines).toHaveLength(4); // kop + drie acties
 
     const serve = lines[1]!.split(';');
-    expect(serve[CSV_COLUMNS.indexOf('actietype')]).toBe('Opslag');
+    expect(serve[CSV_COLUMNS.indexOf('actietype')]).toBe('Service');
     expect(serve[CSV_COLUMNS.indexOf('kwalificatie')]).toBe('Goed');
     expect(serve[CSV_COLUMNS.indexOf('team')]).toBe('Wij');
     expect(serve[CSV_COLUMNS.indexOf('speler')]).toBe('Sanne');

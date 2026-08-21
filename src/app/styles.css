@@ -503,59 +503,94 @@ button {
   color: #4a044e;
 }
 
-/* Invoerpanelen */
+/* Invoer: één stap tegelijk */
 
-/* Neemt de resterende hoogte, zodat de onderbalk met afronden en undo altijd
-   onderaan het scherm staat — daar liggen de duimen. */
 .entry {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: 0.75rem;
-  align-items: start;
+  align-content: start;
   padding-bottom: 0.75rem;
 }
 
-.panel {
-  border: 1px solid var(--line);
+/* Wat er tot nu toe is ingevuld. Altijd zichtbaar, altijd aan te tikken om
+   terug te gaan: dat is wat 'ik weet niet meer waar ik ben' voorkomt. */
+.draft {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.draft__chip {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.5rem 0.7rem;
   border-radius: var(--radius);
+  border: 1px solid var(--line);
   background: var(--bg-panel);
-  padding: 0.75rem;
+  text-align: left;
+  min-height: 3.2rem;
 }
 
-/* De actieve stap krijgt een rand: bij snelle invoer moet in één oogopslag
-   duidelijk zijn waar de app op wacht. */
-.panel--active {
+.draft__chip--active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-.panel__title {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.5rem;
-  margin: 0 0 0.6rem;
-  font-size: 0.8rem;
+.draft__chip:disabled {
+  opacity: 0.45;
+}
+
+.draft__label {
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
 
-.panel__subtitle {
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
+.draft__value {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.panel__hint {
+.draft__back {
+  min-height: 3.2rem;
+  padding: 0 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: transparent;
   color: var(--muted);
-  font-size: 0.85rem;
 }
 
-.panel__actions {
-  margin-top: 0.6rem;
+.draft__back:disabled {
+  opacity: 0.35;
+}
+
+.step {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.step__title {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.step__hint,
+.step__empty {
+  margin: -0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.step__actions {
   display: flex;
   gap: 0.5rem;
 }
@@ -570,7 +605,7 @@ button {
 }
 
 .grid--players {
-  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
 }
 
 .grid--qualities {
@@ -594,17 +629,18 @@ button {
 .tile--player {
   display: grid;
   gap: 0.1rem;
-  min-height: 4rem;
+  min-height: 4.5rem;
+  align-content: center;
 }
 
 .tile__number {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
 .tile__name {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -612,6 +648,42 @@ button {
 
 .tile--unknown {
   color: var(--muted);
+  min-height: 4.5rem;
+}
+
+.tile--add {
+  display: grid;
+  gap: 0.1rem;
+  align-content: center;
+  min-height: 4.5rem;
+  border-style: dashed;
+  color: var(--accent);
+}
+
+.tile--add .tile__name {
+  color: var(--accent);
+}
+
+.tile--type {
+  min-height: 4rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  display: grid;
+  gap: 0.15rem;
+  align-content: center;
+}
+
+/* De verwachte volgende actie krijgt een hint, geen voorselectie: wat er
+   gebeurde bepaalt de invoerder, niet de app. */
+.tile--suggested {
+  border-color: var(--accent);
+}
+
+.tile__hint {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
 }
 
 /* Mini-veld */
@@ -638,7 +710,7 @@ button {
 }
 
 .court__zone {
-  min-height: 3.5rem;
+  min-height: 4.5rem;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--bg-raised);
@@ -1449,4 +1521,255 @@ button {
 .roles__description {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* ---------- Coachscherm: wat doe ik nu ---------- */
+
+.coach {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0.75rem 0.75rem 2rem;
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.coach__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+}
+
+.coach__score {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.coach__sets {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* De stand is van een afstand leesbaar; dat is het enige getal dat je soms
+   zonder te kijken wilt kunnen aflezen. */
+.coach__points {
+  font-size: 3.2rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.coach__points span {
+  color: var(--muted);
+}
+
+.coach__meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.coach__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.button--timeout {
+  min-height: 3.5rem;
+  padding: 0 1.5rem;
+  font-size: 1.1rem;
+}
+
+/* Aanwijzingen */
+
+.cues {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.cues__empty {
+  margin: 0;
+  padding: 1rem;
+  border-radius: var(--radius);
+  border: 1px dashed var(--line);
+  color: var(--muted);
+}
+
+.cue {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--line);
+}
+
+/* Toon draagt de urgentie, maar de tekst zegt het ook: kleur alleen zou hier
+   te weinig zijn. */
+.cue--urgent {
+  border-left-color: var(--error);
+  background: #2a1416;
+}
+
+.cue--watch {
+  border-left-color: var(--poor);
+}
+
+.cue--good {
+  border-left-color: var(--perfect);
+}
+
+.cue__title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.cue__detail {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+}
+
+/* Kerncijfers */
+
+.coach__numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.6rem;
+}
+
+.figure {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+}
+
+.figure__label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.figure__value {
+  font-size: 1.8rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.figure__hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* Sideout per rotatie: zes staafjes, de huidige gemarkeerd. */
+
+.rotbars {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.rotbar {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+}
+
+.rotbar__value {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.rotbar__track {
+  width: 100%;
+  height: 5rem;
+  border-radius: 6px;
+  background: var(--bg-raised);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.rotbar__fill {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+}
+
+.rotbar--current .rotbar__value {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.rotbar--current .rotbar__track {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.rotbar__label {
+  font-weight: 700;
+}
+
+.rotbar__sample {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.coach__footer {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Time-out: groot genoeg om staand vanaf de tafel te lezen. */
+
+.timeout {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.94);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  z-index: 20;
+}
+
+.timeout__inner {
+  max-width: 46rem;
+  width: 100%;
+}
+
+.timeout h2 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.timeout__points {
+  margin: 0 0 2rem;
+  padding-left: 1.5rem;
+  display: grid;
+  gap: 1rem;
+  font-size: 1.6rem;
+  line-height: 1.3;
+}
+
+.timeout__empty {
+  font-size: 1.3rem;
+  color: var(--muted);
 }
