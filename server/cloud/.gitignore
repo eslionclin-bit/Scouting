@@ -1,0 +1,4 @@
+# Lokale staat van `wrangler dev`: een sqlite-database met testgegevens.
+# Hoort bij dit apparaat, niet bij de repository.
+.wrangler/
+node_modules/
