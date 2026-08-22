@@ -1,35 +1,60 @@
 /**
- * Welk Supabase-project de app gebruikt.
+ * Welk adres de app voor de online koppeling gebruikt, en hoe een ploegcode
+ * eruitziet.
  *
- * Twee waarden, allebei publiek: de URL van het project en de anon-sleutel. Ze
- * worden bij het bouwen ingevuld vanuit de omgeving (in GitHub Actions vanuit
- * de repository-secrets), en ze mogen in de gebouwde app staan — op de server
- * mag die sleutel niets. Alles loopt via functies die om de ploegcode vragen,
- * en die code staat alleen op het apparaat zelf.
- *
- * Staan ze er niet, dan is de app precies wat hij hiervoor was: alles lokaal,
- * en koppelen kan alleen met een apparaat in dezelfde zaal.
+ * Het adres wordt bij het bouwen ingevuld vanuit de omgeving (in GitHub Actions
+ * vanuit een repository-secret). Staat het er niet, dan is de app precies wat
+ * hij daarvoor was: alles lokaal, en koppelen kan alleen met een apparaat in
+ * dezelfde zaal.
  */
 
-interface CloudProject {
-  url: string;
-  anonKey: string;
-}
-
-const URL_KEY = 'VITE_SUPABASE_URL';
-const KEY_KEY = 'VITE_SUPABASE_ANON_KEY';
+const URL_KEY = 'VITE_SYNC_URL';
 
 function fromEnv(name: string): string {
-  // In tests (node, geen Vite) bestaat import.meta.env niet; dan is er gewoon
-  // geen project ingebouwd en blijft de app lokaal.
+  // In tests (node, geen Vite) bestaat import.meta.env niet; dan is er geen
+  // server ingebouwd en blijft de app lokaal.
   const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
   return (env[name] ?? '').trim();
 }
 
 export function isCloudConfigured(): boolean {
-  return fromEnv(URL_KEY).length > 0 && fromEnv(KEY_KEY).length > 0;
+  return fromEnv(URL_KEY).length > 0;
 }
 
-export function cloudProject(): CloudProject {
-  return { url: fromEnv(URL_KEY), anonKey: fromEnv(KEY_KEY) };
+export function cloudUrl(): string {
+  return fromEnv(URL_KEY);
+}
+
+/**
+ * Hoe lang een ploegcode minstens moet zijn.
+ *
+ * Dit is geen formaliteit. De server bewaart de code niet en kent geen
+ * accounts: de ploeg ís de code. Alles hangt dus aan de vraag of hij te raden
+ * valt, en daar is lengte het enige echte antwoord op. De server weigert
+ * hetzelfde minimum.
+ */
+export const MIN_CODE_LENGTH = 16;
+
+/**
+ * Woorden waaruit een code wordt gebouwd.
+ *
+ * Vier woorden uit deze lijst plus vier cijfers is ruim voldoende om niet te
+ * raden te zijn, en het is over te tikken en door de telefoon te zeggen —
+ * anders dan een reeks willekeurige tekens, die op een tablet in een zaal
+ * gegarandeerd fout wordt overgenomen.
+ */
+const WORDS = [
+  'anker', 'beuk', 'bries', 'dijk', 'duin', 'eik', 'gors', 'haven',
+  'hei', 'kade', 'kiel', 'klei', 'kust', 'lisdodde', 'maas', 'mist',
+  'molen', 'mos', 'polder', 'riet', 'schans', 'sluis', 'stroom', 'terp',
+  'tij', 'veen', 'vlier', 'vloed', 'waard', 'wad', 'wilg', 'zeil',
+] as const;
+
+/** Een verse ploegcode. Wie hem heeft, ziet de wedstrijden van de ploeg. */
+export function generateTeamCode(): string {
+  const random = new Uint32Array(5);
+  crypto.getRandomValues(random);
+  const words = [...random.slice(0, 4)].map((value) => WORDS[value % WORDS.length]);
+  const digits = String(random[4]! % 10_000).padStart(4, '0');
+  return [...words, digits].join('-');
 }

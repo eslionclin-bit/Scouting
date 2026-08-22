@@ -8,6 +8,7 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import { useCloudSync } from '../hooks/useCloudSync';
+import { generateTeamCode, MIN_CODE_LENGTH } from '../../sync/cloudConfig';
 import { OPPONENT_DETAILS, type AppSettings, type OpponentDetail } from '../../domain/settings';
 import { useQuery, useStore } from '../StoreProvider';
 
@@ -169,7 +170,7 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
         <h2>Online koppeling</h2>
         {!cloud.available ? (
           <p className="card__hint">
-            Er is nog geen online project ingesteld. Zonder blijft alles op dit apparaat staan en
+            Er is nog geen sync-server ingesteld. Zonder blijft alles op dit apparaat staan en
             koppel je alleen met een tablet in dezelfde zaal.
           </p>
         ) : (
@@ -185,21 +186,38 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
                 <label className="field">
                   <span>Ploegcode</span>
                   <input
-                    type="password"
+                    type="text"
                     autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     value={codeDraft}
                     onChange={(event) => setCodeDraft(event.target.value)}
-                    placeholder="van de trainer of de vorige tablet"
+                    placeholder="van de trainer of de eerste tablet"
                   />
                 </label>
-                <button
-                  type="button"
-                  className="button button--primary"
-                  disabled={busy || codeDraft.trim().length === 0}
-                  onClick={() => void saveCode(codeDraft.trim())}
-                >
-                  Koppelen
-                </button>
+                <p className="card__hint">
+                  Is dit het eerste apparaat? Laat de app er dan een maken en schrijf hem op. Er zijn
+                  geen accounts en er is geen wachtwoord-vergeten: de ploeg <em>is</em> de code, en
+                  wie hem heeft ziet de wedstrijden. Minstens {MIN_CODE_LENGTH} tekens.
+                </p>
+                <div className="step__actions">
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    disabled={busy || codeDraft.trim().length < MIN_CODE_LENGTH}
+                    onClick={() => void saveCode(codeDraft.trim())}
+                  >
+                    Koppelen
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    disabled={busy}
+                    onClick={() => setCodeDraft(generateTeamCode())}
+                  >
+                    Code voor mij maken
+                  </button>
+                </div>
               </>
             ) : (
               <>
@@ -219,6 +237,23 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
                   </li>
                 </ul>
                 {cloud.state.lastError && <p className="setup__error">{cloud.state.lastError}</p>}
+
+                {/*
+                  Het enige geval dat de server niet zelf kan zien: een typefout
+                  in de code levert geen foutmelding op maar een andere, lege
+                  ploeg. Dus benoemen we het hier.
+                */}
+                {cloud.onServer === 0 && (
+                  <p className="card__hint">
+                    Er staat nog niets onder deze code. Klopt hij? Zo niet, maak de koppeling los en
+                    vul hem opnieuw in. Is dit het eerste apparaat van de ploeg, dan is dit precies
+                    goed — wat je invoert loopt vanzelf mee.
+                  </p>
+                )}
+
+                <p className="card__hint">
+                  Ploegcode: <code>{teamCode}</code>. Vul dezelfde in op de andere apparaten.
+                </p>
                 <button
                   type="button"
                   className="button button--ghost"

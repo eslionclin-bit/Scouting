@@ -1,12 +1,11 @@
 /// <reference types="vite/client" />
 
 /**
- * De twee waarden waarmee de online koppeling wordt ingebouwd. Allebei
- * optioneel: zonder blijft de app puur lokaal werken.
+ * Het adres van de sync-server. Optioneel: zonder blijft de app puur lokaal
+ * werken, en zegt het instellingenscherm dat ook.
  */
 interface ImportMetaEnv {
-  readonly VITE_SUPABASE_URL?: string;
-  readonly VITE_SUPABASE_ANON_KEY?: string;
+  readonly VITE_SYNC_URL?: string;
 }
 
 interface ImportMeta {

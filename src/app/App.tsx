@@ -47,6 +47,18 @@ export function App(): ReactElement {
     globalThis.history?.pushState({ app: true }, '');
   }, []);
 
+  /**
+   * Hetzelfde, maar het huidige scherm blijft niet achter in de stapel.
+   *
+   * Voor schermen die af zijn zodra ze hun werk hebben gedaan: het formulier
+   * voor een nieuwe wedstrijd is klaar op het moment dat de wedstrijd bestaat.
+   * Zonder dit kom je bij het verlaten van de wedstrijd terug in dat formulier,
+   * en dat is nergens goed voor.
+   */
+  const replace = useCallback((next: View): void => {
+    setStack((current) => [...current.slice(0, -1), next]);
+  }, []);
+
   /** Terug binnen de app: via de geschiedenis, zodat beide kanten kloppen. */
   const back = useCallback((): void => {
     if (globalThis.history?.state?.app) globalThis.history.back();
@@ -107,7 +119,7 @@ export function App(): ReactElement {
         <NewMatchScreen
           onCreated={(matchId) => {
             setScope({ matchId, role: 'scorer' });
-            go({ name: 'scoring', matchId, role: 'scorer' });
+            replace({ name: 'scoring', matchId, role: 'scorer' });
           }}
           onCancel={back}
         />

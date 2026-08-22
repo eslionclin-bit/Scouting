@@ -1,0 +1,15 @@
+name = "volley-scouting-sync"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# De database wordt aangemaakt met:
+#
+#   npx wrangler d1 create volley-scouting --location weur
+#
+# `weur` is West-Europa: daarmee staan spelersnamen en wedstrijdgegevens hier
+# en niet aan de andere kant van de oceaan. Het commando drukt een database_id
+# af; die hoort hieronder.
+[[d1_databases]]
+binding = "DB"
+database_name = "volley-scouting"
+database_id = "00000000-0000-0000-0000-000000000000"
