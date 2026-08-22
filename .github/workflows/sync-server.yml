@@ -27,15 +27,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Zwijgend overslaan is goed bij een gewone push: wie de online koppeling
+      # niet gebruikt, hoeft er geen rood vinkje voor te zien. Maar wie deze
+      # workflow zelf aanzet verwacht dat er iets gebeurt, en dan is 'geslaagd'
+      # terwijl alles is overgeslagen een leugen die meer tijd kost dan een
+      # eerlijke fout.
       - name: Zijn de gegevens er?
         id: check
         run: |
-          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] && [ -n "${{ secrets.CLOUDFLARE_D1_ID }}" ]; then
+          missing=""
+          [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]  || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "${{ secrets.CLOUDFLARE_D1_ID }}" ]      || missing="$missing CLOUDFLARE_D1_ID"
+
+          if [ -z "$missing" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Geen Cloudflare-gegevens ingesteld; de sync-server wordt overgeslagen."
+            echo "Alle drie de gegevens staan klaar."
+            exit 0
           fi
+
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "::error::De sync-server kan niet worden uitgerold, deze secrets ontbreken:$missing"
+            exit 1
+          fi
+
+          echo "::warning::Sync-server overgeslagen, deze secrets ontbreken:$missing"
 
       - uses: actions/setup-node@v4
         if: steps.check.outputs.ready == 'true'
@@ -61,6 +79,8 @@ jobs:
         # Alle statements zijn 'if not exists', dus dit mag elke keer draaien.
         run: npx --yes wrangler@4 d1 execute volley-scouting --remote --file schema.sql --yes
 
+      # Het adres van de worker staat in de uitvoer hieronder; dat is de
+      # waarde voor het secret SYNC_URL waarmee de app hem gaat gebruiken.
       - name: Uitrollen
         if: steps.check.outputs.ready == 'true'
         working-directory: server/cloud
