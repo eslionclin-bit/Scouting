@@ -2,8 +2,8 @@
 # hoeft te plakken.
 #
 # Draait alleen als er iets aan de server verandert — de app zelf heeft zijn
-# eigen workflow. Ontbreken de twee secrets, dan slaat hij zichzelf over: dat is
-# de normale situatie voor wie de online koppeling niet gebruikt.
+# eigen workflow. Ontbreken de gegevens, dan slaat hij zichzelf over: dat is de
+# normale situatie voor wie de online koppeling niet gebruikt.
 #
 # Eenmalig instellen (Settings → Secrets and variables → Actions):
 #   CLOUDFLARE_API_TOKEN   — een token met rechten 'Workers Scripts: Edit' en
@@ -34,22 +34,53 @@ jobs:
       # eerlijke fout.
       - name: Zijn de gegevens er?
         id: check
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1: ${{ secrets.CLOUDFLARE_D1_ID }}
+          VAR_TOKEN: ${{ vars.CLOUDFLARE_API_TOKEN }}
+          VAR_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          VAR_D1: ${{ vars.CLOUDFLARE_D1_ID }}
         run: |
-          # Alleen de lengte, nooit de waarde: dat is genoeg om te zien of een
-          # secret er is en verklapt niets. GitHub maskeert de waarde toch, maar
-          # dan zie je '***' en weet je nog steeds niet of hij leeg is.
+          # Witruimte eruit. Een token dat op een tablet uit een dashboard is
+          # gekopieerd bevat zomaar een regeleinde, en dan komt het als
+          # koptekst in een verzoek terecht en klapt de hele uitrol eruit op
+          # 'invalid header value' — een melding waar je niets aan hebt. Deze
+          # drie waarden bestaan alle drie uit hexadecimale tekens en streepjes,
+          # dus er kan niets zinnigs sneuvelen.
+          clean() { printf '%s' "$1" | tr -d '[:space:]'; }
+          TOKEN_C=$(clean "$TOKEN")
+          ACCOUNT_C=$(clean "$ACCOUNT")
+          D1_C=$(clean "$D1")
+
+          # Ook de opgeschoonde waarden uit de logs houden: GitHub maskeert
+          # alleen wat er letterlijk in het secret staat.
+          [ -n "$TOKEN_C" ] && echo "::add-mask::$TOKEN_C"
+          [ -n "$D1_C" ] && echo "::add-mask::$D1_C"
+
+          # Alleen de lengte, nooit de waarde. Genoeg om te zien of een secret
+          # er is en of er witruimte in zat, en het verklapt niets — terwijl de
+          # gemaskeerde waarde '***' precies dat verschil verbergt.
           echo "Wat deze workflow ziet:"
-          printf '  %-24s %s tekens\n' CLOUDFLARE_API_TOKEN  "${#TOKEN}"
-          printf '  %-24s %s tekens\n' CLOUDFLARE_ACCOUNT_ID "${#ACCOUNT}"
-          printf '  %-24s %s tekens\n' CLOUDFLARE_D1_ID      "${#D1}"
+          printf '  %-24s %s tekens (%s na opschonen)\n' \
+            CLOUDFLARE_API_TOKEN "${#TOKEN}" "${#TOKEN_C}"
+          printf '  %-24s %s tekens (%s na opschonen)\n' \
+            CLOUDFLARE_ACCOUNT_ID "${#ACCOUNT}" "${#ACCOUNT_C}"
+          printf '  %-24s %s tekens (%s na opschonen)\n' \
+            CLOUDFLARE_D1_ID "${#D1}" "${#D1_C}"
 
           missing=""
-          [ -n "$TOKEN" ]   || missing="$missing CLOUDFLARE_API_TOKEN"
-          [ -n "$ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
-          [ -n "$D1" ]      || missing="$missing CLOUDFLARE_D1_ID"
+          [ -n "$TOKEN_C" ]   || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$ACCOUNT_C" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$D1_C" ]      || missing="$missing CLOUDFLARE_D1_ID"
 
           if [ -z "$missing" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "CF_TOKEN=$TOKEN_C"
+              echo "CF_ACCOUNT=$ACCOUNT_C"
+              echo "CF_D1=$D1_C"
+            } >> "$GITHUB_ENV"
             exit 0
           fi
 
@@ -70,13 +101,6 @@ jobs:
           fi
 
           echo "::warning::Sync-server overgeslagen, deze secrets ontbreken:$missing.$hint"
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          D1: ${{ secrets.CLOUDFLARE_D1_ID }}
-          VAR_TOKEN: ${{ vars.CLOUDFLARE_API_TOKEN }}
-          VAR_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          VAR_D1: ${{ vars.CLOUDFLARE_D1_ID }}
 
       - uses: actions/setup-node@v4
         if: steps.check.outputs.ready == 'true'
@@ -89,16 +113,14 @@ jobs:
       - name: Database-id invullen
         if: steps.check.outputs.ready == 'true'
         working-directory: server/cloud
-        run: |
-          sed -i "s|vul-hier-de-id-in-die-wrangler-afdrukt|${{ secrets.CLOUDFLARE_D1_ID }}|" wrangler.toml
-          grep database_id wrangler.toml
+        run: sed -i "s|vul-hier-de-id-in-die-wrangler-afdrukt|$CF_D1|" wrangler.toml
 
       - name: Tabel klaarzetten
         if: steps.check.outputs.ready == 'true'
         working-directory: server/cloud
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
         # Alle statements zijn 'if not exists', dus dit mag elke keer draaien.
         run: npx --yes wrangler@4 d1 execute volley-scouting --remote --file schema.sql --yes
 
@@ -108,6 +130,6 @@ jobs:
         if: steps.check.outputs.ready == 'true'
         working-directory: server/cloud
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
         run: npx --yes wrangler@4 deploy
