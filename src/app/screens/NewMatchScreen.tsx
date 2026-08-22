@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { PLAYER_ROLES, PLAYER_ROLE_LABELS } from '../../domain/players';
+import { primaryRoleOf, rolesOf, PLAYER_ROLES, PLAYER_ROLE_LABELS } from '../../domain/players';
 import type { PlayerRole } from '../../domain/types';
 import { useQuery, useStore } from '../StoreProvider';
 
@@ -23,6 +23,8 @@ interface PlayerRow {
   number: string;
   name: string;
   role?: PlayerRole | '';
+  /** Wat ze verder nog kan spelen; de hoofdpositie zit hier niet in. */
+  extra?: PlayerRole[];
 }
 
 const EMPTY_ROWS: PlayerRow[] = Array.from({ length: 8 }, () => ({ number: '', name: '', role: '' }));
@@ -58,7 +60,8 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
         ? existing.players.map((player) => ({
           number: String(player.number),
           name: player.name,
-          role: player.role ?? '',
+          role: primaryRoleOf(player) ?? '',
+          extra: rolesOf(player).filter((role) => role !== primaryRoleOf(player)),
         }))
         : EMPTY_ROWS,
     );
@@ -93,6 +96,7 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
           number: Number(row.number),
           name: row.name.trim(),
           role: row.role || null,
+          roles: row.extra ?? [],
         }))
         .filter((row) => Number.isInteger(row.number) && row.name.length > 0)
         .filter((row) => !known.has(row.number))
@@ -101,6 +105,7 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
           number: row.number,
           name: row.name,
           role: row.role,
+          roles: row.roles,
         }));
       if (newPlayers.length > 0) await store.players.createMany(newPlayers);
 
@@ -189,8 +194,10 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
 
       <h2 className="setup__subtitle">Spelers eigen team</h2>
       <p className="setup__hint">
-        Blijven bewaard voor volgende wedstrijden. De rol is optioneel; alleen bij een libero maakt
-        het verschil, want die serveert niet.
+        Blijven bewaard voor volgende wedstrijden. De positie is optioneel; alleen bij een libero
+        maakt hij echt verschil, want die serveert niet. Kan iemand meer dan één positie, tik ze er
+        dan bij aan — dat beperkt niets aan wat je kunt invoeren, maar het laat zien wie er
+        inzetbaar is als er iemand uitvalt.
       </p>
       <div className="roster">
         {rows.map((row, index) => (
@@ -224,6 +231,33 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
                 </option>
               ))}
             </select>
+            {/*
+              Kan ook: de posities die ze er verder bij speelt. Beschrijvend —
+              de app houdt niemand tegen die ergens anders gaat staan.
+            */}
+            <div className="roster__extra" role="group" aria-label={`Kan ook speler ${index + 1}`}>
+              {PLAYER_ROLES.filter((role) => role !== row.role).map((role) => {
+                const on = (row.extra ?? []).includes(role);
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    className={`chip ${on ? 'chip--active' : ''}`}
+                    aria-pressed={on}
+                    aria-label={`${PLAYER_ROLE_LABELS[role]} erbij, speler ${index + 1}`}
+                    onClick={() =>
+                      updateRow(index, {
+                        extra: on
+                          ? (row.extra ?? []).filter((entry) => entry !== role)
+                          : [...(row.extra ?? []), role],
+                      })
+                    }
+                  >
+                    {PLAYER_ROLE_LABELS[role]}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ))}
         <button

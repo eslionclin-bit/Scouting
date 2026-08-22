@@ -8,7 +8,10 @@ export interface PlayerInput {
   teamId: string;
   number: number;
   name: string;
+  /** De positie waar ze normaal staat. */
   role?: PlayerRole | null;
+  /** Alle posities die ze kan spelen; standaard alleen bovenstaande. */
+  roles?: PlayerRole[] | null;
   position?: string | null;
   active?: boolean;
 }
@@ -27,6 +30,7 @@ export class PlayerRepository {
       number: input.number,
       name: input.name,
       role: input.role ?? null,
+      roles: normalizeRoles(input),
       position: input.position ?? null,
       active: input.active ?? true,
     });
@@ -57,6 +61,7 @@ export class PlayerRepository {
         number: input.number,
         name: input.name,
         role: input.role ?? null,
+        roles: normalizeRoles(input),
         position: input.position ?? null,
         active: input.active ?? true,
       }),
@@ -95,7 +100,19 @@ export class PlayerRepository {
     if (patch.number != null && patch.number !== current.number) {
       await this.assertNumberFree(current.teamId, patch.number, id);
     }
-    const record = reviseRecord(this.ctx, current, patch);
+    // Verandert de hoofdpositie, dan moet die ook in de lijst blijven staan.
+    const roles =
+      patch.roles !== undefined || patch.role !== undefined
+        ? normalizeRoles({
+            teamId: current.teamId,
+            number: current.number,
+            name: current.name,
+            role: patch.role !== undefined ? patch.role : current.role,
+            roles: patch.roles !== undefined ? patch.roles : current.roles,
+          })
+        : (current.roles ?? null);
+
+    const record = reviseRecord(this.ctx, current, { ...patch, roles });
     await commit(this.ctx, [{ entity: 'players', record }]);
     return record;
   }
@@ -119,4 +136,17 @@ export class PlayerRepository {
       ]);
     }
   }
+}
+
+/**
+ * De lijst posities, met de hoofdpositie er altijd in.
+ *
+ * Anders zou 'ze speelt normaal midden, en ook diagonaal' kunnen eindigen als
+ * een lijst zonder midden erin, en dat klopt met niets.
+ */
+function normalizeRoles(input: PlayerInput): PlayerRole[] | null {
+  const listed = input.roles ?? [];
+  const all = input.role ? [input.role, ...listed] : listed;
+  const unique = [...new Set(all)];
+  return unique.length > 0 ? unique : null;
 }

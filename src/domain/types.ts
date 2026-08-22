@@ -102,7 +102,21 @@ export interface Player extends BaseRecord {
   /** Rugnummer; uniek binnen een team. */
   number: number;
   name: string;
+  /**
+   * De positie waar ze normaal staat. Blijft bestaan naast `roles`: de app moet
+   * ergens één antwoord kunnen geven op 'wat is ze', en oudere opslag kent
+   * alleen dit veld.
+   */
   role?: PlayerRole | null;
+  /**
+   * Alle posities die ze kan spelen, inclusief de bovenstaande.
+   *
+   * Beschrijvend, niet voorschrijvend: het beperkt niet wat je kunt invoeren.
+   * Het is er om te zien wie er inzetbaar is als er iemand uitvalt, en om te
+   * begrijpen waarom iemands cijfers per positie verschillen — een middenspeler
+   * die soms diagonaal speelt, doet dat met andere ballen.
+   */
+  roles?: PlayerRole[] | null;
   position?: string | null;
   active: boolean;
 }
@@ -261,6 +275,16 @@ export interface Lineup extends BaseRecord {
    * speler naar voren draait of moet serveren.
    */
   liberoId?: string | null;
+  /**
+   * Voor wie de libero erin komt.
+   *
+   * De regel laat elke achterspeler toe; in de praktijk is het de
+   * middenspeelster, en dan pas ná haar serviceserie. Meestal kan de app dat
+   * zelf uitrekenen — er staat één middenspeelster achterin — maar bij een
+   * speelster die meerdere posities speelt, of bij twee middens achterin, is
+   * dat raden. Dan telt wat hier staat.
+   */
+  liberoForId?: string | null;
 }
 
 /** Wissel: vanaf de genoemde rally staat de invaller in het veld. */

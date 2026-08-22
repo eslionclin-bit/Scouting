@@ -10,6 +10,7 @@ import {
   serverAt,
 } from './rotation';
 import type { Zone } from './types';
+import type { PlayerRole } from './types';
 
 const start: Record<Zone, string | null> = {
   1: 'p1',
@@ -110,5 +111,51 @@ describe('libero', () => {
       replaced: null,
     });
     expect(courtPositions(lineup, 1, [])).toMatchObject({ replaced: null });
+  });
+});
+
+describe('libero bij speelsters die meerdere posities spelen', () => {
+  const start = { 1: 'p1', 2: 'p2', 3: 'p3', 4: 'p4', 5: 'p5', 6: 'p6' } as const;
+
+  it('verandert niets als er twee middens achterin staan', () => {
+    // p5 én p6 kunnen midden: wie eruit gaat is niet af te leiden, en dan is
+    // niets veranderen beter dan gokken.
+    const rolesOf = (id: string): readonly PlayerRole[] =>
+      id === 'p6' ? ['middle'] : id === 'p5' ? ['outside', 'middle'] : ['setter'];
+
+    const court = courtPositions({ positions: { ...start }, liberoId: 'lib' }, 1, [], { rolesOf });
+
+    expect(court.replaced).toBeNull();
+    expect(playersOnCourt(court.positions)).not.toContain('lib');
+  });
+
+  it('volgt de vastgelegde keuze, ook als de rollen iets anders zeggen', () => {
+    const rolesOf = (id: string): readonly PlayerRole[] =>
+      id === 'p6' ? ['middle'] : ['outside'];
+
+    const court = courtPositions(
+      { positions: { ...start }, liberoId: 'lib', liberoForId: 'p5' },
+      1,
+      [],
+      { rolesOf },
+    );
+
+    expect(court.replaced).toBe('p5');
+    expect(court.positions[5]).toBe('lib');
+    expect(court.positions[6]).toBe('p6');
+  });
+
+  it('laat de vastgelegde speelster met rust zodra ze naar de service draait', () => {
+    // In rotatie 5 staat p5 in zone 1: daar wordt geserveerd, en dat mag de
+    // libero niet.
+    const court = courtPositions(
+      { positions: { ...start }, liberoId: 'lib', liberoForId: 'p5' },
+      5,
+      [],
+      {},
+    );
+
+    expect(court.positions[1]).toBe('p5');
+    expect(court.replaced).toBeNull();
   });
 });

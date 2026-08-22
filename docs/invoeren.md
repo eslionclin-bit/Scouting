@@ -50,6 +50,10 @@ Verder:
 - **Tik je de andere ploeg aan dan de app verwachtte, dan schuift het actietype
   mee.** Verwachtte hij onze service en tik jij de tegenstander aan, dan gaat het
   om hun pass. Altijd te corrigeren.
+- **Bij een verwachte pass licht op wie er passt** — de sideout-opstelling. De
+  zes blijven staan waar ze staan (anders klopt de rotatie niet meer), maar de
+  passer-loper die vooraan staat krijgt het label 'passt', want die past in
+  vrijwel alle gevallen mee. De spelverdeelster en de diagonaal niet.
 - **Bij een blok lichten alleen de drie voorlijnvakken op.** Een blokpunt is een
   punt en hoort aan een naam te hangen; blokken doet de voorlijn.
 - **Alles wat optioneel is, wordt ná de tik gevraagd** in één verfijnbalk: tempo
@@ -119,6 +123,23 @@ Het is optioneel — zonder werkt alles gewoon — maar het levert twee dingen o
 Dat is wat 'serveer op positie 5, zeker als #38 daar staat' mogelijk maakt: het
 staat op het dashboard onder 'Waar we naartoe serveren' en komt als aanwijzing
 terug op het coachscherm.
+
+## Posities en de libero
+
+Een speelster krijgt één positie waar ze normaal staat, en daarnaast desgewenst
+alles wat ze verder kan. Dat beperkt niets — je kunt elke actie aan elke
+speelster hangen — maar het maakt twee dingen mogelijk: zien wie er inzetbaar is
+als er iemand uitvalt, en begrijpen waarom iemands cijfers per positie
+verschillen.
+
+Voor de libero rekent de app zelf uit voor wie ze erin komt: de enige
+middenspeelster achterin, in zone 5 of 6 en nooit in zone 1 — daar wordt
+geserveerd. Staan er twee middens achterin, of speelt iemand naast midden ook
+iets anders, dan is dat raden. Dan kies je het zelf onder 'Opstelling → komt in
+voor', en die keuze wint.
+
+Formeel mag de libero voor elke achterspeelster invallen; de standaard is de
+middenspeelster, na afloop van haar serviceserie. Beide gevallen kunnen dus.
 
 ## Punt zonder actie
 

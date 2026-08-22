@@ -24,6 +24,7 @@ import { useToasts } from '../hooks/useToasts';
 import { useQuery, useStore } from '../StoreProvider';
 import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryReducer';
 import { courtPositions, emptyPositions, positionsAt } from '../../domain/rotation';
+import { receiversFor } from '../../domain/reception';
 import { DEFAULT_SETTINGS } from '../../domain/settings';
 import {
   courtEntryReducer,
@@ -34,6 +35,7 @@ import {
 import { matchStatus, rulesOf, setOutcome } from '../../domain/scoring';
 import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
+import { canPlay, primaryRoleOf, rolesOf } from '../../domain/players';
 import { ZONES, type Action, type Player, type Quality, type TeamSide, type Zone } from '../../domain/types';
 
 export interface ScoringScreenProps {
@@ -160,13 +162,36 @@ export function ScoringScreen({
       data.lineup,
       data.rally?.rotationUs ?? 1,
       data.substitutions ?? [],
-      { roleOf: (playerId) => playersById.get(playerId)?.role ?? null },
+      {
+        rolesOf: (playerId) => {
+          const player = playersById.get(playerId);
+          return player ? rolesOf(player) : [];
+        },
+      },
     );
     return {
       positions,
-      roleOf: (playerId: string) => playersById.get(playerId)?.role ?? null,
+      roleOf: (playerId: string) => primaryRoleOf(playersById.get(playerId) ?? { role: null }),
     };
   }, [data?.lineup, data?.rally?.rotationUs, data?.substitutions, playersById]);
+
+  /**
+   * Wie er in deze rotatie passt.
+   *
+   * De rotatie zegt waar iedereen staat; hij zegt niet wie de bal aanneemt. De
+   * passer-loper aan het net past in vrijwel alle gevallen mee, en dat is
+   * precies wat je bij een verwachte pass moet zien.
+   */
+  const receivers = useMemo(() => {
+    if (!court) return [];
+    return receiversFor(court.positions, {
+      rolesOf: (playerId) => {
+        const player = playersById.get(playerId);
+        return player ? rolesOf(player) : [];
+      },
+      liberoId: data?.lineup?.liberoId ?? null,
+    });
+  }, [court, playersById, data?.lineup?.liberoId]);
 
   /**
    * Hun zes, als rugnummer per zone.
@@ -206,7 +231,7 @@ export function ScoringScreen({
     // Een libero serveert niet. Staat die toch op de serveerplek, dan klopt de
     // opstelling niet en vult de app liever niets in dan iets onmogelijks.
     const player = candidate ? data?.ownPlayers.find((entry) => entry.id === candidate) : undefined;
-    if (player?.role === 'libero') return null;
+    if (player && canPlay(player, 'libero') && rolesOf(player).length === 1) return null;
     return candidate;
   }, [data?.rally, data?.lineup, data?.substitutions, data?.setActions, data?.ownPlayers]);
 
@@ -458,10 +483,11 @@ export function ScoringScreen({
   async function saveLineup(
     positions: Record<Zone, string | null>,
     liberoId: string | null,
+    liberoForId: string | null,
   ): Promise<void> {
     if (!data?.set) return;
     try {
-      await store.lineups.set({ setId: data.set.id, positions, liberoId });
+      await store.lineups.set({ setId: data.set.id, positions, liberoId, liberoForId });
       setShowLineup(false);
     } catch (cause) {
       push('error', cause instanceof Error ? cause.message : String(cause));
@@ -687,6 +713,7 @@ export function ScoringScreen({
           positions={court?.positions ?? emptyPositions()}
           ownPlayers={data.ownPlayers}
           opponentPlayers={data.opponentPlayers}
+          receivers={receivers}
           opponentPositions={themPositions ?? undefined}
           settings={settingsOrDefault}
           expectedServerId={expectedServerId}
@@ -773,7 +800,9 @@ export function ScoringScreen({
           lineup={data.lineup}
           substitutions={data.substitutions ?? []}
           rotation={rally.rotationUs ?? 1}
-          onSaveLineup={(positions, liberoId) => void saveLineup(positions, liberoId)}
+          onSaveLineup={(positions, liberoId, liberoForId) =>
+            void saveLineup(positions, liberoId, liberoForId)
+          }
           onSubstitute={(out, into) => void substitute(out, into)}
           onClose={() => setShowLineup(false)}
         />

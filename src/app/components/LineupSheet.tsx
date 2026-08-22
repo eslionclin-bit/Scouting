@@ -8,7 +8,7 @@
 
 import { useState, type ReactElement } from 'react';
 import { courtPositions, positionsAt } from '../../domain/rotation';
-import { playerLabel } from '../../domain/players';
+import { canPlay, playerLabel, rolesOf } from '../../domain/players';
 import type { Lineup, Player, Substitution, Zone } from '../../domain/types';
 import { ZONES } from '../../domain/types';
 import { COURT_GRID, ZONE_LABELS } from '../../domain/zones';
@@ -18,7 +18,11 @@ export interface LineupSheetProps {
   lineup: Lineup | undefined;
   substitutions: readonly Substitution[];
   rotation: number;
-  onSaveLineup: (positions: Record<Zone, string | null>, liberoId: string | null) => void;
+  onSaveLineup: (
+    positions: Record<Zone, string | null>,
+    liberoId: string | null,
+    liberoForId: string | null,
+  ) => void;
   onSubstitute: (playerOutId: string, playerInId: string) => void;
   onClose: () => void;
 }
@@ -41,6 +45,7 @@ export function LineupSheet({
   const [activeZone, setActiveZone] = useState<Zone>(1);
   const [playerOut, setPlayerOut] = useState<string | null>(null);
   const [liberoId, setLiberoId] = useState<string | null>(lineup?.liberoId ?? null);
+  const [liberoForId, setLiberoForId] = useState<string | null>(lineup?.liberoForId ?? null);
 
   const byId = new Map(players.map((player) => [player.id, player]));
   const current = lineup ? positionsAt(lineup, rotation, substitutions) : draft;
@@ -50,7 +55,10 @@ export function LineupSheet({
   // wordt hij apart gemeld en niet in de wisseltegels gezet.
   const court = lineup
     ? courtPositions(lineup, rotation, substitutions, {
-        roleOf: (playerId) => byId.get(playerId)?.role ?? null,
+        rolesOf: (playerId) => {
+          const player = byId.get(playerId);
+          return player ? rolesOf(player) : [];
+        },
       })
     : null;
   const liberoZone = court?.replaced
@@ -140,8 +148,9 @@ export function LineupSheet({
 
             <h4 className="sheet__subtitle">Libero</h4>
             <p className="step__hint">
-              Staat niet in de zes: hij komt in voor de middenspeler achterin, en gaat eruit als die
-              moet serveren.
+              Staat niet in de zes. De regel laat haar voor elke achterspeelster invallen; in de
+              praktijk is dat de middenspeelster, en pas ná haar serviceserie — vandaar dat ze in
+              zone 1 nooit staat: daar wordt geserveerd.
             </p>
             <div className="grid grid--players">
               <button
@@ -161,11 +170,47 @@ export function LineupSheet({
                 >
                   <span className="tile__number">{player.number}</span>
                   <span className="tile__name">
-                    {player.role === 'libero' ? 'libero' : player.name || '\u00a0'}
+                    {canPlay(player, 'libero') ? 'libero' : player.name || '\u00a0'}
                   </span>
                 </button>
               ))}
             </div>
+
+            {liberoId !== null && (
+              <>
+                <h4 className="sheet__subtitle">Komt in voor</h4>
+                <p className="step__hint">
+                  Meestal rekent de app dit zelf uit: er staat één middenspeelster achterin. Speelt
+                  iemand meerdere posities, of staan er twee middens achterin, dan is het raden — en
+                  dan wint wat je hier kiest.
+                </p>
+                <div className="grid grid--players">
+                  <button
+                    type="button"
+                    className={`tile tile--unknown ${liberoForId === null ? 'tile--selected' : ''}`}
+                    onClick={() => setLiberoForId(null)}
+                  >
+                    Zelf uitrekenen
+                  </button>
+                  {players
+                    .filter((player) => player.id !== liberoId)
+                    .map((player) => (
+                      <button
+                        key={player.id}
+                        type="button"
+                        className={`tile tile--player ${
+                          liberoForId === player.id ? 'tile--selected' : ''
+                        }`}
+                        aria-label={`Libero komt in voor ${playerLabel(player)}`}
+                        onClick={() => setLiberoForId(player.id)}
+                      >
+                        <span className="tile__number">{player.number}</span>
+                        <span className="tile__name">{player.name || '\u00a0'}</span>
+                      </button>
+                    ))}
+                </div>
+              </>
+            )}
 
             <div className="sheet__actions">
               <button type="button" className="button button--ghost" onClick={onClose}>
@@ -174,7 +219,7 @@ export function LineupSheet({
               <button
                 type="button"
                 className="button button--primary"
-                onClick={() => onSaveLineup(draft, liberoId)}
+                onClick={() => onSaveLineup(draft, liberoId, liberoForId)}
               >
                 Opstelling bewaren
               </button>

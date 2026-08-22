@@ -10,7 +10,7 @@
 import { useMemo, type ReactElement } from 'react';
 import { buildPlayerProfile, type FormComparison } from '../../analysis';
 import { loadMatchBundle } from '../../db/bundle';
-import { playerLabel, PLAYER_ROLE_LABELS } from '../../domain/players';
+import { describeRoles, playerLabel } from '../../domain/players';
 import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { ACTION_TYPES } from '../../domain/types';
 import { Placeholder } from '../components/Placeholder';
@@ -72,7 +72,7 @@ export function PlayerScreen({ playerId, onExit, onOpenMatch }: PlayerScreenProp
         <div>
           <h1>{playerLabel(data.player)}</h1>
           <p className="dashboard__sub">
-            {data.player.role ? `${PLAYER_ROLE_LABELS[data.player.role]} · ` : ''}
+            {describeRoles(data.player) ? `${describeRoles(data.player)} · ` : ''}
             {profile.matchesPlayed} {profile.matchesPlayed === 1 ? 'wedstrijd' : 'wedstrijden'} ·{' '}
             {profile.season.overall.total} acties
           </p>

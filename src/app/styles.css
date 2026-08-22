@@ -328,6 +328,20 @@ button {
   gap: 0.5rem;
 }
 
+/* 'Kan ook' loopt onder de rij door: het is bijzaak, en het zijn vijf knopjes. */
+.roster__extra {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: -0.15rem 0 0.35rem;
+}
+
+.roster__extra .chip {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+}
+
 @media (max-width: 30rem) {
   .roster__row {
     grid-template-columns: 4rem 1fr;
@@ -2514,6 +2528,12 @@ button {
 
 /* Blokken doet de voorlijn; die drie vakken springen eruit zodra een blok
    verwacht wordt, want een blokpunt hoort aan een naam te hangen. */
+/* Wie er passt in deze rotatie — de passer-loper vooraan hoort er ook bij. */
+.courtcell--passes {
+  border-color: var(--good, #22c55e);
+  box-shadow: inset 0 2px 0 var(--good, #22c55e);
+}
+
 /* Bij onze service ligt hun helft leeg: die vakken zijn dan het doel. */
 .courtcell--target {
   border-style: dashed;

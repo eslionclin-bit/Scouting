@@ -41,6 +41,11 @@ export interface CourtEntryProps {
   ownPlayers: readonly Player[];
   opponentPlayers: readonly Player[];
   /**
+   * Wie er passt in deze rotatie. Alleen gebruikt zodra een pass verwacht wordt:
+   * dan lichten die vakken op, want daar komt de bal.
+   */
+  receivers?: readonly string[];
+  /**
    * Rugnummer per zone bij de tegenstander, als hun opstelling bekend is. Dan
    * staat er in hun vakken wie er staat in plaats van alleen een zonenaam — en
    * krijgt een doelzone bij de service er vanzelf een naam bij.
@@ -70,6 +75,7 @@ export function CourtEntry({
   positions,
   ownPlayers,
   opponentPlayers,
+  receivers,
   opponentPositions,
   settings,
   onCommit,
@@ -82,6 +88,15 @@ export function CourtEntry({
   // Bij onze eigen service betekent een tik op hun helft 'daar ging hij
   // naartoe', niet 'zij deden iets'.
   const aiming = targetsOpponent(state);
+  // Bij een verwachte pass laat het veld zien wie er aanneemt. De zes staan waar
+  // ze staan — anders klopt de rotatie niet meer — maar de passer-loper aan het
+  // net past mee, en dat is precies wat je op dat moment moet weten.
+  // Ook al tijdens hun service: dan staat de bal in de lucht en is dit precies
+  // de vraag die de invoerder heeft.
+  const receiving =
+    (state.type === 'reception' && state.expectedTeam === 'us') ||
+    (state.type === 'serve' && state.expectedTeam === 'them');
+  const receiverSet = new Set(receivers ?? []);
 
   function selectOwn(zone: Zone): void {
     const playerId = positions[zone];
@@ -174,6 +189,7 @@ export function CourtEntry({
               // Blokken doet de voorlijn. Een blokpunt moet aan een speelster
               // hangen, dus staan bij een blok alleen die drie vakken aan.
               const blocks = state.type === 'block' && isFrontZone(zone);
+              const passes = receiving && playerId !== null && receiverSet.has(playerId);
               return (
                 <button
                   key={`us-${zone}`}
@@ -184,6 +200,7 @@ export function CourtEntry({
                     picked ? 'courtcell--picked' : '',
                     serves ? 'courtcell--server' : '',
                     blocks ? 'courtcell--blocks' : '',
+                    passes ? 'courtcell--passes' : '',
                   ].join(' ')}
                   aria-label={player ? playerLabel(player) : `Onze ${ZONE_LABELS[zone]}`}
                   aria-pressed={picked}
@@ -196,6 +213,7 @@ export function CourtEntry({
                   </span>
                   {serves && <span className="courtcell__badge">serveert</span>}
                   {blocks && !serves && <span className="courtcell__badge">blokt</span>}
+                  {passes && !serves && !blocks && <span className="courtcell__badge">passt</span>}
                 </button>
               );
             })}
@@ -219,7 +237,9 @@ export function CourtEntry({
             ))}
           </div>
         ) : (
-          <p className="courtentry__side courtentry__side--us">Wij</p>
+          <p className="courtentry__side courtentry__side--us">
+            Wij{receiving && receiverSet.size > 0 ? ' · sideout-opstelling' : ''}
+          </p>
         )}
       </div>
 

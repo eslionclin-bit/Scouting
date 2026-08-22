@@ -18,6 +18,8 @@ export interface LineupInput {
   team?: TeamSide;
   /** De libero staat niet in de zes; hij vervangt een achterspeler. */
   liberoId?: string | null;
+  /** Voor wie de libero erin komt; leeg laten betekent 'reken het zelf uit'. */
+  liberoForId?: string | null;
 }
 
 export class LineupRepository {
@@ -37,6 +39,10 @@ export class LineupRepository {
         ? reviseRecord(this.ctx, existing, {
             positions: input.positions,
             liberoId: input.liberoId ?? existing.liberoId ?? null,
+            // Bewust wél overschrijfbaar met null: 'zelf uitrekenen' terugzetten
+            // moet kunnen, anders zit een eenmalige keuze er voorgoed in.
+            liberoForId:
+              input.liberoForId !== undefined ? input.liberoForId : (existing.liberoForId ?? null),
           })
         : buildRecord(this.ctx, 'lineups', {
             matchId: set.matchId,
@@ -44,6 +50,7 @@ export class LineupRepository {
             team,
             positions: input.positions,
             liberoId: input.liberoId ?? null,
+            liberoForId: input.liberoForId ?? null,
           });
 
       await commit(this.ctx, [{ entity: 'lineups', record }]);
