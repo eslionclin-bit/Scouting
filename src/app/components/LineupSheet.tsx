@@ -48,6 +48,12 @@ export function LineupSheet({
   const [liberoForId, setLiberoForId] = useState<string | null>(lineup?.liberoForId ?? null);
 
   const byId = new Map(players.map((player) => [player.id, player]));
+
+  // Alleen wie als libero is opgegeven. De hele selectie hier nog eens tonen
+  // helpt niemand: je zoekt één speelster, en die staat in de ploeglijst al
+  // aangemerkt. Heeft niemand de positie, dan is de lijst leeg en zegt het
+  // scherm waar je dat invult.
+  const liberos = players.filter((player) => canPlay(player, 'libero'));
   const current = lineup ? positionsAt(lineup, rotation, substitutions) : draft;
 
   // De libero staat wél in het veld, maar hoort niet in de rotatie: wissels
@@ -152,29 +158,34 @@ export function LineupSheet({
               praktijk is dat de middenspeelster, en pas ná haar serviceserie — vandaar dat ze in
               zone 1 nooit staat: daar wordt geserveerd.
             </p>
-            <div className="grid grid--players">
-              <button
-                type="button"
-                className={`tile tile--unknown ${liberoId === null ? 'tile--selected' : ''}`}
-                onClick={() => setLiberoId(null)}
-              >
-                Geen
-              </button>
-              {players.map((player) => (
+            {liberos.length === 0 ? (
+              <p className="step__hint">
+                Niemand heeft libero als positie. Dat vul je in bij de ploeg — onder 'Ons team' of
+                bij het opzetten van een wedstrijd.
+              </p>
+            ) : (
+              <div className="grid grid--players">
                 <button
-                  key={player.id}
                   type="button"
-                  className={`tile tile--player ${liberoId === player.id ? 'tile--selected' : ''}`}
-                  aria-label={`${playerLabel(player)} als libero`}
-                  onClick={() => setLiberoId(player.id)}
+                  className={`tile tile--unknown ${liberoId === null ? 'tile--selected' : ''}`}
+                  onClick={() => setLiberoId(null)}
                 >
-                  <span className="tile__number">{player.number}</span>
-                  <span className="tile__name">
-                    {canPlay(player, 'libero') ? 'libero' : player.name || '\u00a0'}
-                  </span>
+                  Geen
                 </button>
-              ))}
-            </div>
+                {liberos.map((player) => (
+                  <button
+                    key={player.id}
+                    type="button"
+                    className={`tile tile--player ${liberoId === player.id ? 'tile--selected' : ''}`}
+                    aria-label={`${playerLabel(player)} als libero`}
+                    onClick={() => setLiberoId(player.id)}
+                  >
+                    <span className="tile__number">{player.number}</span>
+                    <span className="tile__name">{player.name || '\u00a0'}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {liberoId !== null && (
               <>

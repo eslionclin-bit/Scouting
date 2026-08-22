@@ -124,6 +124,14 @@ Dat is wat 'serveer op positie 5, zeker als #38 daar staat' mogelijk maakt: het
 staat op het dashboard onder 'Waar we naartoe serveren' en komt als aanwijzing
 terug op het coachscherm.
 
+## De opstelling komt vóór het eerste punt
+
+De app telt de rotatie door vanaf de zes van het begin van de set. Vul je de
+opstelling pas na een paar punten in, dan klopt de rotatiestand van die punten
+niet meer — en die staat onder elk cijfer per rotatie. Daarom vraagt hij erom
+zolang de set nog leeg is, met 'weet ik nog niet' ernaast: soms staat de ploeg er
+gewoon nog niet.
+
 ## Posities en de libero
 
 Een speelster krijgt één positie waar ze normaal staat, en daarnaast desgewenst
@@ -131,6 +139,10 @@ alles wat ze verder kan. Dat beperkt niets — je kunt elke actie aan elke
 speelster hangen — maar het maakt twee dingen mogelijk: zien wie er inzetbaar is
 als er iemand uitvalt, en begrijpen waarom iemands cijfers per positie
 verschillen.
+
+In het opstellingsscherm staan onder 'Libero' alleen de speelsters die die
+positie hebben, met hun naam erbij. Staat er niemand, dan vul je dat eerst in bij
+de ploeg.
 
 Voor de libero rekent de app zelf uit voor wie ze erin komt: de enige
 middenspeelster achterin, in zone 5 of 6 en nooit in zone 1 — daar wordt

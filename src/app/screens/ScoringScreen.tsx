@@ -75,6 +75,8 @@ export function ScoringScreen({
   const [explain, setExplain] = useState<Quality | null>(null);
   const [showLineup, setShowLineup] = useState(false);
   const [showThemLineup, setShowThemLineup] = useState(false);
+  /** De set waarvoor de invoerder 'later' koos bij de opstelling. */
+  const [skippedLineupFor, setSkippedLineupFor] = useState<string | null>(null);
   const [showPairing, setShowPairing] = useState(false);
   const [showScoreFix, setShowScoreFix] = useState(false);
   const [showActionFix, setShowActionFix] = useState(false);
@@ -304,6 +306,23 @@ export function ScoringScreen({
   const settingsOrDefault = settings ?? DEFAULT_SETTINGS;
 
   const needsServeChoice = set.startingServe === null;
+
+  /**
+   * De opstelling hoort er te staan vóór het eerste punt.
+   *
+   * Achteraf invullen kan wel, maar dan is de rotatiestand van de al gespeelde
+   * rally's niet meer terug te rekenen: de app telt door vanaf de zes van het
+   * begin, en die zes waren er dan niet. Dus vraagt hij erom zolang de set nog
+   * leeg is — en laat hij hem overslaan, want soms weet je hem gewoon nog niet.
+   */
+  const needsLineup =
+    leads &&
+    !needsServeChoice &&
+    data.lineup === undefined &&
+    (data.setActions?.length ?? 0) === 0 &&
+    set.pointsUs === 0 &&
+    set.pointsThem === 0 &&
+    skippedLineupFor !== set.id;
 
   async function commitAction(quality: Quality): Promise<void> {
     const draft = useCourt ? toCourtDraft(courtEntry, quality) : toActionDraft(entry, quality);
@@ -678,6 +697,31 @@ export function ScoringScreen({
               onClick={() => setDismissedAt(scoreKey)}
             >
               Nog niet
+            </button>
+          </div>
+        </section>
+      ) : needsLineup ? (
+        <section className="step step--serve">
+          <h2 className="step__title">Zet eerst de opstelling neer</h2>
+          <p className="step__hint">
+            De app telt de rotatie door vanaf de zes van het begin van de set. Vul je hem pas na een
+            paar punten in, dan klopt de rotatiestand van die punten niet meer — en die staat onder
+            elk cijfer per rotatie.
+          </p>
+          <div className="step__actions">
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={() => setShowLineup(true)}
+            >
+              Opstelling invullen
+            </button>
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => setSkippedLineupFor(set.id)}
+            >
+              Weet ik nog niet — later
             </button>
           </div>
         </section>

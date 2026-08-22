@@ -46,6 +46,11 @@ async function renderScoring(
     </StoreProvider>,
   );
   await screen.findByText(/Nog geen acties in deze rally/);
+  // De app vraagt vóór het eerste punt om de opstelling; deze tests gaan over
+  // de invoer zelf, dus die stap wordt hier overgeslagen zoals een invoerder
+  // dat ook kan.
+  const later = screen.queryByRole('button', { name: /Weet ik nog niet/ });
+  if (later) await userEvent.click(later);
   return { store, matchId: fixture.match.id, setId: fixture.set.id };
 }
 
@@ -228,6 +233,10 @@ describe('ScoringScreen: regels van het spel', () => {
     await waitFor(async () => {
       expect((await store.sets.require(set.id)).startingServe).toBe('them');
     });
+
+    // Daarna vraagt hij om de opstelling, want die moet er staan vóór het
+    // eerste punt: de rotatie telt door vanaf de zes van het begin.
+    await user.click(await screen.findByRole('button', { name: /Weet ik nog niet/ }));
     expect(await screen.findByText('Wie speelde de bal?')).toBeDefined();
   });
 
@@ -489,5 +498,56 @@ describe('ScoringScreen: setverloop', () => {
 
     expect(await screen.findByText('Wie speelde de bal?')).toBeDefined();
     expect((await store.sets.require(fixture.set.id)).status).toBe('live');
+  });
+});
+
+describe('ScoringScreen: opstelling vóór het eerste punt', () => {
+  it('vraagt om de opstelling zolang de set nog leeg is, en laat hem overslaan', async () => {
+    const user = userEvent.setup();
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    expect(await screen.findByText('Zet eerst de opstelling neer')).toBeDefined();
+    expect(screen.queryByText('Wie speelde de bal?')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Weet ik nog niet/ }));
+    expect(await screen.findByText('Wie speelde de bal?')).toBeDefined();
+  });
+
+  it('vraagt er niet meer om zodra de opstelling er staat', async () => {
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    const [sanne, noor, fem] = fixture.players;
+    await store.lineups.set({
+      setId: fixture.set.id,
+      positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
+    });
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    await screen.findByText(/Nog geen acties in deze rally/);
+    expect(screen.queryByText('Zet eerst de opstelling neer')).toBeNull();
   });
 });
