@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 148 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 153 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -163,6 +163,24 @@ apparaten allebei een rally kunnen afronden, dan ontstaan er twee rally's en twe
 standen. De assistent ziet daarom geen 'punt wij', geen 'set afronden' en geen
 'undo rally'; wat hij invoert verschijnt binnen een seconde bij de ander. Wie
 welke kant van het net invoert, spreek je zelf af — de app bewaakt dat niet.
+
+**Nu, wij gemiddeld, topniveau** — op het dashboard en in het teamdossier staan
+zes kerngetallen (sideout, punt op eigen service, pass positief, aanval punt,
+aanvalsrendement, servicefouten) naast twee referentiepunten: ons eigen
+gemiddelde over de andere wedstrijden, en waar het op topniveau ligt. 50%
+sideout zegt niets; 50% tegenover onze eigen 53% en 64% op topniveau zegt alles.
+Op het coachscherm staat het eigen gemiddelde beknopt onder de cijfers die
+tijdens een set tellen.
+
+De eerste twee kolommen zijn tellingen. De derde niet: die waarden zijn
+*indicatief* — ordegroottes die in de volleybalanalyse voor topniveau worden
+aangehouden, niet door ons uit een dataset gerekend. Dat staat er bij elk getal
+bij, en tikken toont de herkomst. Zie [docs/maatstaven.md](docs/maatstaven.md)
+voor hoe ze harde getallen worden.
+
+Het eigen gemiddelde is ook drempel geworden waar dat eerlijker is: een rotatie
+is zwak als hij twaalf procentpunt onder onze eigen andere rotaties ligt, niet
+omdat hij onder een vast percentage zakt.
 
 **Eén speler** — vanuit het dashboard of het teamdossier tik je op een naam.
 Daar staat wat ze doet per actietype, hoe haar aanval verloopt over het seizoen

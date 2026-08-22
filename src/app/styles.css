@@ -2047,3 +2047,72 @@ button {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Drieluik: nu, wij gemiddeld, topniveau ---------- */
+
+.metrics th[scope='row'] {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 11rem;
+}
+
+.metrics__label {
+  font-weight: 600;
+}
+
+.metrics__explain {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.metrics td {
+  vertical-align: top;
+}
+
+.metrics__value {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.metrics__sample {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kleur zegt hier nooit iets alleen: naast de kleur staat 'onder niveau' of
+   'boven niveau' in de regel eronder. */
+.metrics__now--onder .metrics__value {
+  color: var(--poor);
+}
+
+.metrics__now--boven .metrics__value {
+  color: var(--perfect);
+}
+
+.metrics__reference {
+  display: grid;
+  gap: 0.15rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* De herkomst hoort bij het getal: 'indicatief' betekent dat het een
+   ordegrootte is en geen gemeten waarde. */
+.metrics__basis {
+  font-size: 0.68rem;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.metrics__sourcerow td {
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--line);
+}

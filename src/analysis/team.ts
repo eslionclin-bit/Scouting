@@ -13,11 +13,23 @@
 import type { MatchBundle } from '../db/bundle';
 import { ACTION_TYPE_LABELS } from '../domain/protocol';
 import type { Player } from '../domain/types';
+import { measureMetrics, MIN_BASELINE_SAMPLE, type MetricSet } from './metrics';
 import { filterActions, toActionRows, toRallyRows, type RallyRow } from './rows';
 import { statsByPlayer, statsByType, type PlayerStats, type TypeStats } from './stats';
 
 /** Minimum aantal waarnemingen voordat een patroon genoemd wordt. */
 export const MIN_ROTATION_RALLIES = 10;
+/**
+ * Hoeveel een rotatie onder het eigen gemiddelde moet liggen voordat het een
+ * bevinding is. Binnen een team is het eigen gemiddelde de eerlijkste maat: of
+ * 40% sideout slecht is hangt af van de competitie, maar dat R4 twaalf punten
+ * onder de andere vijf rotaties ligt, is in elke competitie iets om aan te
+ * werken. Zolang er te weinig gespeeld is, valt de app terug op een vaste
+ * ondergrens.
+ */
+const ROTATION_GAP = 0.12;
+const FALLBACK_SIDEOUT = 0.4;
+const FALLBACK_SERVE_POINT = 0.3;
 export const MIN_TEAM_ACTIONS = 20;
 const MIN_PLAYER_ACTIONS = 12;
 const MIN_LINEUP_SETS = 2;
@@ -64,6 +76,8 @@ export interface TeamProfile {
   rotations: RotationProfile[];
   lineups: LineupProfile[];
   players: PlayerStats[];
+  /** De zes kerngetallen over alle wedstrijden: ons eigen niveau. */
+  metrics: MetricSet;
   findings: TeamFinding[];
   advice: TeamAdvice[];
 }
@@ -94,7 +108,14 @@ export function buildTeamProfile(bundles: readonly MatchBundle[], ownTeamId: str
     else if (setsThem > setsUs) losses++;
   }
 
-  const findings = collectFindings({ byType, rotations, lineups, players: playerStats });
+  const metrics = measureMetrics(relevant);
+  const findings = collectFindings({
+    byType,
+    rotations,
+    lineups,
+    players: playerStats,
+    metrics,
+  });
 
   return {
     matches: relevant.length,
@@ -105,6 +126,7 @@ export function buildTeamProfile(bundles: readonly MatchBundle[], ownTeamId: str
     rotations,
     lineups,
     players: playerStats,
+    metrics,
     findings,
     advice: adviceFor(findings),
   };
@@ -206,32 +228,48 @@ interface FindingInput {
   rotations: RotationProfile[];
   lineups: LineupProfile[];
   players: PlayerStats[];
+  metrics: MetricSet;
 }
 
-function collectFindings({ byType, rotations, lineups, players }: FindingInput): TeamFinding[] {
+function collectFindings({
+  byType,
+  rotations,
+  lineups,
+  players,
+  metrics,
+}: FindingInput): TeamFinding[] {
   const findings: TeamFinding[] = [];
 
+  const ownSideout = baselineOr(metrics.sideout, FALLBACK_SIDEOUT + ROTATION_GAP);
+  const sideoutLimit = ownSideout - ROTATION_GAP;
   const weakRotation = rotations
-    .filter((entry) => entry.receiveRallies >= MIN_ROTATION_RALLIES && (entry.sideoutPct ?? 1) < 0.4)
+    .filter(
+      (entry) =>
+        entry.receiveRallies >= MIN_ROTATION_RALLIES && (entry.sideoutPct ?? 1) < sideoutLimit,
+    )
     .sort((a, b) => (a.sideoutPct ?? 1) - (b.sideoutPct ?? 1))[0];
   if (weakRotation) {
     findings.push({
       code: 'rotation_weak',
-      text: `In rotatie R${weakRotation.rotation} sideouten we maar ${percent(weakRotation.sideoutPct ?? 0)}.`,
+      text: `In rotatie R${weakRotation.rotation} sideouten we ${percent(weakRotation.sideoutPct ?? 0)}, tegenover ${percent(ownSideout)} gemiddeld.`,
       sample: weakRotation.receiveRallies,
-      strength: 1 - (weakRotation.sideoutPct ?? 0),
+      strength: ownSideout - (weakRotation.sideoutPct ?? 0),
     });
   }
 
+  const ownServePoint = baselineOr(metrics.breakPoint, FALLBACK_SERVE_POINT + ROTATION_GAP);
+  const serveLimit = ownServePoint - ROTATION_GAP;
   const weakServeRotation = rotations
-    .filter((entry) => entry.serveRallies >= MIN_ROTATION_RALLIES && (entry.servePointPct ?? 1) < 0.3)
+    .filter(
+      (entry) => entry.serveRallies >= MIN_ROTATION_RALLIES && (entry.servePointPct ?? 1) < serveLimit,
+    )
     .sort((a, b) => (a.servePointPct ?? 1) - (b.servePointPct ?? 1))[0];
   if (weakServeRotation) {
     findings.push({
       code: 'rotation_serve_weak',
-      text: `Op eigen service scoren we in R${weakServeRotation.rotation} maar ${percent(weakServeRotation.servePointPct ?? 0)}.`,
+      text: `Op eigen service scoren we in R${weakServeRotation.rotation} ${percent(weakServeRotation.servePointPct ?? 0)}, tegenover ${percent(ownServePoint)} gemiddeld.`,
       sample: weakServeRotation.serveRallies,
-      strength: 1 - (weakServeRotation.servePointPct ?? 0),
+      strength: ownServePoint - (weakServeRotation.servePointPct ?? 0),
     });
   }
 
@@ -293,6 +331,15 @@ function collectFindings({ byType, rotations, lineups, players }: FindingInput):
   }
 
   return findings.sort((a, b) => b.strength - a.strength);
+}
+
+/**
+ * Het eigen gemiddelde als maatstaf — maar alleen als er genoeg van gezien is.
+ * Anders de vaste ondergrens, zodat de eerste wedstrijden geen onzin opleveren.
+ */
+function baselineOr(value: { value: number | null; sample: number }, fallback: number): number {
+  if (value.value === null || value.sample < MIN_BASELINE_SAMPLE) return fallback;
+  return value.value;
 }
 
 function adviceFor(findings: readonly TeamFinding[]): TeamAdvice[] {

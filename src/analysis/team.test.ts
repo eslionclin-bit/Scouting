@@ -70,6 +70,64 @@ describe('eigen teamprofiel', () => {
     return loadMatchBundle(store, match.id);
   }
 
+  /**
+   * Eén set waarin de tegenstander steeds serveert, met een opgegeven rij
+   * uitslagen. Winnen we, dan draait de rotatie door — precies zoals in het veld.
+   */
+  async function playOutcomes(date: string, outcomes: TeamSide[]): Promise<MatchBundle> {
+    const match = await store.matches.create({
+      date,
+      ownTeamId: ownTeam.id,
+      opponentTeamId: opponent.id,
+      homeAway: 'home',
+      status: 'finished',
+    });
+    const set = await store.sets.start({ matchId: match.id, startingServe: 'them' });
+    for (const wonBy of outcomes) {
+      const rally = await store.rallies.start({ setId: set.id, servingTeam: 'them' });
+      await store.actions.append({
+        rallyId: rally.id,
+        team: 'us',
+        type: 'reception',
+        quality: wonBy === 'us' ? 'good' : 'error',
+        playerId: players[0]!.id,
+      });
+      await store.rallies.complete(rally.id, wonBy);
+    }
+    return loadMatchBundle(store, match.id);
+  }
+
+  it('meet een rotatie af aan ons eigen gemiddelde, niet aan een vast percentage', async () => {
+    // Per set: R1 verliest er één en wint er één, de rotaties daarna winnen alles.
+    // Over tien sets is dat 50% in R1 tegenover 86% gemiddeld — een gat dat een
+    // vaste ondergrens van 40% zou missen, want 50% ligt daarboven.
+    const bundles: MatchBundle[] = [];
+    for (let i = 0; i < 10; i++) {
+      bundles.push(
+        await playOutcomes(`2026-09-${String(i + 1).padStart(2, '0')}`, [
+          'them',
+          'us',
+          'us',
+          'us',
+          'us',
+          'us',
+          'us',
+        ]),
+      );
+    }
+
+    const profile = buildTeamProfile(bundles, ownTeam.id);
+    const rotation1 = profile.rotations.find((entry) => entry.rotation === 1);
+    expect(rotation1?.receiveRallies).toBe(20);
+    expect(rotation1?.sideoutPct).toBeCloseTo(0.5);
+    expect(profile.metrics.sideout.value).toBeCloseTo(60 / 70);
+
+    const finding = profile.findings.find((entry) => entry.code === 'rotation_weak');
+    expect(finding?.text).toContain('R1');
+    expect(finding?.text).toContain('gemiddeld');
+    expect(finding?.sample).toBe(20);
+  });
+
   it('telt rotaties over meerdere wedstrijden bij elkaar op', async () => {
     const first = await playSet({ date: '2026-09-12', receiveRallies: 6 });
     const second = await playSet({ date: '2026-11-01', receiveRallies: 6 });

@@ -7,9 +7,15 @@
  */
 
 import { useMemo, type ReactElement } from 'react';
-import { buildTeamProfile, MIN_ROTATION_RALLIES } from '../../analysis';
+import {
+  buildTeamProfile,
+  compareMetrics,
+  emptyMetrics,
+  MIN_ROTATION_RALLIES,
+} from '../../analysis';
 import { loadMatchBundle } from '../../db/bundle';
 import { ACTION_TYPE_LABELS } from '../../domain/protocol';
+import { MetricTable } from '../components/MetricTable';
 import { StatTile } from '../components/StatTile';
 import { useQuery } from '../StoreProvider';
 
@@ -34,6 +40,13 @@ export function TeamScreen({ onExit, onOpenMatch, onOpenPlayer }: TeamScreenProp
   const profile = useMemo(
     () => (data?.ownTeam ? buildTeamProfile(data.bundles, data.ownTeam.id) : null),
     [data],
+  );
+
+  // Hier is er geen 'nu': dit scherm gaat over het hele seizoen. De vergelijking
+  // is dus tussen ons niveau en topniveau, zonder tussenkolom.
+  const metrics = useMemo(
+    () => compareMetrics(profile?.metrics ?? emptyMetrics(), emptyMetrics()),
+    [profile],
   );
 
   if (error) {
@@ -83,6 +96,16 @@ export function TeamScreen({ onExit, onOpenMatch, onOpenPlayer }: TeamScreenProp
           hint={`${profile.byType.reception.total} passes`}
         />
       </div>
+
+      <section className="card">
+        <h2>Ons niveau</h2>
+        <p className="card__hint">
+          Onze cijfers over alle wedstrijden, naast wat er op topniveau staat. Tik op een
+          referentiegetal om te zien waar het vandaan komt — het is een richting, geen norm voor
+          volgende week.
+        </p>
+        <MetricTable rows={metrics} nowLabel="Wij dit seizoen" referenceLabel="Topniveau" />
+      </section>
 
       <section className="card">
         <h2>Waar we vastlopen</h2>

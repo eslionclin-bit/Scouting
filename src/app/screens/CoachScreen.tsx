@@ -11,7 +11,14 @@
  */
 
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { buildCoachBriefing, type CoachCue } from '../../analysis';
+import {
+  buildCoachBriefing,
+  compareMetrics,
+  formatMetric,
+  measureMetrics,
+  type CoachCue,
+  type MetricComparison,
+} from '../../analysis';
 import { loadMatchBundle } from '../../db/bundle';
 import { ACTION_TYPE_LABELS, QUALITY_LABELS } from '../../domain/protocol';
 import { PairingSheet } from '../components/PairingSheet';
@@ -91,6 +98,23 @@ export function CoachScreen({
   }, [data]);
 
   const setId = data?.bundle.sets.filter((set) => set.set.status === 'live').at(-1)?.set.id ?? null;
+
+  /**
+   * Deze set naast ons eigen gemiddelde. Niet als tabel — daar is dit scherm niet
+   * voor — maar als tweede getal onder de cijfers die er nu toe doen: 50% sideout
+   * betekent iets anders als we normaal op 53% zitten dan als we normaal op 40%
+   * zitten.
+   */
+  const metrics = useMemo(
+    () =>
+      data
+        ? compareMetrics(
+            measureMetrics([data.bundle], setId ? { setId } : {}),
+            measureMetrics(data.ownHistory),
+          )
+        : null,
+    [data, setId],
+  );
   const markKey = setId ? `coach.timeout.${setId}` : null;
 
   // De markering staat lokaal: hij hoort bij deze bank, niet bij de wedstrijd.
@@ -205,17 +229,17 @@ export function CoachScreen({
         <Figure
           label="Sideout"
           value={briefing.sideoutPct === null ? '—' : pct(briefing.sideoutPct)}
-          hint="op hun service"
+          hint={withOwn('op hun service', metrics, 'sideout')}
         />
         <Figure
           label="Op eigen service"
           value={briefing.servePointPct === null ? '—' : pct(briefing.servePointPct)}
-          hint="rally's gewonnen"
+          hint={withOwn("rally's gewonnen", metrics, 'breakPoint')}
         />
         <Figure
           label="Aanval"
           value={briefing.attackEfficiency === null ? '—' : signed(briefing.attackEfficiency)}
-          hint={`${briefing.attackTotal} pogingen`}
+          hint={withOwn(`${briefing.attackTotal} pogingen`, metrics, 'attackEfficiency')}
         />
         <Figure label="Eigen fouten" value={String(briefing.errorsUs)} hint="deze set" />
       </section>
@@ -374,6 +398,20 @@ function Figure({ label, value, hint }: { label: string; value: string; hint: st
       <span className="figure__hint">{hint}</span>
     </div>
   );
+}
+
+/**
+ * Zet ons eigen gemiddelde achter de toelichting, maar alleen als er genoeg
+ * wedstrijden achter liggen — anders vergelijk je met ruis.
+ */
+function withOwn(
+  hint: string,
+  metrics: MetricComparison[] | null,
+  key: 'sideout' | 'breakPoint' | 'attackEfficiency',
+): string {
+  const row = metrics?.find((entry) => entry.metric.key === key);
+  if (!row || row.own.value === null || row.vsOwn === null) return hint;
+  return `${hint} · wij ${formatMetric(key, row.own.value)}`;
 }
 
 function pct(value: number): string {

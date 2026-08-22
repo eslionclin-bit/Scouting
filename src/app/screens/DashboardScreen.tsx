@@ -10,8 +10,10 @@
 import { useMemo, useState, type ReactElement } from 'react';
 import { loadMatchBundle } from '../../db/bundle';
 import {
+  compareMetrics,
   filterActions,
   filterRallies,
+  measureMetrics,
   statsByPlayer,
   statsByRotation,
   statsByType,
@@ -23,6 +25,7 @@ import {
 import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { ACTION_TYPES, type ActionType } from '../../domain/types';
 import { QualityBar, QualityLegend } from '../components/QualityBar';
+import { MetricTable } from '../components/MetricTable';
 import { StatTile } from '../components/StatTile';
 import { ZoneHeatmap } from '../components/ZoneHeatmap';
 import { useQuery } from '../StoreProvider';
@@ -46,15 +49,36 @@ export function DashboardScreen({
   const [zoneType, setZoneType] = useState<ActionType>('attack');
 
   const { data, error } = useQuery(
-    async (store) => loadMatchBundle(store, matchId),
+    async (store) => {
+      const bundle = await loadMatchBundle(store, matchId);
+      // De andere wedstrijden van dit team vormen het eigen gemiddelde: zonder
+      // dat referentiepunt is een percentage niet te lezen.
+      const others = (await store.matches.list()).filter(
+        (match) => match.id !== matchId && match.ownTeamId === bundle.match.ownTeamId,
+      );
+      const history = await Promise.all(
+        others.map((match) => loadMatchBundle(store, match.id)),
+      );
+      return { bundle, history };
+    },
     [matchId],
   );
 
-  const view = useMemo(() => {
+  const bundle = data?.bundle ?? null;
+
+  const metrics = useMemo(() => {
     if (!data) return null;
+    return compareMetrics(
+      measureMetrics([data.bundle], setId ? { setId } : {}),
+      measureMetrics(data.history),
+    );
+  }, [data, setId]);
+
+  const view = useMemo(() => {
+    if (!bundle) return null;
     const filter = { setId, rotation };
-    const actionRows = filterActions(toActionRows(data), filter);
-    const rallyRows = filterRallies(toRallyRows(data), filter);
+    const actionRows = filterActions(toActionRows(bundle), filter);
+    const rallyRows = filterRallies(toRallyRows(bundle), filter);
 
     const ours = filterActions(actionRows, { team: 'us' });
     const theirs = filterActions(actionRows, { team: 'them' });
@@ -77,14 +101,14 @@ export function DashboardScreen({
       theirTypes: statsByType(theirs),
       players: statsByPlayer(
         ours,
-        data.players.filter((player) => player.teamId === data.match.ownTeamId),
+        bundle.players.filter((player) => player.teamId === bundle.match.ownTeamId),
       ),
       rotations,
       pointsUs: rallyRows.filter((row) => row.rally.wonBy === 'us').length,
       pointsThem: rallyRows.filter((row) => row.rally.wonBy === 'them').length,
       sideoutPct: receiveRallies > 0 ? sideouts / receiveRallies : null,
     };
-  }, [data, setId, rotation, playerId]);
+  }, [bundle, setId, rotation, playerId]);
 
   if (error) {
     return (
@@ -96,9 +120,10 @@ export function DashboardScreen({
       </div>
     );
   }
-  if (!data || !view) return <div className="boot">Cijfers berekenen…</div>;
+  if (!data || !view || !metrics) return <div className="boot">Cijfers berekenen…</div>;
 
-  const ownPlayers = data.players.filter((player) => player.teamId === data.match.ownTeamId);
+  const match = data.bundle;
+  const ownPlayers = match.players.filter((player) => player.teamId === match.match.ownTeamId);
   const attackStats = view.ourTypes.attack;
 
   return (
@@ -108,18 +133,18 @@ export function DashboardScreen({
           ← Terug
         </button>
         <div>
-          <h1>{data.opponent?.name ?? 'Wedstrijd'}</h1>
+          <h1>{match.opponent?.name ?? 'Wedstrijd'}</h1>
           <p className="dashboard__sub">
-            {data.match.date} · {data.match.homeAway === 'home' ? 'thuis' : 'uit'} ·{' '}
-            {data.sets.map((set) => `${set.set.pointsUs}-${set.set.pointsThem}`).join(' · ') ||
+            {match.match.date} · {match.match.homeAway === 'home' ? 'thuis' : 'uit'} ·{' '}
+            {match.sets.map((set) => `${set.set.pointsUs}-${set.set.pointsThem}`).join(' · ') ||
               'nog geen sets'}
           </p>
         </div>
-        {onOpenOpponent && data.opponent && (
+        {onOpenOpponent && match.opponent && (
           <button
             type="button"
             className="button button--ghost"
-            onClick={() => onOpenOpponent(data.opponent!.id)}
+            onClick={() => onOpenOpponent(match.opponent!.id)}
           >
             Dossier tegenstander
           </button>
@@ -131,7 +156,7 @@ export function DashboardScreen({
           <FilterChip active={setId === null} onClick={() => setSetId(null)}>
             Alles
           </FilterChip>
-          {data.sets.map((set) => (
+          {match.sets.map((set) => (
             <FilterChip
               key={set.set.id}
               active={setId === set.set.id}
@@ -183,6 +208,21 @@ export function DashboardScreen({
           hint="rally's gewonnen op service tegenstander"
         />
       </div>
+
+      <section className="card">
+        <h2>Hoe verhoudt dit zich?</h2>
+        <p className="card__hint">
+          {data.history.length > 0
+            ? 'Een percentage is pas te lezen naast iets anders: ons eigen gemiddelde over de andere wedstrijden, en waar het op topniveau ligt. Tik op een referentiegetal om te zien waar het vandaan komt.'
+            : 'Dit is de eerste wedstrijd van dit team, dus er is nog geen eigen gemiddelde om naast te leggen. Wat er wel naast staat is het topniveau — tik erop om te zien waar dat getal vandaan komt.'}
+        </p>
+        <MetricTable
+          rows={metrics}
+          nowLabel={setId ? 'Deze set' : 'Deze wedstrijd'}
+          {...(data.history.length > 0 ? { ownLabel: 'Ons gemiddelde' } : {})}
+          referenceLabel="Topniveau"
+        />
+      </section>
 
       <section className="card">
         <h2>Per speler</h2>
