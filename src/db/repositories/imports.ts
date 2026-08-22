@@ -15,7 +15,9 @@
  */
 
 import type { ImportedMatch } from '../../import/dvw/interpret';
+import { readMatchFile } from '../../import/matchFile';
 import type { PlayerRole, TeamSide } from '../../domain/types';
+import { applyRemoteChanges } from '../../sync/merge';
 import { buildRecord, commit, type WriteContext, type WriteOp } from '../mutations';
 import type { PlayerRepository } from './players';
 import type { TeamRepository } from './teams';
@@ -39,6 +41,30 @@ export interface ImportSummary {
   actionsPerRally: number;
 }
 
+/**
+ * Wat er van een ingelezen wedstrijdbestand terechtkwam.
+ *
+ * `bijgewerkt` is het geval waar de meeste vragen over komen: hetzelfde bestand
+ * twee keer inlezen, of een nieuwere export van een wedstrijd die je al had.
+ * Dan komt er niets bij, en dat hoort er ook zo te staan.
+ */
+export interface FileImportSummary {
+  matchId: string;
+  date: string;
+  /** Namen zoals ze in het bestand staan; het apparaat kende ze misschien nog niet. */
+  ownTeam: string;
+  opponent: string;
+  sets: number;
+  rallies: number;
+  actions: number;
+  /** Records die daadwerkelijk zijn weggeschreven. */
+  applied: number;
+  /** Records die we al in een gelijke of nieuwere versie hadden. */
+  unchanged: number;
+  /** Stond deze wedstrijd hier al? */
+  existed: boolean;
+}
+
 /** Zoveel records gaan er per transactie in. */
 const CHUNK = 400;
 
@@ -48,6 +74,41 @@ export class ImportRepository {
     private readonly teams: TeamRepository,
     private readonly players: PlayerRepository,
   ) {}
+
+  /**
+   * Een wedstrijd inlezen uit een JSON-export van deze app.
+   *
+   * Dit loopt bewust langs `applyRemoteChanges`, dezelfde weg als een wijziging
+   * die over de netwerkkoppeling binnenkomt. Daarmee gelden precies dezelfde
+   * regels: id's blijven staan, de hoogste revisie wint, en niets van wat hier
+   * binnenkomt gaat de outbox in. Een bestand is in die zin niets anders dan
+   * een apparaat dat toevallig niet tegelijk aan staat.
+   */
+  async importMatchFile(text: string): Promise<FileImportSummary> {
+    const { file, changes } = readMatchFile(text);
+    const existed = (await this.ctx.db.get('matches', file.match.id)) !== undefined;
+    const result = await applyRemoteChanges(this.ctx, changes);
+
+    let rallies = 0;
+    let actions = 0;
+    for (const set of file.sets) {
+      rallies += set.rallies.length;
+      for (const entry of set.rallies) actions += entry.actions.length;
+    }
+
+    return {
+      matchId: file.match.id,
+      date: file.match.date,
+      ownTeam: file.teams?.own?.name ?? 'onbekend',
+      opponent: file.teams?.opponent?.name ?? 'onbekend',
+      sets: file.sets.length,
+      rallies,
+      actions,
+      applied: result.applied,
+      unchanged: result.skipped,
+      existed,
+    };
+  }
 
   async importScoutedMatch(
     imported: ImportedMatch,

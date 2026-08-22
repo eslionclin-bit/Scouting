@@ -7,6 +7,7 @@ import {
   type CourtSelection,
 } from './courtEntry';
 import { DEFAULT_SETTINGS } from '../../domain/settings';
+import { isFrontZone, OPPONENT_GRID } from '../../domain/zones';
 
 const ONS: CourtSelection = { team: 'us', playerId: 'p9', playerNumber: 9, zone: 4 };
 const HUN: CourtSelection = { team: 'them', playerId: null, playerNumber: null, zone: 5 };
@@ -81,22 +82,41 @@ describe('veldinvoer', () => {
       });
     });
 
-    it('slaat de set-up over tenzij je hem wilt', () => {
-      const pass = { team: 'them', type: 'reception', quality: 'good' } as const;
+    it('slaat onze eigen set-up over tenzij je hem wilt', () => {
+      const pass = { team: 'us', type: 'reception', quality: 'good' } as const;
 
-      expect(expectedNext(pass, 'us', DEFAULT_SETTINGS)).toStrictEqual({
-        team: 'them',
+      expect(expectedNext(pass, 'them', DEFAULT_SETTINGS)).toStrictEqual({
+        team: 'us',
         type: 'attack',
       });
-      expect(expectedNext(pass, 'us', { ...DEFAULT_SETTINGS, askSetup: true })).toStrictEqual({
-        team: 'them',
+      expect(expectedNext(pass, 'them', { ...DEFAULT_SETTINGS, askSetup: true })).toStrictEqual({
+        team: 'us',
         type: 'set',
       });
     });
 
-    it('slaat de pass van de tegenstander over als je dat instelt', () => {
+    it('vraagt de verdediging van de tegenstander niet nog eens na onze aanval', () => {
+      // Onze aanval was goed maar geen punt: de rally gaat door. Wat hun
+      // verdediging deed staat al in die kwalificatie, dus het volgende dat
+      // ertoe doet is hun aanval.
+      const attack = { team: 'us', type: 'attack', quality: 'good' } as const;
+
+      expect(expectedNext(attack, 'us', DEFAULT_SETTINGS)).toStrictEqual({
+        team: 'them',
+        type: 'attack',
+      });
       expect(
-        expectedNext(serve, 'us', { ...DEFAULT_SETTINGS, trackOpponentReception: false }),
+        expectedNext(attack, 'us', { ...DEFAULT_SETTINGS, opponentDetail: 'volledig' }),
+      ).toStrictEqual({ team: 'them', type: 'dig' });
+    });
+
+    it('vraagt hun pass alleen op het niveau waar die bij hoort', () => {
+      expect(expectedNext(serve, 'us', DEFAULT_SETTINGS)).toStrictEqual({
+        team: 'them',
+        type: 'reception',
+      });
+      expect(
+        expectedNext(serve, 'us', { ...DEFAULT_SETTINGS, opponentDetail: 'kern' }),
       ).toStrictEqual({ team: 'them', type: 'attack' });
     });
 
@@ -107,5 +127,20 @@ describe('veldinvoer', () => {
         type: 'serve',
       });
     });
+  });
+});
+
+describe('de helft van de tegenstander', () => {
+  it('zet hun voorlijn tegen het net en spiegelt links en rechts', () => {
+    // Hun helft staat boven het net en wordt van de andere kant bekeken. Rij 0
+    // is dus hun achterlijn (van ons af), rij 1 staat aan het net. En hun zone
+    // 4 — hun linksvoor — staat voor ons rechts.
+    expect(OPPONENT_GRID.map((row) => [...row])).toStrictEqual([
+      [1, 6, 5],
+      [2, 3, 4],
+    ]);
+
+    const atNet = OPPONENT_GRID[1]!;
+    expect(atNet.every((zone) => isFrontZone(zone))).toBe(true);
   });
 });

@@ -23,7 +23,7 @@ import {
   type Quality,
   type Zone,
 } from '../../domain/types';
-import { ZONE_LABELS } from '../../domain/zones';
+import { isFrontZone, OPPONENT_GRID, ZONE_LABELS } from '../../domain/zones';
 import { useLongPress } from '../hooks/useLongPress';
 import {
   SERVE_SPOTS,
@@ -49,6 +49,13 @@ export interface CourtEntryProps {
 /** Het veld van boven: voorste rij bij het net, achterste rij bij de achterlijn. */
 const FRONT: readonly Zone[] = [4, 3, 2] as const;
 const BACK: readonly Zone[] = [5, 6, 1] as const;
+
+/**
+ * Hun helft staat boven het net en wordt van de andere kant bekeken: hun
+ * voorlijn hoort dus onderaan die helft (tegen het net) en hun zone 4 staat
+ * voor ons rechts. Zie `OPPONENT_GRID`.
+ */
+const THEM_ORDER: readonly Zone[] = OPPONENT_GRID.flat();
 
 export function CourtEntry({
   state,
@@ -103,7 +110,7 @@ export function CourtEntry({
 
         <div className="courtplan">
           <div className="courtplan__half courtplan__half--them">
-            {[...FRONT, ...BACK].map((zone) => {
+            {THEM_ORDER.map((zone) => {
               const picked = selection?.team === 'them' && selection.zone === zone;
               return (
                 <button
@@ -131,6 +138,9 @@ export function CourtEntry({
               const player = playerId ? byId.get(playerId) : undefined;
               const picked = selection?.team === 'us' && selection.playerId === (playerId ?? null);
               const serves = playerId !== null && playerId === expectedServerId;
+              // Blokken doet de voorlijn. Een blokpunt moet aan een speelster
+              // hangen, dus staan bij een blok alleen die drie vakken aan.
+              const blocks = state.type === 'block' && isFrontZone(zone);
               return (
                 <button
                   key={`us-${zone}`}
@@ -140,6 +150,7 @@ export function CourtEntry({
                     'courtcell--us',
                     picked ? 'courtcell--picked' : '',
                     serves ? 'courtcell--server' : '',
+                    blocks ? 'courtcell--blocks' : '',
                   ].join(' ')}
                   aria-label={player ? playerLabel(player) : `Onze ${ZONE_LABELS[zone]}`}
                   aria-pressed={picked}
@@ -151,6 +162,7 @@ export function CourtEntry({
                     {player?.name || (player ? '' : shortZone(zone))}
                   </span>
                   {serves && <span className="courtcell__badge">serveert</span>}
+                  {blocks && !serves && <span className="courtcell__badge">blokt</span>}
                 </button>
               );
             })}
@@ -288,3 +300,6 @@ function describeSelection(
 
 /** Zones in de volgorde waarin ze op het scherm staan; handig voor tests. */
 export const COURT_ORDER: readonly Zone[] = [...FRONT, ...BACK] as const;
+
+/** Idem, voor de helft van de tegenstander. */
+export const OPPONENT_ORDER: readonly Zone[] = THEM_ORDER;

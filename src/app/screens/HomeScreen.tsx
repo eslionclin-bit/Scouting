@@ -1,8 +1,10 @@
 /** Startscherm: wedstrijden openen, een nieuwe beginnen, of data exporteren. */
 
-import { useState, type ReactElement } from 'react';
+import { useState, type ChangeEvent, type ReactElement } from 'react';
 
 import { loadMatchBundle } from '../../db/bundle';
+import type { FileImportSummary } from '../../db/repositories/imports';
+import { MatchFileError } from '../../import/matchFile';
 import { toMatchCsv } from '../../export/csv';
 import { toMatchJson } from '../../export/json';
 import type { DeviceRole } from '../../domain/types';
@@ -35,6 +37,9 @@ export function HomeScreen({
   const store = useStore();
   const [showPairing, setShowPairing] = useState(false);
   const [choosingRole, setChoosingRole] = useState<{ id: string; label: string } | null>(null);
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [readResult, setReadResult] = useState<FileImportSummary[]>([]);
 
   const { data } = useQuery(async (instance) => {
     const matches = await instance.matches.list();
@@ -66,6 +71,35 @@ export function HomeScreen({
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * Een wedstrijd van een ander apparaat inlezen. Twee keer hetzelfde bestand
+   * kiezen kan geen kwaad: de id's in het bestand zijn dezelfde, dus het wordt
+   * dezelfde wedstrijd en niet een tweede.
+   */
+  async function readFiles(event: ChangeEvent<HTMLInputElement>): Promise<void> {
+    const files = [...(event.target.files ?? [])];
+    event.target.value = '';
+    if (files.length === 0) return;
+
+    setReading(true);
+    setReadError(null);
+    const summaries: FileImportSummary[] = [];
+    try {
+      for (const file of files) {
+        summaries.push(await store.imports.importMatchFile(await file.text()));
+      }
+      setReadResult(summaries);
+    } catch (cause) {
+      setReadError(
+        cause instanceof MatchFileError
+          ? cause.message
+          : `Inlezen mislukt: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    } finally {
+      setReading(false);
+    }
+  }
+
   return (
     <div className="home">
       <header className="home__header">
@@ -88,6 +122,16 @@ export function HomeScreen({
           <button type="button" className="button" onClick={onOpenTeam}>
             Ons team
           </button>
+          <label className={`button filebutton ${reading ? 'button--busy' : ''}`}>
+            {reading ? 'Bezig met inlezen…' : 'Wedstrijd inlezen'}
+            <input
+              type="file"
+              accept=".json,application/json"
+              multiple
+              disabled={reading}
+              onChange={(event) => void readFiles(event)}
+            />
+          </label>
           <button type="button" className="button" onClick={onOpenSettings}>
             Instellingen
           </button>
@@ -96,6 +140,25 @@ export function HomeScreen({
           </button>
         </div>
       </header>
+
+      {readError && <p className="home__error">{readError}</p>}
+
+      {readResult.length > 0 && (
+        <ul className="findings">
+          {readResult.map((summary) => (
+            <li key={summary.matchId} className="findings__item">
+              <span className="findings__text">
+                {summary.ownTeam} – {summary.opponent} · {summary.date}
+              </span>
+              <span className="findings__sample">
+                {summary.applied === 0
+                  ? 'stond hier al, niets veranderd'
+                  : `${summary.existed ? 'bijgewerkt' : 'toegevoegd'}: ${summary.sets} sets · ${summary.rallies} rally's · ${summary.actions} acties`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {data && data.pending > 0 && (
         <p className="home__pending">

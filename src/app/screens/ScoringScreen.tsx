@@ -631,15 +631,30 @@ export function ScoringScreen({
       <footer className="bottombar">
         {leads && (
           <>
-            <button type="button" className="button button--us" onClick={() => void finishRally('us')}>
-              Punt wij
+            {/*
+              De stand volgt normaal uit de actie zelf: een kill is een punt, een
+              fout is een punt tegen, en de rally sluit vanzelf. Deze twee zijn
+              voor de rally die eindigt zonder dat er iets is ingevoerd — de
+              tegenstander slaat uit terwijl je hun aanval niet vastlegt, een
+              netfout, een fluitsignaal, een bal die te rommelig was om te
+              scouten.
+            */}
+            <span className="bottombar__label">punt zonder actie</span>
+            <button
+              type="button"
+              className="button button--us"
+              aria-label="Punt wij"
+              onClick={() => void finishRally('us')}
+            >
+              Wij
             </button>
             <button
               type="button"
               className="button button--them"
+              aria-label="Punt zij"
               onClick={() => void finishRally('them')}
             >
-              Punt zij
+              Zij
             </button>
           </>
         )}

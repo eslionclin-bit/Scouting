@@ -7,7 +7,7 @@
  */
 
 import { useState, type ReactElement } from 'react';
-import type { AppSettings } from '../../domain/settings';
+import { OPPONENT_DETAILS, type AppSettings, type OpponentDetail } from '../../domain/settings';
 import { useQuery, useStore } from '../StoreProvider';
 
 export interface SettingsScreenProps {
@@ -15,8 +15,13 @@ export interface SettingsScreenProps {
   onOpenReference: () => void;
 }
 
+/** Alleen de ja/nee-instellingen; de tegenstander heeft drie standen. */
+type BooleanKey = {
+  [K in keyof AppSettings]: AppSettings[K] extends boolean ? K : never;
+}[keyof AppSettings];
+
 interface Toggle {
-  key: keyof AppSettings;
+  key: BooleanKey;
   title: string;
   hint: string;
   /** Wat er gebeurt als hij aanstaat, in de woorden van de invoerder. */
@@ -40,13 +45,6 @@ const TOGGLES: readonly Toggle[] = [
     off: 'alleen als je hem kiest',
   },
   {
-    key: 'trackOpponentReception',
-    title: 'Pass van de tegenstander vastleggen',
-    hint: 'Kost twee tikken per ontvangen rally en levert op wie van hen slecht passt — dat is waar je de volgende keer naartoe serveert.',
-    on: 'wordt gevraagd',
-    off: 'overgeslagen',
-  },
-  {
     key: 'showOpponentNumbers',
     title: 'Rugnummers van de tegenstander tonen',
     hint: 'Zijn ze ingevuld, dan staan ze in het veld en kun je een actie aan een speler hangen in plaats van aan een zone.',
@@ -55,12 +53,37 @@ const TOGGLES: readonly Toggle[] = [
   },
 ];
 
+/** Hoeveel van de tegenstander de app vóórstelt om vast te leggen. */
+const DETAILS: Record<OpponentDetail, { title: string; hint: string }> = {
+  kern: {
+    title: 'Alleen wat op ons afkomt',
+    hint: 'Hun service en hun aanval. Hun verdediging staat al in de kwalificatie van onze eigen aanval — die hoeft er niet nog eens apart bij.',
+  },
+  pass: {
+    title: 'Ook hun pass',
+    hint: 'Twee tikken per ontvangen rally, en het levert op wie van hen slecht past. Daar serveer je de volgende keer naartoe.',
+  },
+  volledig: {
+    title: 'Alles van hen',
+    hint: 'Ook hun set-up en verdediging. Voor wie een dossier opbouwt en de tikken ervoor over heeft.',
+  },
+};
+
 export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps): ReactElement {
   const store = useStore();
   const { data } = useQuery(async (instance) => instance.getSettings(), []);
   const [busy, setBusy] = useState(false);
 
-  async function toggle(key: keyof AppSettings, value: boolean): Promise<void> {
+  async function choose(patch: Partial<AppSettings>): Promise<void> {
+    setBusy(true);
+    try {
+      await store.updateSettings(patch);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggle(key: BooleanKey, value: boolean): Promise<void> {
     setBusy(true);
     try {
       await store.updateSettings({ [key]: value });
@@ -106,6 +129,40 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
                 >
                   <span className="switch__knob" aria-hidden="true" />
                   <span className="switch__label">{value ? entry.on : entry.off}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <section className="card">
+        <h2>Van de tegenstander</h2>
+        <p className="card__hint">
+          De invoer is er om ons eigen spel te sturen. Wat zij doen telt mee voor zover wij er iets
+          mee kunnen — en dat is minder dan het lijkt. Overslaan betekent alleen dat de app het niet
+          vóórstelt: kiezen kan altijd, en een fout van hen kan sowieso niet verdwijnen.
+        </p>
+        <ul className="settings">
+          {OPPONENT_DETAILS.map((level) => {
+            const picked = (data?.opponentDetail ?? 'pass') === level;
+            return (
+              <li key={level} className="settings__item">
+                <div className="settings__text">
+                  <strong>{DETAILS[level].title}</strong>
+                  <span className="settings__hint">{DETAILS[level].hint}</span>
+                </div>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={picked}
+                  aria-label={DETAILS[level].title}
+                  disabled={busy || data === undefined}
+                  className={`switch ${picked ? 'switch--on' : ''}`}
+                  onClick={() => void choose({ opponentDetail: level })}
+                >
+                  <span className="switch__knob" aria-hidden="true" />
+                  <span className="switch__label">{picked ? 'gekozen' : 'kiezen'}</span>
                 </button>
               </li>
             );

@@ -30,7 +30,9 @@ actie, en je keek naar een namenlijst in plaats van naar het veld.
 **Het hele veld staat op het scherm; je tikt waar het gebeurde en hoe het ging.**
 
 - Eén veld, net in het midden. Onze helft toont de zes op hun rotatiepositie met
-  rugnummer en naam, libero inbegrepen. Hun helft toont de zes zones.
+  rugnummer en naam, libero inbegrepen. Hun helft toont de zes zones, gezien
+  vanaf onze kant: hun voorlijn staat tegen het net en hun zone 4 (hun
+  linksvoor) staat voor ons rechts.
 - **Eén tik op een vak** legt vast wie het was, welke kant en welke zone.
 - **De actiesoort wordt voorspeld** en staat groot naast het veld. Je leest wat
   je vastlegt in plaats van het in te vullen; klopt het niet, dan is het één tik.
@@ -48,6 +50,8 @@ Verder:
 - **Tik je de andere ploeg aan dan de app verwachtte, dan schuift het actietype
   mee.** Verwachtte hij onze service en tik jij de tegenstander aan, dan gaat het
   om hun pass. Altijd te corrigeren.
+- **Bij een blok lichten alleen de drie voorlijnvakken op.** Een blokpunt is een
+  punt en hoort aan een naam te hangen; blokken doet de voorlijn.
 - **Alles wat optioneel is, wordt ná de tik gevraagd** in één verfijnbalk: tempo
   en blok bij een aanval, de reden bij een fout, welke tegenstander het was.
   De balk verdwijnt vanzelf. Zo blijft de hoofdstroom altijd twee tikken en kost
@@ -74,10 +78,35 @@ voor de wedstrijd — een tweede tablet heeft zijn eigen keuzes.
 - **Veld rechts, knoppen links** — voor wie de tablet met links bedient.
 - **Set-up altijd vragen** — standaard uit. De toets kost ongeveer een derde van
   alle tikken en zegt weinig zolang hij gewoon goed is.
-- **Pass van de tegenstander vastleggen** — standaard aan. Kost twee tikken per
-  ontvangen rally en levert op wie van hen slecht passt: daar serveer je de
-  volgende keer naartoe.
+- **Van de tegenstander** — drie standen, standaard 'ook hun pass':
+  - *alleen wat op ons afkomt* — hun service en hun aanval;
+  - *ook hun pass* — twee tikken per ontvangen rally, en het levert op wie van
+    hen slecht past: daar serveer je de volgende keer naartoe;
+  - *alles van hen* — ook hun set-up en verdediging.
 - **Rugnummers van de tegenstander tonen** — standaard aan.
+
+## Waarom hun verdediging niet apart wordt gevraagd
+
+Omdat het twee keer dezelfde vraag is. Zeg je van onze aanval dat hij geen punt
+was maar de tegenstander wel in de problemen bracht, dan *is* dat het oordeel
+over hun verdediging. Nog een keer op hun helft tikken om hetzelfde te zeggen
+kost twee tikken en levert niets op wat er niet al stond.
+
+Wat er van hen overblijft is wat op ons afkomt — hun service en hun aanval — en,
+als je het wilt weten, hun receptie. Alleen dat wordt vóórgesteld; de rest is
+altijd nog met één tik te kiezen.
+
+Hetzelfde geldt voor hun blok. Wie van hen blokte doet er voor ons niet toe; hoe
+vaak wij tegen één, twee of drie blokkeerders aanliepen wél, en dat staat al bij
+onze eigen aanval.
+
+## Punt zonder actie
+
+De stand volgt normaal uit de actie zelf: een kill is een punt, een fout is een
+punt tegen, en de rally sluit vanzelf. De twee knoppen onderin zijn voor de rally
+die eindigt zonder dat er iets is ingevoerd — de tegenstander slaat uit terwijl
+je hun aanval niet vastlegt, een netfout, een fluitsignaal, een bal die te
+rommelig was om te scouten.
 
 ## Wat 'set-up overslaan' precies betekent
 
@@ -91,3 +120,21 @@ Alleen dat de app hem niet vóórstelt. Drie gevallen waarin je hem toch krijgt:
 3. **De set was slecht.** Zelfde: één tik op 'Set-up', dan de kwalificatie.
 
 Wie alles wil vastleggen, zet de instelling aan.
+
+## Een wedstrijd van een ander apparaat inlezen
+
+Op het startscherm staat **Wedstrijd inlezen**: kies een JSON-bestand dat op een
+ander apparaat is geëxporteerd, en de wedstrijd staat erbij.
+
+Twee dingen maken dat veilig, en ze zijn allebei geleend van de netwerkkoppeling:
+
+1. **De id's blijven staan.** Elk record heeft een uuid van het apparaat waar het
+   is ingevoerd. Hetzelfde bestand twee keer inlezen levert dus geen tweede
+   wedstrijd op.
+2. **De hoogste revisie wint.** Een oud bestand kan verse invoer op dit apparaat
+   niet overschrijven; een nieuwer bestand vult wel aan.
+
+Wat het niet doet is ploegen samenvoegen. Heeft de tablet een eigen team
+aangemaakt en de telefoon ook, dan zijn dat twee ploegen, en dat blijven het er
+twee. Samenvoegen op naam is raden, en raden hoort niet thuis in iets dat data
+wegschrijft.

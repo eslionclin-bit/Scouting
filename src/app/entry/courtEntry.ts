@@ -11,7 +11,7 @@
  */
 
 import { suggestNextAction } from '../../domain/rules';
-import type { AppSettings } from '../../domain/settings';
+import type { AppSettings, OpponentDetail } from '../../domain/settings';
 import type { Action, ActionType, Quality, TeamSide, Zone } from '../../domain/types';
 
 /** Wat er aangetikt is: een speler van ons, of een zone van de tegenstander. */
@@ -104,15 +104,20 @@ export function courtEntryReducer(
 /**
  * Wat de app verwacht na de vorige actie, met de voorkeuren erin verwerkt.
  *
- * De set-up en de pass van de tegenstander zijn overslaanbaar; dat betekent
- * hier alleen dat ze niet worden vóórgesteld. Kiezen kan altijd, en een fout
- * kan sowieso niet verdwijnen: die beëindigt de rally, dus hij wordt hoe dan
- * ook ingevoerd.
+ * Overslaan betekent hier alleen: niet vóórstellen. Kiezen kan altijd, en een
+ * fout kan sowieso niet verdwijnen — die beëindigt de rally, dus hij wordt hoe
+ * dan ook ingevoerd.
+ *
+ * Bij de tegenstander is dat overslaan geen zuinigheid maar een correctie. Hun
+ * verdediging apart beoordelen vraagt twee keer hetzelfde: zeg je van onze
+ * aanval dat hij de tegenstander in de problemen bracht, dan ís dat het oordeel
+ * over hun verdediging. Wat er van hen overblijft, is wat op ons afkomt — hun
+ * service en hun aanval — en, als je het wilt weten, hun receptie.
  */
 export function expectedNext(
   last: Pick<Action, 'team' | 'type' | 'quality'> | undefined,
   servingTeam: TeamSide,
-  settings: Pick<AppSettings, 'askSetup' | 'trackOpponentReception'>,
+  settings: Pick<AppSettings, 'askSetup' | 'opponentDetail'>,
 ): { team: TeamSide; type: ActionType } {
   if (!last) return { team: servingTeam, type: 'serve' };
 
@@ -120,20 +125,24 @@ export function expectedNext(
   if (!suggestion) return { team: servingTeam, type: 'serve' };
 
   // Set-up overslaan: na de pass verwachten we meteen de aanval.
-  if (suggestion.type === 'set' && !settings.askSetup) {
-    return { team: suggestion.team, type: 'attack' };
+  if (suggestion.type === 'set' && suggestion.team === 'us' && !settings.askSetup) {
+    return { team: 'us', type: 'attack' };
   }
 
-  // De pass van de tegenstander overslaan: dan is hun aanval het volgende.
-  if (
-    suggestion.type === 'reception' &&
-    suggestion.team === 'them' &&
-    !settings.trackOpponentReception
-  ) {
+  if (suggestion.team === 'them' && !asks(settings.opponentDetail, suggestion.type)) {
+    // Alles wat we van hen overslaan loopt uit op hetzelfde: de eerstvolgende
+    // bal die weer onze kant op komt.
     return { team: 'them', type: 'attack' };
   }
 
   return suggestion;
+}
+
+/** Stelt de app deze actie van de tegenstander voor? */
+function asks(detail: OpponentDetail, type: ActionType): boolean {
+  if (detail === 'volledig') return true;
+  if (type === 'serve' || type === 'attack') return true;
+  return detail === 'pass' && type === 'reception';
 }
 
 /** Serveerplekken achter de achterlijn, zoals ze in het veld heten. */
