@@ -28,6 +28,28 @@ hoger volgnummer krijgt en andere apparaten het ophalen.
 Alles staat in twee bestanden: `server/cloud/worker.js` (twee eindpunten) en
 `server/cloud/schema.sql` (één tabel).
 
+### De tabel
+
+Vier kolommen verdienen uitleg, want ze dragen de hele opzet:
+
+- **`seq`** is het volgnummer waarop 'geef me alles ná dit punt' werkt. De
+  logische klok van de app loopt per apparaat op, maar niet tussen apparaten
+  onderling; daar is één teller voor nodig, en dat is precies wat een oplopende
+  rowid is. Dáárom wordt een gewijzigd record verwijderd en opnieuw ingevoegd in
+  plaats van bijgewerkt: zo krijgt het een nieuw, hoger volgnummer en halen
+  andere apparaten het op.
+- **`team`** is de hash van de ploegcode, niet de code zelf. Zie hieronder.
+- **`rev`** is de revisie uit de hybride klok van de app en bepaalt wie wint bij
+  gelijktijdig wijzigen. De server vergelijkt hem als tekst, precies zoals de
+  app doet.
+- **`match_id`** staat er zodat meelezen met één wedstrijd niet de hele
+  geschiedenis hoeft op te halen. Leeg bij ploegen en spelers: die horen overal
+  bij en gaan altijd mee.
+
+Het bestand zelf bevat geen commentaar, en dat is met opzet: de SQL-console van
+Cloudflare splitst een geplakt bestand op puntkomma's en struikelt over wat er
+daarna nog staat. Zo is het overal te plakken.
+
 ## Waarom Cloudflare en niet Supabase
 
 Supabase was de eerste keus en is het niet geworden, om twee redenen die pas bij
@@ -87,6 +109,25 @@ npx wrangler deploy
 
 Dat adres zet je in GitHub onder *Settings → Secrets and variables → Actions* als
 `SYNC_URL`. De eerstvolgende deploy neemt het mee.
+
+### Zonder terminal
+
+Het kan ook helemaal via het dashboard, en dat is handig als je op een tablet
+werkt:
+
+1. **Storage & Databases → D1 → Create database**, naam `volley-scouting`,
+   locatie **Western Europe (WEUR)**.
+2. Open de database, tabblad **Console**, en voer de statements uit
+   `schema.sql` uit. Loopt een geplakt blok vast op *'Requests without any query
+   are not supported'*, plak ze dan één voor één en laat de puntkomma weg.
+3. **Compute → Workers & Pages → Create → Workers**, deploy de voorbeeldcode.
+4. Open de worker, tabblad **Bindings → Add binding → D1 database**, variabele
+   **`DB`** (exact zo — de code zoekt op die naam), en kies de database.
+5. **Edit code**, alles vervangen door `worker.js`, deployen. Het adres staat
+   bovenaan.
+
+Open dat adres in een tabblad: je hoort `{"error":"Alleen POST."}` te zien. Dat
+is goed nieuws — de worker draait en weigert netjes wat hij niet moet doen.
 
 Daarna, op elk apparaat: **Instellingen → Online koppeling**. Op het eerste
 apparaat laat je de app een code maken en schrijf je hem op; op de andere vul je
