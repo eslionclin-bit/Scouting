@@ -122,6 +122,37 @@ export class ActionRepository {
     });
   }
 
+  /**
+   * Een actie die er al staat rechtzetten.
+   *
+   * Acties zijn verder append-only, en dat blijft de regel: tijdens het invoeren
+   * corrigeer je met undo. Maar een fout die je drie rally's later ontdekt, is
+   * anders niet meer te herstellen zonder alles ertussen weg te gooien — en dat
+   * is precies wat een invoerder in een sporthal niet gaat doen.
+   *
+   * Wat hier bewust níét gebeurt: de stand herrekenen. Verandert een correctie
+   * de uitslag van een rally, dan zegt het scherm dat erbij en corrigeert de
+   * invoerder de stand zelf. Stilzwijgend de score verschuiven is erger dan een
+   * cijfer dat niet klopt.
+   */
+  async revise(
+    id: string,
+    patch: Pick<Partial<Action>, 'quality' | 'playerId' | 'zoneFrom' | 'zoneTo' | 'type'>,
+  ): Promise<Action> {
+    return this.ctx.lock.run(async () => {
+      const current = await this.require(id);
+      const playerId = patch.playerId === undefined ? current.playerId : patch.playerId;
+      const playerNumber =
+        patch.playerId === undefined
+          ? current.playerNumber
+          : await this.resolvePlayerNumber({ playerId });
+
+      const record = reviseRecord(this.ctx, current, { ...patch, playerId, playerNumber });
+      await commit(this.ctx, [{ entity: 'actions', record }]);
+      return record;
+    });
+  }
+
   async remove(id: string): Promise<void> {
     await this.ctx.lock.run(async () => {
       await this.tombstone(await this.require(id));
@@ -138,7 +169,9 @@ export class ActionRepository {
    * een export leesbaar en klopt de historie ook als een speler later van
    * rugnummer wisselt.
    */
-  private async resolvePlayerNumber(input: AppendActionInput): Promise<number | null> {
+  private async resolvePlayerNumber(
+    input: Pick<AppendActionInput, 'playerId'> & { playerNumber?: number | null },
+  ): Promise<number | null> {
     if (input.playerNumber != null) return input.playerNumber;
     if (!input.playerId) return null;
     const player = await this.players.get(input.playerId);

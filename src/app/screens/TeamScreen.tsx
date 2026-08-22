@@ -8,14 +8,18 @@
 
 import { useMemo, type ReactElement } from 'react';
 import {
+  attackDistribution,
   buildTeamProfile,
   compareMetrics,
   emptyMetrics,
   MIN_ROTATION_RALLIES,
+  sideoutByPass,
+  toActionRows,
 } from '../../analysis';
 import { loadMatchBundle } from '../../db/bundle';
 import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { MetricTable } from '../components/MetricTable';
+import { PassValue } from '../components/PassValue';
 import { useReference } from '../hooks/useReference';
 import { StatTile } from '../components/StatTile';
 import { useQuery } from '../StoreProvider';
@@ -46,6 +50,21 @@ export function TeamScreen({ onExit, onOpenMatch, onOpenPlayer }: TeamScreenProp
   // Hier is er geen 'nu': dit scherm gaat over het hele seizoen. De vergelijking
   // is dus tussen ons niveau en topniveau, zonder tussenkolom.
   const reference = useReference();
+
+  // Twee ketenanalyses over het hele seizoen: wat een pass oplevert, en wie de
+  // bal krijgt per rotatie. Allebei uit data die er al ligt.
+  const chains = useMemo(() => {
+    if (!data?.ownTeam) return null;
+    const rows = data.bundles.flatMap((bundle) => toActionRows(bundle));
+    const players = data.bundles
+      .flatMap((bundle) => bundle.players)
+      .filter((player) => player.teamId === data.ownTeam?.id);
+    const unique = [...new Map(players.map((player) => [player.id, player])).values()];
+    return {
+      passes: sideoutByPass(data.bundles),
+      distribution: attackDistribution(rows, unique),
+    };
+  }, [data]);
   const metrics = useMemo(
     () => compareMetrics(profile?.metrics ?? emptyMetrics(), emptyMetrics(), reference.level),
     [profile, reference.level],
@@ -146,6 +165,76 @@ export function TeamScreen({ onExit, onOpenMatch, onOpenPlayer }: TeamScreenProp
           </ul>
         </section>
       )}
+
+      <section className="card">
+        <h2>Wat een pass oplevert</h2>
+        <p className="card__hint">
+          Over alle wedstrijden. Per ontvangen rally telt de eerste pass.
+        </p>
+        {chains ? <PassValue data={chains.passes} /> : null}
+      </section>
+
+      <section className="card">
+        <h2>Wie krijgt de bal, per rotatie</h2>
+        <p className="card__hint">
+          De verdeling van onze aanvallen, met het rendement erachter. Eén speler die alles krijgt
+          is prima — zolang het rendement er is.
+        </p>
+        {chains && chains.distribution.length > 0 ? (
+          <div className="tablewrap">
+            <table className="stats">
+              <thead>
+                <tr>
+                  <th scope="col">Rotatie</th>
+                  <th scope="col">Speler</th>
+                  <th scope="col">Aanvallen</th>
+                  <th scope="col">Aandeel</th>
+                  <th scope="col">Rendement</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chains.distribution.flatMap((rotation) =>
+                  rotation.attackers.map((attacker, index) => (
+                    <tr key={`${rotation.rotation}-${attacker.playerId ?? index}`}>
+                      <th scope="row">{index === 0 ? `R${rotation.rotation}` : ''}</th>
+                      <td>
+                        {attacker.number === null ? 'onbekend' : `#${attacker.number}`}{' '}
+                        {attacker.name}
+                      </td>
+                      <td>{attacker.attacks}</td>
+                      <td>
+                        <span className="share">
+                          <span className="share__track" aria-hidden="true">
+                            <span
+                              className="share__bar"
+                              style={{ width: `${Math.round(attacker.share * 100)}%` }}
+                            />
+                          </span>
+                          <span className="share__value">
+                            {Math.round(attacker.share * 100)}%
+                          </span>
+                        </span>
+                      </td>
+                      <td
+                        className={
+                          (attacker.stats.efficiency ?? 0) >= 0 ? 'stats__good' : 'stats__bad'
+                        }
+                      >
+                        {signed(attacker.stats.efficiency ?? 0)}
+                      </td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="card__hint">
+            Nog geen aanvallen met een rotatiestand. Zet de opstelling per set neer, dan komt dit
+            vanzelf.
+          </p>
+        )}
+      </section>
 
       <section className="card">
         <h2>Per rotatie</h2>

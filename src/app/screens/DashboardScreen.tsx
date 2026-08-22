@@ -10,10 +10,12 @@
 import { useMemo, useState, type ReactElement } from 'react';
 import { loadMatchBundle } from '../../db/bundle';
 import {
+  attackByPhase,
   compareMetrics,
   filterActions,
   filterRallies,
   measureMetrics,
+  sideoutByPass,
   statsByPlayer,
   statsByRotation,
   statsByType,
@@ -26,6 +28,7 @@ import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { ACTION_TYPES, type ActionType } from '../../domain/types';
 import { QualityBar, QualityLegend } from '../components/QualityBar';
 import { MetricTable } from '../components/MetricTable';
+import { PassValue } from '../components/PassValue';
 import { useReference } from '../hooks/useReference';
 import { StatTile } from '../components/StatTile';
 import { ZoneHeatmap } from '../components/ZoneHeatmap';
@@ -48,6 +51,7 @@ export function DashboardScreen({
   const [rotation, setRotation] = useState<number | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [zoneType, setZoneType] = useState<ActionType>('attack');
+  const [zoneSide, setZoneSide] = useState<'from' | 'to'>('from');
 
   const { data, error } = useQuery(
     async (store) => {
@@ -67,6 +71,11 @@ export function DashboardScreen({
 
   const bundle = data?.bundle ?? null;
   const reference = useReference();
+
+  const passValue = useMemo(
+    () => (data ? sideoutByPass([data.bundle], setId ? { setId } : {}) : null),
+    [data, setId],
+  );
 
   const metrics = useMemo(() => {
     if (!data) return null;
@@ -107,6 +116,7 @@ export function DashboardScreen({
         bundle.players.filter((player) => player.teamId === bundle.match.ownTeamId),
       ),
       rotations,
+      phases: attackByPhase(actionRows),
       pointsUs: rallyRows.filter((row) => row.rally.wonBy === 'us').length,
       pointsThem: rallyRows.filter((row) => row.rally.wonBy === 'them').length,
       sideoutPct: receiveRallies > 0 ? sideouts / receiveRallies : null,
@@ -123,7 +133,8 @@ export function DashboardScreen({
       </div>
     );
   }
-  if (!data || !view || !metrics) return <div className="boot">Cijfers berekenen…</div>;
+  if (!data || !view || !metrics || !passValue)
+    return <div className="boot">Cijfers berekenen…</div>;
 
   const match = data.bundle;
   const ownPlayers = match.players.filter((player) => player.teamId === match.match.ownTeamId);
@@ -228,6 +239,59 @@ export function DashboardScreen({
       </section>
 
       <section className="card">
+        <h2>Wat een pass oplevert</h2>
+        <p className="card__hint">
+          Per ontvangen rally telt de eerste pass. Rally's zonder ingevoerde pass staan er niet
+          tussen.
+        </p>
+        <PassValue data={passValue} />
+      </section>
+
+      <section className="card">
+        <h2>Eerste bal of transitie</h2>
+        <p className="card__hint">
+          Een aanval na onze eigen pass is een opgezette aanval; alles daarna komt uit een
+          verdediging. Dat zijn twee verschillende dingen om op te trainen.
+        </p>
+        <div className="tablewrap">
+          <table className="stats">
+            <thead>
+              <tr>
+                <th scope="col">Fase</th>
+                <th scope="col">Aanvallen</th>
+                <th scope="col">Punt</th>
+                <th scope="col">Fout</th>
+                <th scope="col">Rendement</th>
+                <th scope="col">Verdeling</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.phases.map((entry) => (
+                <tr key={entry.phase}>
+                  <th scope="row">
+                    {entry.phase === 'reception' ? 'Eerste bal (na pass)' : 'Transitie'}
+                  </th>
+                  <td>{entry.stats.total}</td>
+                  <td>{entry.stats.total > 0 ? formatPct(entry.stats.pointPct ?? 0) : '—'}</td>
+                  <td>{entry.stats.total > 0 ? formatPct(entry.stats.errorPct) : '—'}</td>
+                  <td
+                    className={
+                      (entry.stats.efficiency ?? 0) >= 0 ? 'stats__good' : 'stats__bad'
+                    }
+                  >
+                    {entry.stats.total > 0 ? formatSigned(entry.stats.efficiency ?? 0) : '—'}
+                  </td>
+                  <td>
+                    <QualityBar counts={entry.stats.counts} total={entry.stats.total} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="card">
         <h2>Per speler</h2>
         <QualityLegend />
         <div className="tablewrap">
@@ -323,21 +387,29 @@ export function DashboardScreen({
                 {ACTION_TYPE_LABELS[type]}
               </FilterChip>
             ))}
+            <FilterChip active={zoneSide === 'from'} onClick={() => setZoneSide('from')}>
+              Vanaf
+            </FilterChip>
+            <FilterChip active={zoneSide === 'to'} onClick={() => setZoneSide('to')}>
+              Waarheen
+            </FilterChip>
           </div>
         </div>
         <p className="card__hint">
-          Vertrekzone: van waaruit wordt {zoneType === 'attack' ? 'aangevallen' : 'geserveerd'}.
+          {zoneSide === 'from'
+            ? `Vertrekzone: van waaruit wordt ${zoneType === 'attack' ? 'aangevallen' : 'geserveerd'}.`
+            : 'Landingszone: waar de bal terechtkwam. Alleen ingevuld als de invoerder er tijd voor had.'}
         </p>
         <div className="heatmaps">
           <ZoneHeatmap
             title="Wij"
             subtitle={ACTION_TYPE_LABELS[zoneType].toLowerCase()}
-            tally={zoneTally(filterActions(view.ours, { type: zoneType }))}
+            tally={zoneTally(filterActions(view.ours, { type: zoneType }), zoneSide)}
           />
           <ZoneHeatmap
             title="Tegenstander"
             subtitle={ACTION_TYPE_LABELS[zoneType].toLowerCase()}
-            tally={zoneTally(filterActions(view.theirs, { type: zoneType }))}
+            tally={zoneTally(filterActions(view.theirs, { type: zoneType }), zoneSide)}
           />
         </div>
       </section>

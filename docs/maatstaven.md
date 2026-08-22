@@ -13,6 +13,17 @@ Daarom staat elk kerngetal in de app naast twee andere:
 De eerste twee zijn tellingen. De derde niet, en dat is het belangrijkste wat er
 over dit hoofdstuk te zeggen valt.
 
+## Naast de zes kerngetallen
+
+Drie analyses die geen extra invoer kosten en toch iets zeggen wat de losse
+tellingen niet zeggen:
+
+- **Wat een pass oplevert**: sideout per passkwaliteit, en het verschil tussen
+  een perfecte en een matige pass in punten per honderd ontvangen ballen.
+- **Eerste bal of transitie**: aanval na eigen pass tegenover aanval uit een
+  verdediging.
+- **Wie krijgt de bal, per rotatie**: de aanvalsverdeling met rendement.
+
 ## De zes kerngetallen
 
 Ze staan in `src/analysis/metrics.ts`, en ze worden overal op dezelfde manier

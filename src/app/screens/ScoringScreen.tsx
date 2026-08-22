@@ -11,6 +11,7 @@ import { useEffect, useMemo, useReducer, useRef, useState, type ReactElement } f
 import { EntryPanel, type NewPlayerInput } from '../components/EntryPanel';
 import { LineupSheet } from '../components/LineupSheet';
 import { PairingSheet } from '../components/PairingSheet';
+import { ActionFixSheet } from '../components/ActionFixSheet';
 import { ScoreFixSheet } from '../components/ScoreFixSheet';
 import { ProtocolSheet } from '../components/ProtocolSheet';
 import { RallyChain } from '../components/RallyChain';
@@ -19,7 +20,7 @@ import type { PeerSession } from '../hooks/usePeerSession';
 import { useToasts } from '../hooks/useToasts';
 import { useQuery, useStore } from '../StoreProvider';
 import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryReducer';
-import { positionsAt } from '../../domain/rotation';
+import { courtPositions, positionsAt } from '../../domain/rotation';
 import { matchStatus, rulesOf, setOutcome } from '../../domain/scoring';
 import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
@@ -55,6 +56,7 @@ export function ScoringScreen({
   const [showLineup, setShowLineup] = useState(false);
   const [showPairing, setShowPairing] = useState(false);
   const [showScoreFix, setShowScoreFix] = useState(false);
+  const [showActionFix, setShowActionFix] = useState(false);
   /** Bij welke stand de invoerder 'nog niet' zei tegen het sluiten van de set. */
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
 
@@ -112,6 +114,26 @@ export function ScoringScreen({
     }
     return map;
   }, [data?.ownPlayers, data?.opponentPlayers]);
+
+  /**
+   * Wie er volgens de opstelling in het veld staat, inclusief de libero. Dit
+   * gaat mee naar de validatie: daarmee merkt de app tijdens de wedstrijd op dat
+   * er een speler wordt ingevoerd die er niet staat, of dat een achterspeler
+   * blokt.
+   */
+  const court = useMemo(() => {
+    if (!data?.lineup) return null;
+    const { positions } = courtPositions(
+      data.lineup,
+      data.rally?.rotationUs ?? 1,
+      data.substitutions ?? [],
+      { roleOf: (playerId) => playersById.get(playerId)?.role ?? null },
+    );
+    return {
+      positions,
+      roleOf: (playerId: string) => playersById.get(playerId)?.role ?? null,
+    };
+  }, [data?.lineup, data?.rally?.rotationUs, data?.substitutions, playersById]);
 
   /**
    * Wie er hoort te serveren. Met een opstelling weet de app dat exact: dat is
@@ -179,7 +201,10 @@ export function ScoringScreen({
     if (!draft || !data?.rally) return;
 
     try {
-      const { action, warnings } = await store.actions.append({ rallyId: data.rally.id, ...draft });
+      const { action, warnings } = await store.actions.append(
+        { rallyId: data.rally.id, ...draft },
+        { court },
+      );
       for (const warning of warnings) push('warning', warning.message);
       dispatch({ kind: 'committed', last: action });
 
@@ -413,6 +438,15 @@ export function ScoringScreen({
             </button>
           )}
           {leads && (
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => setShowActionFix(true)}
+            >
+              Corrigeren
+            </button>
+          )}
+          {leads && (
             <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
               Wissel
             </button>
@@ -522,6 +556,14 @@ export function ScoringScreen({
           </button>
         )}
       </footer>
+
+      {showActionFix && (
+        <ActionFixSheet
+          setId={set.id}
+          players={data.ownPlayers}
+          onClose={() => setShowActionFix(false)}
+        />
+      )}
 
       {showScoreFix && (
         <ScoreFixSheet

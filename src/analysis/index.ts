@@ -4,6 +4,7 @@ export * from './benchmarks';
 export * from './comparison';
 export * from './reference';
 export * from './stats';
+export * from './chains';
 export * from './opponent';
 export * from './coach';
 export * from './team';

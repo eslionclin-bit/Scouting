@@ -2151,3 +2151,137 @@ button {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Kleurstip voor een kwalificatie in een tabelregel. De naam staat ernaast:
+   de stip herhaalt alleen wat er in tekst al staat. */
+.dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.45rem;
+  vertical-align: baseline;
+}
+
+.dot--perfect {
+  background: var(--perfect);
+}
+
+.dot--good {
+  background: var(--good);
+}
+
+.dot--poor {
+  background: var(--poor);
+}
+
+.dot--error {
+  background: var(--error);
+}
+
+/* Aanvalsverdeling per rotatie: een balkje dat het aandeel toont, met het
+   percentage ernaast in tekst. */
+.share {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 8rem;
+}
+
+.share__track {
+  flex: 1;
+  height: 0.5rem;
+  border-radius: 3px;
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.share__bar {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--us);
+}
+
+.share__value {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+/* ---------- Actie corrigeren ---------- */
+
+.fixlist {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.fixlist__item {
+  display: grid;
+  grid-template-columns: 5rem 1fr 6rem 5rem;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fixlist__rally,
+.fixlist__who {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* De kwalificatie krijgt hier alleen een randje mee: een vol gekleurd vlak in
+   een lijst leest als een knop die je moet indrukken. */
+.fixlist__quality {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  border-left: 4px solid currentColor;
+  background: transparent;
+  color: var(--text);
+}
+
+.fixlist__quality.quality--perfect {
+  border-left-color: var(--perfect);
+}
+
+.fixlist__quality.quality--good {
+  border-left-color: var(--good);
+}
+
+.fixlist__quality.quality--poor {
+  border-left-color: var(--poor);
+}
+
+.fixlist__quality.quality--error {
+  border-left-color: var(--error);
+}
+
+.quality--selected {
+  outline: 3px solid var(--text);
+  outline-offset: -3px;
+}
+
+@media (max-width: 640px) {
+  .fixlist__item {
+    grid-template-columns: 4rem 1fr;
+    grid-template-areas: 'rally what' 'who quality';
+    padding: 0.4rem 0.6rem;
+  }
+}

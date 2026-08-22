@@ -8,7 +8,7 @@
  *   - `warning` : dit kan kloppen, maar wijkt af van het protocol — laat het zien.
  */
 
-import type { Action, ActionType, Quality, Rally, TeamSide } from './types';
+import type { Action, ActionType, PlayerRole, Quality, Rally, TeamSide, Zone } from './types';
 import { ACTION_TYPES, QUALITIES } from './types';
 import { isZone } from './zones';
 
@@ -73,6 +73,19 @@ export interface ValidateActionContext {
   previousActions?: readonly Pick<Action, 'team' | 'type' | 'quality'>[];
   /** Bij het eigen team verwachten we een gekozen speler; bij de tegenstander niet. */
   requirePlayerForOwnTeam?: boolean;
+  /**
+   * Wie er volgens de opstelling in het veld staat, en waar.
+   *
+   * Hiermee kan de app tijdens de wedstrijd de fouten opmerken die je anders pas
+   * maandag ontdekt: een speler die allang gewisseld is, een libero die
+   * serveert, een blok door een achterspeler. Alles als waarschuwing — de app
+   * weet het niet beter dan de invoerder, hij kijkt alleen mee.
+   */
+  court?: {
+    /** Speler-id per zone (1-6), inclusief de libero als die in het veld staat. */
+    positions: Partial<Record<Zone, string | null>>;
+    roleOf?: (playerId: string) => PlayerRole | null | undefined;
+  } | null;
 }
 
 /** Valideert één in te voeren actie tegen datamodel en protocol. */
@@ -160,6 +173,66 @@ export function validateAction(
       severity: 'warning',
       code: 'block_own_attack',
       message: 'Een blok volgt op een aanval van de tegenpartij.',
+    });
+  }
+
+  issues.push(...courtIssues(draft, context.court));
+
+  return issues;
+}
+
+/** Achterzones: daar mag niet geblokt worden. */
+const BACK_ROW: readonly Zone[] = [1, 5, 6] as const;
+
+/**
+ * Controles die alleen kunnen als de opstelling bekend is. Ze wijzen op een
+ * fout in de invoer óf op een fout in het veld — welke van de twee, dat ziet de
+ * invoerder zelf; daarom staat er nooit een blokkade op.
+ */
+function courtIssues(
+  draft: ActionDraft,
+  court: ValidateActionContext['court'],
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const playerId = draft.playerId;
+  if (!court || draft.team !== 'us' || !playerId) return issues;
+
+  const entries = Object.entries(court.positions) as [string, string | null][];
+  const onCourt = entries.filter(([, id]) => id !== null);
+  if (onCourt.length === 0) return issues;
+
+  const spot = onCourt.find(([, id]) => id === playerId);
+  if (!spot) {
+    issues.push({
+      severity: 'warning',
+      code: 'player_not_on_court',
+      field: 'playerId',
+      message:
+        'Deze speler staat volgens de opstelling niet in het veld. Klopt de wissel, of de rotatie?',
+    });
+    return issues;
+  }
+
+  const role = court.roleOf?.(playerId) ?? null;
+  if (role === 'libero' && (draft.type === 'serve' || draft.type === 'attack')) {
+    issues.push({
+      severity: 'warning',
+      code: 'libero_illegal_action',
+      field: 'type',
+      message:
+        draft.type === 'serve'
+          ? 'Een libero serveert niet. Staat de juiste speler in zone 1?'
+          : 'Een libero mag de bal niet van bovenaf aanvallen boven nethoogte.',
+    });
+  }
+
+  const zone = Number(spot[0]) as Zone;
+  if (draft.type === 'block' && BACK_ROW.includes(zone)) {
+    issues.push({
+      severity: 'warning',
+      code: 'back_row_block',
+      field: 'type',
+      message: `Deze speler staat achterin (zone ${zone}); een achterspeler mag niet blokken.`,
     });
   }
 

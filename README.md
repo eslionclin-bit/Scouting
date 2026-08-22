@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 171 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 183 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -101,6 +101,19 @@ rondt de rally meteen af en zet de opslag van de winnaar klaar.
 Undo werkt over de rallygrens heen: is de nieuwe rally nog leeg, dan wordt de
 vorige rally heropend en dáár de laatste actie teruggedraaid.
 
+**Corrigeren** — undo werkt zolang je de fout meteen ziet. Ontdek je pas drie
+rally's later dat die pass matig was in plaats van goed, dan staat onder
+'Corrigeren' de laatste twintig acties van de set, met de rally erbij; per actie
+zijn de kwalificatie en de speler aan te passen of is hij te verwijderen. De
+stand wordt daarbij bewust niet meeverschoven: verandert een correctie de uitslag
+van een rally, dan zegt het scherm dat en corrigeer je de stand zelf via 'Stand'.
+
+**Meekijken op de opstelling** — is de opstelling ingevuld, dan waarschuwt de app
+tijdens het invoeren bij een speler die volgens de opstelling niet in het veld
+staat, bij een libero die serveert of aanvalt, en bij een blok door een
+achterspeler. Alles als waarschuwing, nooit als blokkade: de app weet het niet
+beter dan de invoerder, hij kijkt alleen mee.
+
 **Opstelling, libero en wissels** — via de knop 'Opstelling' in het invoerscherm.
 Je zet alleen de zes van het begin van de set neer; welke speler tijdens rally 34 in
 zone 3 staat, rekent de app zelf uit. De rotatiestand staat in de kop van het
@@ -163,6 +176,22 @@ apparaten allebei een rally kunnen afronden, dan ontstaan er twee rally's en twe
 standen. De assistent ziet daarom geen 'punt wij', geen 'set afronden' en geen
 'undo rally'; wat hij invoert verschijnt binnen een seconde bij de ander. Wie
 welke kant van het net invoert, spreek je zelf af — de app bewaakt dat niet.
+
+**Wat een pass oplevert** — op het dashboard en in het teamdossier: per
+passkwaliteit het percentage rally's dat we daarna winnen, plus het verschil
+tussen een perfecte en een matige pass in punten per honderd ontvangen ballen.
+Dat is passkwaliteit uitgedrukt in punten, en daarmee het argument voor een
+training. Per ontvangen rally telt de eerste pass; rally's zonder ingevoerde
+pass blijven erbuiten.
+
+**Eerste bal of transitie** — een aanval na onze eigen pass is een opgezette
+aanval, alles daarna komt uit een verdediging. Alle scoutprogramma's houden die
+twee uit elkaar, want een ploeg kan op de eerste bal prima draaien en in
+transitie alles weggeven.
+
+**Wie krijgt de bal, per rotatie** — de verdeling van onze aanvallen per rotatie
+met het rendement erachter. Eén speler die alles krijgt is prima, zolang het
+rendement er is.
 
 **Nu, wij gemiddeld, topniveau** — op het dashboard en in het teamdossier staan
 zes kerngetallen (sideout, punt op eigen service, pass positief, aanval punt,

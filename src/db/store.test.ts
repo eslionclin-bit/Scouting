@@ -337,6 +337,36 @@ describe('ScoutingStore', () => {
     ).rejects.toThrow(/maximum van 6 wissels/);
   });
 
+  it('zet een actie recht die verder terugligt, zonder de stand te verschuiven', async () => {
+    const first = await store.rallies.start({ setId: fixture.set.id });
+    const { action } = await store.actions.append({
+      rallyId: first.id,
+      team: 'us',
+      type: 'reception',
+      quality: 'good',
+      playerId: fixture.players[0]!.id,
+    });
+    await store.rallies.complete(first.id, 'us');
+
+    // Twee rally's verder blijkt die pass matig te zijn geweest.
+    const second = await store.rallies.start({ setId: fixture.set.id });
+    await store.rallies.complete(second.id, 'them');
+
+    const revised = await store.actions.revise(action.id, {
+      quality: 'poor',
+      playerId: fixture.players[1]!.id,
+    });
+
+    expect(revised.quality).toBe('poor');
+    expect(revised.playerId).toBe(fixture.players[1]!.id);
+    // Het rugnummer hoort mee te verhuizen, anders klopt de export niet meer.
+    expect(revised.playerNumber).toBe(fixture.players[1]!.number);
+
+    // De stand blijft ongemoeid: die corrigeert de invoerder zelf.
+    const set = await store.sets.get(fixture.set.id);
+    expect(set).toMatchObject({ pointsUs: 1, pointsThem: 1 });
+  });
+
   it('onthoudt rol en actieve wedstrijd van dit apparaat', async () => {
     expect(await store.getDeviceRole()).toBe('scorer');
     await store.setDeviceRole('viewer');
