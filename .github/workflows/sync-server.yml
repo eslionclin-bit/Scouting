@@ -35,25 +35,48 @@ jobs:
       - name: Zijn de gegevens er?
         id: check
         run: |
+          # Alleen de lengte, nooit de waarde: dat is genoeg om te zien of een
+          # secret er is en verklapt niets. GitHub maskeert de waarde toch, maar
+          # dan zie je '***' en weet je nog steeds niet of hij leeg is.
+          echo "Wat deze workflow ziet:"
+          printf '  %-24s %s tekens\n' CLOUDFLARE_API_TOKEN  "${#TOKEN}"
+          printf '  %-24s %s tekens\n' CLOUDFLARE_ACCOUNT_ID "${#ACCOUNT}"
+          printf '  %-24s %s tekens\n' CLOUDFLARE_D1_ID      "${#D1}"
+
           missing=""
-          [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]  || missing="$missing CLOUDFLARE_API_TOKEN"
-          [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
-          [ -n "${{ secrets.CLOUDFLARE_D1_ID }}" ]      || missing="$missing CLOUDFLARE_D1_ID"
+          [ -n "$TOKEN" ]   || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$D1" ]      || missing="$missing CLOUDFLARE_D1_ID"
 
           if [ -z "$missing" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "Alle drie de gegevens staan klaar."
             exit 0
           fi
 
           echo "ready=false" >> "$GITHUB_OUTPUT"
 
+          # Verreweg de meest gemaakte vergissing: de pagina in GitHub heeft twee
+          # tabbladen, Secrets en Variables, en ze zien er hetzelfde uit. Staat
+          # het onder Variables, dan is het geen geheim en ziet deze workflow het
+          # niet op de plek waar hij kijkt.
+          hint=""
+          if [ -n "$VAR_TOKEN$VAR_ACCOUNT$VAR_D1" ]; then
+            hint=" Ze staan wel onder het tabblad Variables: zet ze over naar Secrets."
+          fi
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "::error::De sync-server kan niet worden uitgerold, deze secrets ontbreken:$missing"
+            echo "::error::De sync-server kan niet worden uitgerold, deze secrets ontbreken:$missing.$hint"
             exit 1
           fi
 
-          echo "::warning::Sync-server overgeslagen, deze secrets ontbreken:$missing"
+          echo "::warning::Sync-server overgeslagen, deze secrets ontbreken:$missing.$hint"
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1: ${{ secrets.CLOUDFLARE_D1_ID }}
+          VAR_TOKEN: ${{ vars.CLOUDFLARE_API_TOKEN }}
+          VAR_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          VAR_D1: ${{ vars.CLOUDFLARE_D1_ID }}
 
       - uses: actions/setup-node@v4
         if: steps.check.outputs.ready == 'true'
