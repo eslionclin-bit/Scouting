@@ -50,6 +50,15 @@ export class SyncEngine {
   private soonTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubscribeStore: (() => void) | null = null;
   private running = false;
+  /**
+   * Gestopt betekent: niets meer aanraken.
+   *
+   * Zonder deze vlag kan een tik die al onderweg was alsnog de database
+   * aanspreken nadat die gesloten is — dan valt de app over een fout die er
+   * niet toe doet. Dat gebeurde in de praktijk bij het verlaten van een
+   * wedstrijd, en in de tests als een unhandled rejection ná de laatste test.
+   */
+  private stopped = false;
   private nextAttemptAt = 0;
   private matchId: string | null;
   private readonly options: Required<Omit<SyncEngineOptions, 'matchId'>>;
@@ -92,6 +101,7 @@ export class SyncEngine {
 
   start(): void {
     if (this.timer) return;
+    this.stopped = false;
     this.timer = setInterval(() => void this.syncNow(), this.options.intervalMs);
     globalThis.addEventListener?.('online', this.onOnline);
 
@@ -106,6 +116,7 @@ export class SyncEngine {
   }
 
   stop(): void {
+    this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     if (this.soonTimer) clearTimeout(this.soonTimer);
@@ -128,11 +139,11 @@ export class SyncEngine {
    * Werpt nooit; de uitkomst staat in de teruggegeven status.
    */
   async syncNow(options: { force?: boolean } = {}): Promise<SyncState> {
-    if (this.running) return this.getState();
+    if (this.stopped || this.running) return this.getState();
     if (!options.force && this.options.now() < this.nextAttemptAt) return this.getState();
 
     if (!(await this.isOnline())) {
-      this.update({ status: 'offline', pending: await pendingCount(this.store.db) });
+      this.update({ status: 'offline', pending: await this.pending() });
       return this.getState();
     }
 
@@ -146,7 +157,7 @@ export class SyncEngine {
       this.nextAttemptAt = 0;
       this.update({
         status: 'idle',
-        pending: await pendingCount(this.store.db),
+        pending: await this.pending(),
         lastSyncAt,
         lastError: null,
         failures: 0,
@@ -162,7 +173,7 @@ export class SyncEngine {
       this.nextAttemptAt = this.options.now() + backoff;
       this.update({
         status: 'error',
-        pending: await pendingCount(this.store.db),
+        pending: await this.pending(),
         lastError: error instanceof Error ? error.message : String(error),
         failures,
       });
@@ -170,6 +181,22 @@ export class SyncEngine {
       this.running = false;
     }
     return this.getState();
+  }
+
+  /**
+   * Het aantal wachtende wijzigingen, en nooit een fout.
+   *
+   * Deze telling staat op elk pad in `syncNow` — ook op het foutpad. Als de
+   * database net gesloten is, mag juist dát geen nieuwe fout opleveren; dan is
+   * het antwoord simpelweg onbekend en houden we wat we hadden.
+   */
+  private async pending(): Promise<number> {
+    if (this.stopped) return this.state.pending;
+    try {
+      return await pendingCount(this.store.db);
+    } catch {
+      return this.state.pending;
+    }
   }
 
   private async pushOnce(): Promise<void> {

@@ -26,6 +26,10 @@ describe('live meelezen', () => {
   });
 
   afterEach(() => {
+    // Eerst de engines stoppen, dan pas de databases sluiten: een sync die nog
+    // onderweg is mag niet in een gesloten database terechtkomen.
+    for (const engine of engines) engine.stop();
+    engines.length = 0;
     client?.close();
     client = null;
     host.stop();
@@ -33,11 +37,15 @@ describe('live meelezen', () => {
     viewer.close();
   });
 
+  const engines: SyncEngine[] = [];
+
   function connect(): { engine: SyncEngine; detach: () => void } {
     const [hostChannel, viewerChannel] = createMemoryChannelPair();
     const detach = host.attach(hostChannel);
     client = new PeerClient(viewer, viewerChannel, { matchId: fixture.match.id });
-    return { engine: new SyncEngine(viewer, client, { retryBaseMs: 0 }), detach };
+    const engine = new SyncEngine(viewer, client, { retryBaseMs: 0 });
+    engines.push(engine);
+    return { engine, detach };
   }
 
   async function addAction(quality: 'good' | 'perfect' = 'good'): Promise<string> {

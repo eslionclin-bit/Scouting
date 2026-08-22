@@ -199,3 +199,38 @@ describe('sync tussen twee apparaten', () => {
     expect((await viewer.matches.require(fixture.match.id)).notes).toBe('tweede');
   });
 });
+
+describe('stoppen', () => {
+  /**
+   * De fout die hierachter zit kwam uit de praktijk: een sync die al onderweg
+   * was, sprak de database aan nadat die gesloten werd. In de browser is dat
+   * een fout in de console bij het verlaten van een wedstrijd; in de tests
+   * liet hij de hele build omvallen terwijl alle tests slaagden.
+   */
+  it('raakt de database niet meer aan nadat hij gestopt is', async () => {
+    const store = await openTestStore('device-stop');
+    const hub = new LoopbackHub();
+    const engine = new SyncEngine(store, hub.transport("stop"));
+
+    engine.start();
+    engine.stop();
+    store.close();
+
+    // Geen fout, en de status blijft staan zoals hij was.
+    await expect(engine.syncNow({ force: true })).resolves.toBeDefined();
+  });
+
+  it('valt niet om als de database sluit terwijl een ronde loopt', async () => {
+    const store = await openTestStore('device-race');
+    const hub = new LoopbackHub();
+    const engine = new SyncEngine(store, hub.transport("race"));
+
+    const running = engine.syncNow({ force: true });
+    store.close();
+
+    const state = await running;
+    // Of hij nog net klaar was of niet doet er niet toe; hij mag alleen niet
+    // met een onbehandelde fout eindigen.
+    expect(['idle', 'error', 'offline', 'syncing']).toContain(state.status);
+  });
+});
