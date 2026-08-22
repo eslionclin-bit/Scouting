@@ -21,6 +21,7 @@ import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { MetricTable } from '../components/MetricTable';
 import { PassValue } from '../components/PassValue';
 import { useReference } from '../hooks/useReference';
+import { Placeholder } from '../components/Placeholder';
 import { StatTile } from '../components/StatTile';
 import { useQuery } from '../StoreProvider';
 
@@ -31,7 +32,7 @@ export interface TeamScreenProps {
 }
 
 export function TeamScreen({ onExit, onOpenMatch, onOpenPlayer }: TeamScreenProps): ReactElement {
-  const { data, error } = useQuery(async (store) => {
+  const { data, error, loading } = useQuery(async (store) => {
     const ownTeam = await store.teams.ownTeam();
     if (!ownTeam) return { ownTeam: undefined, bundles: [] };
 
@@ -70,17 +71,21 @@ export function TeamScreen({ onExit, onOpenMatch, onOpenPlayer }: TeamScreenProp
     [profile, reference.level],
   );
 
-  if (error) {
+  if (error) return <Placeholder title="Er ging iets mis" hint={error.message} onExit={onExit} tone="error" />;
+  if (loading || !data) return <Placeholder title="Profiel samenstellen…" onExit={onExit} />;
+
+  // Zonder eigen team valt er niets samen te stellen. Dat is geen fout en ook
+  // geen laadtoestand: het betekent dat er nog geen wedstrijd is geweest.
+  if (!data.ownTeam || !profile) {
     return (
-      <div className="boot boot--error">
-        <p>{error.message}</p>
-        <button type="button" className="button" onClick={onExit}>
-          Terug
-        </button>
-      </div>
+      <Placeholder
+        title="Nog geen eigen team"
+        hint="Het teamdossier vult zich zodra je een wedstrijd hebt opgezet: dan weet de app wie jullie zijn en welke wedstrijden van jullie zijn."
+        onExit={onExit}
+        tone="empty"
+      />
     );
   }
-  if (!data || !profile) return <div className="boot">Profiel samenstellen…</div>;
 
   return (
     <div className="dashboard">

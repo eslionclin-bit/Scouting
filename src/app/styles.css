@@ -2791,3 +2791,37 @@ button {
 .switch__label {
   font-size: 0.85rem;
 }
+
+/* ---------- Scherm zonder inhoud ---------- */
+
+.placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: 1.5rem;
+}
+
+.placeholder__card {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  max-width: 32rem;
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-panel);
+}
+
+.placeholder__card h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.placeholder__card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.placeholder--error .placeholder__card {
+  border-color: var(--error);
+}

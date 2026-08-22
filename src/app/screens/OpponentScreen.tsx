@@ -13,6 +13,7 @@ import { loadMatchBundle } from '../../db/bundle';
 import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { StatTile } from '../components/StatTile';
 import { ZoneHeatmap } from '../components/ZoneHeatmap';
+import { Placeholder } from '../components/Placeholder';
 import { useQuery } from '../StoreProvider';
 
 export interface OpponentScreenProps {
@@ -47,7 +48,17 @@ export function OpponentScreen({ opponentId, onExit, onOpenMatch }: OpponentScre
       </div>
     );
   }
-  if (!data || !dossier) return <div className="boot">Dossier samenstellen…</div>;
+  if (!data) return <Placeholder title="Dossier samenstellen…" onExit={onExit} />;
+  if (!dossier) {
+    return (
+      <Placeholder
+        title="Nog geen dossier"
+        hint="Zodra er een wedstrijd tegen deze ploeg is ingevoerd, staat hier wat we van ze weten."
+        onExit={onExit}
+        tone="empty"
+      />
+    );
+  }
 
   const thin = dossier.totalActions < MIN_SAMPLE;
 

@@ -32,6 +32,7 @@ import { ACTION_TYPES, type ActionType } from '../../domain/types';
 import { QualityBar, QualityLegend } from '../components/QualityBar';
 import { ATTACK_TEMPO_LABELS, BLOCK_LABELS } from '../../domain/attack';
 import { ERROR_REASON_LABELS } from '../../domain/errors';
+import { Placeholder } from '../components/Placeholder';
 import { MetricTable } from '../components/MetricTable';
 import { PassValue } from '../components/PassValue';
 import { useReference } from '../hooks/useReference';
@@ -141,8 +142,9 @@ export function DashboardScreen({
       </div>
     );
   }
-  if (!data || !view || !metrics || !passValue)
-    return <div className="boot">Cijfers berekenen…</div>;
+  if (!data || !view || !metrics || !passValue) {
+    return <Placeholder title="Cijfers berekenen…" onExit={onExit} />;
+  }
 
   const match = data.bundle;
   const ownPlayers = match.players.filter((player) => player.teamId === match.match.ownTeamId);

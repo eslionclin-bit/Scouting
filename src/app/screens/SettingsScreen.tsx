@@ -12,6 +12,7 @@ import { useQuery, useStore } from '../StoreProvider';
 
 export interface SettingsScreenProps {
   onExit: () => void;
+  onOpenReference: () => void;
 }
 
 interface Toggle {
@@ -54,7 +55,7 @@ const TOGGLES: readonly Toggle[] = [
   },
 ];
 
-export function SettingsScreen({ onExit }: SettingsScreenProps): ReactElement {
+export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps): ReactElement {
   const store = useStore();
   const { data } = useQuery(async (instance) => instance.getSettings(), []);
   const [busy, setBusy] = useState(false);
@@ -110,6 +111,18 @@ export function SettingsScreen({ onExit }: SettingsScreenProps): ReactElement {
             );
           })}
         </ul>
+      </section>
+
+      <section className="card">
+        <h2>Referentiemateriaal</h2>
+        <p className="card__hint">
+          Wedstrijden van andere ploegen, ingelezen uit scoutbestanden. Ze bepalen waar de
+          referentiekolom in de cijfertabellen op berust — en je zet ze één keer klaar, niet elke
+          wedstrijd opnieuw. Daarom staat het hier en niet op het startscherm.
+        </p>
+        <button type="button" className="button button--primary" onClick={onOpenReference}>
+          Referentiemateriaal beheren
+        </button>
       </section>
     </div>
   );

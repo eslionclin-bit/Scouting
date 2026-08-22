@@ -3,7 +3,7 @@
  * vanaf het startscherm van een tablet openen, zonder URL-gedoe.
  */
 
-import { useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import type { DeviceRole } from '../domain/types';
 import { usePeerSession } from './hooks/usePeerSession';
 import { DashboardScreen } from './screens/DashboardScreen';
@@ -25,15 +25,41 @@ type View =
   | { name: 'viewer'; matchId: string }
   | { name: 'dashboard'; matchId: string }
   | { name: 'opponent'; opponentId: string }
-  | { name: 'player'; playerId: string; back: View }
+  | { name: 'player'; playerId: string }
   | { name: 'reference' }
   | { name: 'settings' }
   | { name: 'team' };
 
 export function App(): ReactElement {
   const store = useStore();
-  const [view, setView] = useState<View>({ name: 'home' });
+  /**
+   * Schermen als stapel, zodat de terugknop van de browser (en het veegbaar
+   * terug van een tablet) binnen de app blijft in plaats van de website te
+   * verlaten. Elke stap zet ook een stap in de geschiedenis van de browser; die
+   * twee blijven zo gelijk lopen.
+   */
+  const [stack, setStack] = useState<View[]>([{ name: 'home' }]);
+  const view = stack[stack.length - 1] ?? { name: 'home' };
   const [restored, setRestored] = useState(false);
+
+  const go = useCallback((next: View): void => {
+    setStack((current) => [...current, next]);
+    globalThis.history?.pushState({ app: true }, '');
+  }, []);
+
+  /** Terug binnen de app: via de geschiedenis, zodat beide kanten kloppen. */
+  const back = useCallback((): void => {
+    if (globalThis.history?.state?.app) globalThis.history.back();
+    else setStack((current) => (current.length > 1 ? current.slice(0, -1) : current));
+  }, []);
+
+  useEffect(() => {
+    const onPopState = (): void => {
+      setStack((current) => (current.length > 1 ? current.slice(0, -1) : current));
+    };
+    globalThis.addEventListener?.('popstate', onPopState);
+    return () => globalThis.removeEventListener?.('popstate', onPopState);
+  }, []);
 
   /**
    * De koppeling hangt aan de wedstrijd en de rol, niet aan het scherm: kijkt de
@@ -59,11 +85,12 @@ export function App(): ReactElement {
         // invoerscherm te belanden nadat de tablet op slot is geweest.
         const stored = (await store.getMatchRole(matchId)) ?? 'scorer';
         setScope({ matchId, role: stored });
-        setView(
+        setStack([
+          { name: 'home' },
           stored === 'viewer'
             ? { name: 'viewer', matchId }
             : { name: 'scoring', matchId, role: stored },
-        );
+        ]);
       }
       setRestored(true);
     })();
@@ -80,9 +107,9 @@ export function App(): ReactElement {
         <NewMatchScreen
           onCreated={(matchId) => {
             setScope({ matchId, role: 'scorer' });
-            setView({ name: 'scoring', matchId, role: 'scorer' });
+            go({ name: 'scoring', matchId, role: 'scorer' });
           }}
-          onCancel={() => setView({ name: 'home' })}
+          onCancel={back}
         />
       );
     case 'scoring':
@@ -91,10 +118,10 @@ export function App(): ReactElement {
           matchId={view.matchId}
           session={session}
           role={view.role}
-          onOpenDashboard={() => setView({ name: 'dashboard', matchId: view.matchId })}
+          onOpenDashboard={() => go({ name: 'dashboard', matchId: view.matchId })}
           onExit={() => {
             void store.setActiveMatchId(null);
-            setView({ name: 'home' });
+            back();
           }}
         />
       );
@@ -103,59 +130,57 @@ export function App(): ReactElement {
         <CoachScreen
           matchId={view.matchId}
           session={session}
-          onOpenDashboard={() => setView({ name: 'dashboard', matchId: view.matchId })}
-          onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
+          onOpenDashboard={() => go({ name: 'dashboard', matchId: view.matchId })}
+          onOpenOpponent={(opponentId) => go({ name: 'opponent', opponentId })}
           onSwitchToScoring={() => {
             void store.setMatchRole(view.matchId, 'scorer');
             setScope({ matchId: view.matchId, role: 'scorer' });
-            setView({ name: 'scoring', matchId: view.matchId, role: 'scorer' });
+            go({ name: 'scoring', matchId: view.matchId, role: 'scorer' });
           }}
           onExit={() => {
             void store.setActiveMatchId(null);
             setScope({ matchId: null, role: 'viewer' });
-            setView({ name: 'home' });
+            back();
           }}
         />
       );
-    case 'dashboard': {
-      const here: View = { name: 'dashboard', matchId: view.matchId };
+    case 'dashboard':
       return (
         <DashboardScreen
           matchId={view.matchId}
-          onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
-          onOpenPlayer={(playerId) => setView({ name: 'player', playerId, back: here })}
-          onExit={() => setView({ name: 'scoring', matchId: view.matchId, role: 'scorer' })}
+          onOpenOpponent={(opponentId) => go({ name: 'opponent', opponentId })}
+          onOpenPlayer={(playerId) => go({ name: 'player', playerId })}
+          onExit={back}
         />
       );
-    }
     case 'reference':
-      return <ReferenceScreen onExit={() => setView({ name: 'home' })} />;
+      return <ReferenceScreen onExit={back} />;
     case 'settings':
-      return <SettingsScreen onExit={() => setView({ name: 'home' })} />;
+      return (
+        <SettingsScreen onExit={back} onOpenReference={() => go({ name: 'reference' })} />
+      );
     case 'team':
       return (
         <TeamScreen
-          onOpenMatch={(matchId) => setView({ name: 'dashboard', matchId })}
-          onOpenPlayer={(playerId) => setView({ name: 'player', playerId, back: { name: 'team' } })}
-          onExit={() => setView({ name: 'home' })}
+          onOpenMatch={(matchId) => go({ name: 'dashboard', matchId })}
+          onOpenPlayer={(playerId) => go({ name: 'player', playerId })}
+          onExit={back}
         />
       );
-    case 'player': {
-      const back = view.back;
+    case 'player':
       return (
         <PlayerScreen
           playerId={view.playerId}
-          onOpenMatch={(matchId) => setView({ name: 'dashboard', matchId })}
-          onExit={() => setView(back)}
+          onOpenMatch={(matchId) => go({ name: 'dashboard', matchId })}
+          onExit={back}
         />
       );
-    }
     case 'opponent':
       return (
         <OpponentScreen
           opponentId={view.opponentId}
-          onOpenMatch={(matchId) => setView({ name: 'dashboard', matchId })}
-          onExit={() => setView({ name: 'home' })}
+          onOpenMatch={(matchId) => go({ name: 'dashboard', matchId })}
+          onExit={back}
         />
       );
     case 'home':
@@ -163,21 +188,16 @@ export function App(): ReactElement {
       return (
         <HomeScreen
           session={session}
-          onNewMatch={() => setView({ name: 'new' })}
-          onOpenDashboard={(matchId) => setView({ name: 'dashboard', matchId })}
-          onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
-          onOpenTeam={() => setView({ name: 'team' })}
-          onOpenReference={() => setView({ name: 'reference' })}
-          onOpenSettings={() => setView({ name: 'settings' })}
+          onNewMatch={() => go({ name: 'new' })}
+          onOpenDashboard={(matchId) => go({ name: 'dashboard', matchId })}
+          onOpenOpponent={(opponentId) => go({ name: 'opponent', opponentId })}
+          onOpenTeam={() => go({ name: 'team' })}
+          onOpenSettings={() => go({ name: 'settings' })}
           onOpenMatch={(matchId, role) => {
             void store.setActiveMatchId(matchId);
             void store.setMatchRole(matchId, role);
             setScope({ matchId, role });
-            setView(
-              role === 'viewer'
-                ? { name: 'viewer', matchId }
-                : { name: 'scoring', matchId, role },
-            );
+            go(role === 'viewer' ? { name: 'viewer', matchId } : { name: 'scoring', matchId, role });
           }}
         />
       );

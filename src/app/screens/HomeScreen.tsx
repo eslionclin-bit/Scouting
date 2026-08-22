@@ -19,7 +19,6 @@ export interface HomeScreenProps {
   onOpenDashboard: (matchId: string) => void;
   onOpenOpponent: (opponentId: string) => void;
   onOpenTeam: () => void;
-  onOpenReference: () => void;
   onOpenSettings: () => void;
   onNewMatch: () => void;
 }
@@ -30,7 +29,6 @@ export function HomeScreen({
   onOpenDashboard,
   onOpenOpponent,
   onOpenTeam,
-  onOpenReference,
   onOpenSettings,
   onNewMatch,
 }: HomeScreenProps): ReactElement {
@@ -89,9 +87,6 @@ export function HomeScreen({
           </button>
           <button type="button" className="button" onClick={onOpenTeam}>
             Ons team
-          </button>
-          <button type="button" className="button" onClick={onOpenReference}>
-            Referentie
           </button>
           <button type="button" className="button" onClick={onOpenSettings}>
             Instellingen

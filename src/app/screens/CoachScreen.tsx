@@ -23,6 +23,7 @@ import { loadMatchBundle } from '../../db/bundle';
 import { ACTION_TYPE_LABELS, QUALITY_LABELS } from '../../domain/protocol';
 import { PairingSheet } from '../components/PairingSheet';
 import type { PeerSession } from '../hooks/usePeerSession';
+import { Placeholder } from '../components/Placeholder';
 import { useQuery, useStore } from '../StoreProvider';
 
 /** Stand op het moment van de laatste time-out, om het effect ervan te zien. */
@@ -136,7 +137,7 @@ export function CoachScreen({
     await store.setMeta(markKey, mark);
   }
 
-  if (!data || !briefing) return <div className="boot">Wedstrijd laden…</div>;
+  if (!data || !briefing) return <Placeholder title="Wedstrijd laden…" onExit={onExit} />;
 
   const live = briefing.cues.filter((cue) => cue.source === 'live');
   const urgent = live.filter((cue) => cue.tone === 'urgent');

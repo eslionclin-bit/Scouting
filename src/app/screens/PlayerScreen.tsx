@@ -13,6 +13,7 @@ import { loadMatchBundle } from '../../db/bundle';
 import { playerLabel, PLAYER_ROLE_LABELS } from '../../domain/players';
 import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { ACTION_TYPES } from '../../domain/types';
+import { Placeholder } from '../components/Placeholder';
 import { StatTile } from '../components/StatTile';
 import { useQuery } from '../StoreProvider';
 
@@ -42,17 +43,18 @@ export function PlayerScreen({ playerId, onExit, onOpenMatch }: PlayerScreenProp
     [data],
   );
 
-  if (error) {
+  if (error) return <Placeholder title="Er ging iets mis" hint={error.message} onExit={onExit} tone="error" />;
+  if (!data) return <Placeholder title="Speler laden…" onExit={onExit} />;
+  if (!data.player || !profile) {
     return (
-      <div className="boot boot--error">
-        <p>{error.message}</p>
-        <button type="button" className="button" onClick={onExit}>
-          Terug
-        </button>
-      </div>
+      <Placeholder
+        title="Speler niet gevonden"
+        hint="Deze speler staat niet meer in de app; misschien is hij verwijderd."
+        onExit={onExit}
+        tone="empty"
+      />
     );
   }
-  if (!data?.player || !profile) return <div className="boot">Speler laden…</div>;
 
   const attack = profile.season.byType.attack;
   const serve = profile.season.byType.serve;
