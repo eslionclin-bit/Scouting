@@ -2514,6 +2514,17 @@ button {
 
 /* Blokken doet de voorlijn; die drie vakken springen eruit zodra een blok
    verwacht wordt, want een blokpunt hoort aan een naam te hangen. */
+/* Bij onze service ligt hun helft leeg: die vakken zijn dan het doel. */
+.courtcell--target {
+  border-style: dashed;
+}
+
+.panelcard__target {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .courtcell--blocks {
   border-color: var(--us);
   box-shadow: inset 0 2px 0 var(--us);

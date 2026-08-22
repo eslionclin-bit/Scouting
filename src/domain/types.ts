@@ -170,6 +170,15 @@ export interface Rally extends BaseRecord {
   /** Rotatiestand van het eigen team (1-6) tijdens deze rally, indien bijgehouden. */
   rotationUs?: number | null;
   /**
+   * Rotatiestand van de tegenstander (1-6).
+   *
+   * Volgt uit precies dezelfde telling als die van onszelf: zij draaien door
+   * zodra zij een rally winnen waarin wij serveerden. Dat is de reden dat de app
+   * na een servicefout kan zeggen wie van hen zo meteen serveert — zonder dat
+   * iemand hun rotatie hoeft bij te houden.
+   */
+  rotationThem?: number | null;
+  /**
    * Is deze rally echt ingevoerd, of alleen als punt bijgeteld?
    *
    * Tijdens een wedstrijd raakt een invoerder wel eens een rally kwijt — een bal

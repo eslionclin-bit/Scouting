@@ -12,7 +12,8 @@ import type { ActionRow, RallyRow } from './rows';
 import { summarize, type ActionStats } from './stats';
 import type { MatchBundle } from '../db/bundle';
 import type { ErrorReason } from '../domain/errors';
-import type { ActionType, AttackTempo, BlockCount, Player, Quality, TeamSide } from '../domain/types';
+import type { ActionType, AttackTempo, BlockCount, Player, Quality, TeamSide, Zone } from '../domain/types';
+import { positionsAt } from '../domain/rotation';
 import { ATTACK_TEMPOS, BLOCK_COUNTS, QUALITIES } from '../domain/types';
 import { toActionRows, toRallyRows } from './rows';
 
@@ -345,4 +346,121 @@ export function errorsByReason(
       };
     })
     .sort((a, b) => b.errors - a.errors);
+}
+
+/** Onder dit aantal services op één plek zeggen we er niets over. */
+export const MIN_SERVES_PER_TARGET = 8;
+
+export interface ServeTarget {
+  zone: Zone;
+  /** Rugnummer van wie daar volgens hun rotatie stond, als dat bekend is. */
+  number: number | null;
+  serves: number;
+  /** Rally's die we wonnen ná een service daarheen. */
+  won: number;
+  errors: number;
+  wonPct: number | null;
+}
+
+export interface ServeTargets {
+  /** Per zone, opgeteld over alle speelsters die daar stonden. */
+  byZone: ServeTarget[];
+  /** Per zone én rugnummer: dit is waar een advies concreet van wordt. */
+  byPlayer: ServeTarget[];
+  /** Alle services met een doelzone erbij. */
+  total: number;
+  wonPct: number | null;
+}
+
+/**
+ * Waar we naartoe serveren, en wat het oplevert.
+ *
+ * De doelzone komt uit één tik op hun helft tijdens onze service. Wie daar
+ * stond wordt hier afgeleid uit hun opstelling en de rotatiestand van die rally
+ * — dus niet apart ingevoerd, en dus ook met terugwerkende kracht ingevuld
+ * zodra iemand hun zes alsnog invult.
+ *
+ * Wat het antwoord waard is, hangt aan de noemer: onder `MIN_SERVES_PER_TARGET`
+ * zegt een percentage niets, en dat staat er dan ook bij.
+ */
+export function serveTargets(
+  bundles: readonly MatchBundle[],
+  options: { setId?: string } = {},
+): ServeTargets {
+  const byZone = new Map<Zone, { serves: number; won: number; errors: number }>();
+  const byPlayer = new Map<string, ServeTarget>();
+  let total = 0;
+  let won = 0;
+
+  for (const bundle of bundles) {
+    const numberOf = new Map(bundle.players.map((player) => [player.id, player.number]));
+
+    for (const setBundle of bundle.sets) {
+      if (options.setId && setBundle.set.id !== options.setId) continue;
+
+      for (const { rally, actions } of setBundle.rallies) {
+        for (const action of actions) {
+          if (action.team !== 'us' || action.type !== 'serve') continue;
+          const zone = action.zoneTo;
+          if (zone === null || zone === undefined) continue;
+
+          total++;
+          const point = rally.wonBy === 'us';
+          if (point) won++;
+          const isError = action.quality === 'error';
+
+          const zoneTally = byZone.get(zone) ?? { serves: 0, won: 0, errors: 0 };
+          zoneTally.serves++;
+          if (point) zoneTally.won++;
+          if (isError) zoneTally.errors++;
+          byZone.set(zone, zoneTally);
+
+          // Wie daar stond volgt uit hun opstelling plus de rotatie van deze
+          // rally; ontbreekt een van die twee, dan blijft het bij de zone.
+          const lineup = setBundle.opponentLineup;
+          const playerId = lineup
+            ? positionsAt(lineup, rally.rotationThem ?? 1)[zone]
+            : null;
+          const number = playerId ? (numberOf.get(playerId) ?? null) : null;
+          if (number === null) continue;
+
+          const key = `${zone}:${number}`;
+          const row = byPlayer.get(key) ?? {
+            zone,
+            number,
+            serves: 0,
+            won: 0,
+            errors: 0,
+            wonPct: null,
+          };
+          row.serves++;
+          if (point) row.won++;
+          if (isError) row.errors++;
+          byPlayer.set(key, row);
+        }
+      }
+    }
+  }
+
+  const zones: ServeTarget[] = [...byZone.entries()]
+    .map(([zone, tally]) => ({
+      zone,
+      number: null,
+      serves: tally.serves,
+      won: tally.won,
+      errors: tally.errors,
+      wonPct: tally.serves > 0 ? tally.won / tally.serves : null,
+    }))
+    .sort((a, b) => b.serves - a.serves);
+
+  const players = [...byPlayer.values()]
+    .map((row) => ({ ...row, wonPct: row.serves > 0 ? row.won / row.serves : null }))
+    .sort((a, b) => b.serves - a.serves);
+
+  return {
+    byZone: zones,
+    byPlayer: players,
+    total,
+    wonPct: total > 0 ? won / total : null,
+  };
 }

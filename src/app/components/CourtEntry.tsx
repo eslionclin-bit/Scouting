@@ -27,6 +27,7 @@ import { isFrontZone, OPPONENT_GRID, ZONE_LABELS } from '../../domain/zones';
 import { useLongPress } from '../hooks/useLongPress';
 import {
   SERVE_SPOTS,
+  targetsOpponent,
   type CourtEntryEvent,
   type CourtEntryState,
   type CourtSelection,
@@ -39,6 +40,12 @@ export interface CourtEntryProps {
   positions: Record<Zone, string | null>;
   ownPlayers: readonly Player[];
   opponentPlayers: readonly Player[];
+  /**
+   * Rugnummer per zone bij de tegenstander, als hun opstelling bekend is. Dan
+   * staat er in hun vakken wie er staat in plaats van alleen een zonenaam — en
+   * krijgt een doelzone bij de service er vanzelf een naam bij.
+   */
+  opponentPositions?: Record<Zone, number | null>;
   settings: AppSettings;
   onCommit: (quality: Quality) => void;
   onExplain: (quality: Quality) => void;
@@ -63,6 +70,7 @@ export function CourtEntry({
   positions,
   ownPlayers,
   opponentPlayers,
+  opponentPositions,
   settings,
   onCommit,
   onExplain,
@@ -71,6 +79,9 @@ export function CourtEntry({
   const byId = new Map(ownPlayers.map((player) => [player.id, player]));
   const selection = state.selection;
   const servingSelf = state.type === 'serve' && state.selection?.team === 'us';
+  // Bij onze eigen service betekent een tik op hun helft 'daar ging hij
+  // naartoe', niet 'zij deden iets'.
+  const aiming = targetsOpponent(state);
 
   function selectOwn(zone: Zone): void {
     const playerId = positions[zone];
@@ -89,6 +100,10 @@ export function CourtEntry({
   }
 
   function selectOpponent(zone: Zone, player?: Player): void {
+    if (aiming) {
+      dispatch({ kind: 'target', zone });
+      return;
+    }
     dispatch({
       kind: 'select',
       selection: {
@@ -105,23 +120,41 @@ export function CourtEntry({
       <div className="courtentry__court">
         <p className="courtentry__side courtentry__side--them">
           Tegenstander
-          {selection?.team === 'them' ? ' · gekozen' : ''}
+          {aiming
+            ? ' · tik waar je naartoe serveert'
+            : selection?.team === 'them'
+              ? ' · gekozen'
+              : ''}
         </p>
 
         <div className="courtplan">
           <div className="courtplan__half courtplan__half--them">
             {THEM_ORDER.map((zone) => {
-              const picked = selection?.team === 'them' && selection.zone === zone;
+              const picked = aiming
+                ? state.target === zone
+                : selection?.team === 'them' && selection.zone === zone;
+              const number =
+                settings.showOpponentNumbers ? (opponentPositions?.[zone] ?? null) : null;
               return (
                 <button
                   key={`them-${zone}`}
                   type="button"
-                  className={`courtcell courtcell--them ${picked ? 'courtcell--picked' : ''}`}
-                  aria-label={`Tegenstander ${ZONE_LABELS[zone]}`}
+                  className={[
+                    'courtcell',
+                    'courtcell--them',
+                    picked ? 'courtcell--picked' : '',
+                    aiming ? 'courtcell--target' : '',
+                  ].join(' ')}
+                  aria-label={
+                    aiming
+                      ? `Serveren op ${ZONE_LABELS[zone]}${number !== null ? `, nummer ${number}` : ''}`
+                      : `Tegenstander ${ZONE_LABELS[zone]}${number !== null ? `, nummer ${number}` : ''}`
+                  }
                   aria-pressed={picked}
                   onClick={() => selectOpponent(zone)}
                 >
                   <span className="courtcell__zone">{zone}</span>
+                  {number !== null && <span className="courtcell__number">{number}</span>}
                   <span className="courtcell__name">{shortZone(zone)}</span>
                 </button>
               );
@@ -196,6 +229,17 @@ export function CourtEntry({
           <p className="panelcard__who">
             {describeSelection(selection, byId, opponentPlayers, settings)}
           </p>
+          {aiming && (
+            <p className="panelcard__target">
+              {state.target === null
+                ? 'naar: nog niet aangetikt'
+                : `naar ${shortZone(state.target)}${
+                    opponentPositions?.[state.target] != null
+                      ? ` · #${opponentPositions[state.target]}`
+                      : ''
+                  }`}
+            </p>
+          )}
         </div>
 
         <div className="panelcard">

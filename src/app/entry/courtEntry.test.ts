@@ -26,6 +26,7 @@ describe('veldinvoer', () => {
       playerId: 'p9',
       playerNumber: 9,
       zoneFrom: 4,
+      zoneTo: null,
     });
   });
 

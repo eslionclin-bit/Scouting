@@ -17,6 +17,7 @@ import { ACTION_TYPE_LABELS } from '../domain/protocol';
 import type { TeamSide } from '../domain/types';
 import { ZONE_LABELS } from '../domain/zones';
 import { buildPlayerProfile, compareForm, type FormComparison } from './player';
+import { MIN_SERVES_PER_TARGET, serveTargets } from './chains';
 import { buildOpponentDossier } from './opponent';
 import { filterActions, toActionRows, toRallyRows, type RallyRow } from './rows';
 import { statsByPlayer, statsByRotation, statsByType, zoneTally, type RotationStats } from './stats';
@@ -144,6 +145,7 @@ export function buildCoachBriefing(
   briefing.cues = [
     ...collectCues(bundle, briefing, { setRallies, oursInSet, receiveRallies }),
     ...formCues(bundle, options),
+    ...serveCues(bundle, options),
     ...historyCues(bundle, options),
   ];
   briefing.talkingPoints = briefing.cues
@@ -333,6 +335,69 @@ function formCues(bundle: MatchBundle, options: CoachBriefingOptions): CoachCue[
         sample: entry.actionsNow,
       });
     }
+  }
+
+  return cues;
+}
+
+/**
+ * Waar we naartoe moeten serveren.
+ *
+ * Dit is de aanwijzing waar een coach het meest aan heeft en die tot nu toe
+ * niet te geven was: niet 'serveer scherp', maar 'serveer op positie 5, zeker
+ * als #38 daar staat'. Hij komt uit één tik per service — de doelzone — plus
+ * hun rotatie, die de app zelf bijhoudt.
+ *
+ * Deze wedstrijd én eerdere wedstrijden tegen dezelfde ploeg tellen mee: een
+ * zwakke passer blijft doorgaans een zwakke passer, en juist bij een tweede
+ * ontmoeting is dat het voorwerk waard.
+ */
+function serveCues(bundle: MatchBundle, options: CoachBriefingOptions): CoachCue[] {
+  const bundles = [
+    bundle,
+    ...(options.opponentHistory ?? []).filter((entry) => entry.match.id !== bundle.match.id),
+  ];
+  const targets = serveTargets(bundles);
+  if (targets.total < MIN_SERVES_PER_TARGET * 2 || targets.wonPct === null) return [];
+
+  const cues: CoachCue[] = [];
+
+  // Eerst op de speelster, want dat is het scherpste advies. Alleen als hij
+  // duidelijk beter is dan wat we gemiddeld op een service halen.
+  const onPlayer = targets.byPlayer
+    .filter((row) => row.serves >= MIN_SERVES_PER_TARGET && row.wonPct !== null)
+    .sort((a, b) => (b.wonPct ?? 0) - (a.wonPct ?? 0))[0];
+  if (onPlayer?.wonPct != null && onPlayer.wonPct - targets.wonPct >= 0.1) {
+    cues.push({
+      code: 'serve_target_player',
+      tone: 'good',
+      source: 'live',
+      title: `Serveer op #${onPlayer.number} in ${ZONE_LABELS[onPlayer.zone].toLowerCase()}`,
+      detail: `${Math.round(onPlayer.wonPct * 100)}% van die rally's gewonnen (${
+        onPlayer.serves
+      } services), tegenover ${Math.round(targets.wonPct * 100)}% op al onze services.`,
+      sample: onPlayer.serves,
+    });
+  }
+
+  const onZone = targets.byZone
+    .filter((row) => row.serves >= MIN_SERVES_PER_TARGET && row.wonPct !== null)
+    .sort((a, b) => (b.wonPct ?? 0) - (a.wonPct ?? 0))[0];
+  if (
+    onZone?.wonPct != null &&
+    onZone.wonPct - targets.wonPct >= 0.1 &&
+    onZone.zone !== onPlayer?.zone
+  ) {
+    cues.push({
+      code: 'serve_target_zone',
+      tone: 'good',
+      source: 'live',
+      title: `Serveer op ${ZONE_LABELS[onZone.zone].toLowerCase()}`,
+      detail: `${Math.round(onZone.wonPct * 100)}% van die rally's gewonnen (${
+        onZone.serves
+      } services), tegenover ${Math.round(targets.wonPct * 100)}% op al onze services.`,
+      sample: onZone.serves,
+    });
   }
 
   return cues;

@@ -6,6 +6,7 @@ import {
   attackByPhase,
   attackByTempo,
   attackDistribution,
+  serveTargets,
   sideoutByPass,
 } from './chains';
 import { toActionRows } from './rows';
@@ -326,5 +327,71 @@ describe('ketens in een echte wedstrijd', () => {
     expect(reception.stats.total + transition.stats.total).toBe(attacks.length);
 
     store.close();
+  });
+});
+
+describe('waar we naartoe serveren', () => {
+  let store: ScoutingStore;
+  let fixture: TestMatchFixture;
+
+  beforeEach(async () => {
+    store = await openTestStore();
+    fixture = await seedMatch(store);
+  });
+
+  afterEach(() => store.close());
+
+  /** Eén service met een doelzone, en wie de rally wint. */
+  async function serveTo(zone: Zone, wonBy: TeamSide): Promise<void> {
+    const rally = await store.rallies.start({ setId: fixture.set.id, servingTeam: 'us' });
+    await store.actions.append({
+      rallyId: rally.id,
+      team: 'us',
+      type: 'serve',
+      quality: wonBy === 'us' ? 'good' : 'poor',
+      playerId: fixture.players[0]!.id,
+      zoneFrom: 1,
+      zoneTo: zone,
+    });
+    await store.rallies.complete(rally.id, wonBy);
+  }
+
+  it('telt per zone hoe vaak we de rally wonnen', async () => {
+    for (let i = 0; i < 6; i++) await serveTo(5, 'us');
+    for (let i = 0; i < 4; i++) await serveTo(1, 'them');
+
+    const targets = serveTargets([await loadMatchBundle(store, fixture.match.id)]);
+
+    expect(targets.total).toBe(10);
+    expect(targets.wonPct).toBeCloseTo(0.6);
+
+    const five = targets.byZone.find((row) => row.zone === 5);
+    expect(five).toMatchObject({ serves: 6, won: 6 });
+    expect(five?.wonPct).toBe(1);
+
+    // Zonder hun opstelling blijft het bij de zone: raden wie daar stond doen
+    // we niet.
+    expect(targets.byPlayer).toStrictEqual([]);
+  });
+
+  it('hangt er een rugnummer aan zodra hun opstelling bekend is', async () => {
+    const them = await store.players.createMany([
+      { teamId: fixture.opponent.id, number: 38, name: '' },
+      { teamId: fixture.opponent.id, number: 3, name: '' },
+    ]);
+    await store.lineups.set({
+      setId: fixture.set.id,
+      team: 'them',
+      positions: { 1: them[1]!.id, 2: null, 3: null, 4: null, 5: them[0]!.id, 6: null },
+    });
+
+    // Wij serveren en winnen alles: hun rotatie blijft dus staan, en #38 blijft
+    // in zone 5.
+    for (let i = 0; i < 8; i++) await serveTo(5, 'us');
+
+    const targets = serveTargets([await loadMatchBundle(store, fixture.match.id)]);
+
+    expect(targets.byPlayer).toHaveLength(1);
+    expect(targets.byPlayer[0]).toMatchObject({ zone: 5, number: 38, serves: 8, won: 8 });
   });
 });

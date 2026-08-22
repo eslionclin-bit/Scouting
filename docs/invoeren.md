@@ -100,6 +100,26 @@ Hetzelfde geldt voor hun blok. Wie van hen blokte doet er voor ons niet toe; hoe
 vaak wij tegen één, twee of drie blokkeerders aanliepen wél, en dat staat al bij
 onze eigen aanval.
 
+## De tegenstander: hun opstelling en waar je naartoe serveert
+
+Onder 'Hun opstelling' (achter de ⋯) vul je hun zes rugnummers in, zoals ze er
+op dat moment staan. De app rekent zelf terug naar het begin van de set en telt
+hun rotatie daarna net zo door als die van ons: zij draaien zodra zij een rally
+winnen waarin wij serveerden. Voer je dus een servicefout in, dan staat er
+meteen bij wie er bij hen aan de opslag komt.
+
+Het is optioneel — zonder werkt alles gewoon — maar het levert twee dingen op:
+
+- **Wie van hen serveert**, boven in de balk.
+- **Op wie je serveert.** Tijdens onze eigen service ligt hun helft leeg; een tik
+  daar betekent dan 'daar ging hij naartoe' en niet 'zij deden iets'. Wie daar
+  stond leidt de app af uit hun opstelling plus de rotatie van die rally. Vul je
+  hun zes pas later in, dan krijgen de al ingevoerde services die naam alsnog.
+
+Dat is wat 'serveer op positie 5, zeker als #38 daar staat' mogelijk maakt: het
+staat op het dashboard onder 'Waar we naartoe serveren' en komt als aanwijzing
+terug op het coachscherm.
+
 ## Punt zonder actie
 
 De stand volgt normaal uit de actie zelf: een kill is een punt, een fout is een

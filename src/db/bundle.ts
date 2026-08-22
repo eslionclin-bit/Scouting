@@ -28,6 +28,12 @@ export interface SetBundle {
   rallies: RallyBundle[];
   /** Startopstelling van het eigen team, als die is vastgelegd. */
   lineup: Lineup | undefined;
+  /**
+   * Startopstelling van de tegenstander, als die is ingevuld. Optioneel, maar
+   * het is wat een doelzone bij de service een naam geeft: met hun rotatie
+   * erbij is 'zone 5' opeens '#38'.
+   */
+  opponentLineup: Lineup | undefined;
   substitutions: Substitution[];
 }
 
@@ -65,14 +71,16 @@ export async function loadMatchBundle(
 
   const setBundles: SetBundle[] = [];
   for (const set of sets) {
-    const [rallies, lineup, substitutions] = await Promise.all([
+    const [rallies, lineup, opponentLineup, substitutions] = await Promise.all([
       store.rallies.listBySet(set.id),
       store.lineups.forSet(set.id),
+      store.lineups.forSet(set.id, 'them'),
       store.substitutions.listBySet(set.id),
     ]);
     setBundles.push({
       set,
       lineup,
+      opponentLineup,
       substitutions,
       rallies: rallies.map((rally) => ({
         rally,

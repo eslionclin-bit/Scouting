@@ -11,6 +11,8 @@ import { useMemo, useState, type ReactElement } from 'react';
 import { loadMatchBundle } from '../../db/bundle';
 import {
   attackByBlock,
+  serveTargets,
+  MIN_SERVES_PER_TARGET,
   attackByPhase,
   attackByTempo,
   errorsByReason,
@@ -32,6 +34,7 @@ import { ACTION_TYPES, type ActionType } from '../../domain/types';
 import { QualityBar, QualityLegend } from '../components/QualityBar';
 import { ATTACK_TEMPO_LABELS, BLOCK_LABELS } from '../../domain/attack';
 import { ERROR_REASON_LABELS } from '../../domain/errors';
+import { ZONE_LABELS } from '../../domain/zones';
 import { Placeholder } from '../components/Placeholder';
 import { MetricTable } from '../components/MetricTable';
 import { PassValue } from '../components/PassValue';
@@ -126,6 +129,7 @@ export function DashboardScreen({
       tempo: { us: attackByTempo(actionRows, 'us'), them: attackByTempo(actionRows, 'them') },
       block: { us: attackByBlock(actionRows, 'us'), them: attackByBlock(actionRows, 'them') },
       errors: errorsByReason(actionRows, 'us'),
+      serve: serveTargets([bundle], setId ? { setId } : {}),
       pointsUs: rallyRows.filter((row) => row.rally.wonBy === 'us').length,
       pointsThem: rallyRows.filter((row) => row.rally.wonBy === 'them').length,
       sideoutPct: receiveRallies > 0 ? sideouts / receiveRallies : null,
@@ -379,6 +383,65 @@ export function DashboardScreen({
           <p className="card__hint">
             Nog geen aanval waarbij het blok is ingevuld. Dat is de tweede tik in de aanvalsvraag.
           </p>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Waar we naartoe serveren</h2>
+        {view.serve.total === 0 ? (
+          <p className="card__hint">
+            Nog geen service met een doelzone. Tik tijdens onze service op hun helft waar de bal
+            heen gaat — dat is één tik, en het is de enige manier om 'serveer op positie 5' ooit te
+            kunnen zeggen.
+          </p>
+        ) : (
+          <>
+            <p className="card__hint">
+              Per plek: hoe vaak we daarheen serveerden en hoe vaak we die rally wonnen. Het
+              rugnummer erbij volgt uit hun opstelling en de rotatie van die rally — invullen onder
+              'Hun opstelling' vult deze kolom ook met terugwerkende kracht. Onder{' '}
+              {MIN_SERVES_PER_TARGET} services zegt een percentage nog niets; dat staat erbij.
+            </p>
+            <div className="tablewrap">
+              <table className="stats">
+                <thead>
+                  <tr>
+                    <th scope="col">Plek</th>
+                    <th scope="col">Services</th>
+                    <th scope="col">Rally gewonnen</th>
+                    <th scope="col">Servicefouten</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...view.serve.byPlayer, ...view.serve.byZone].map((row) => (
+                    <tr key={`${row.zone}:${row.number ?? 'zone'}`}>
+                      <th scope="row">
+                        {row.number === null
+                          ? ZONE_LABELS[row.zone]
+                          : `#${row.number} in ${ZONE_LABELS[row.zone].toLowerCase()}`}
+                      </th>
+                      <td>{row.serves}</td>
+                      <td>
+                        {row.wonPct === null ? '—' : `${Math.round(row.wonPct * 100)}%`}
+                        {row.serves < MIN_SERVES_PER_TARGET && (
+                          <span className="metrics__sample">te weinig om iets van te vinden</span>
+                        )}
+                      </td>
+                      <td>{row.errors}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <th scope="row">Alles bij elkaar</th>
+                    <td>{view.serve.total}</td>
+                    <td>
+                      {view.serve.wonPct === null ? '—' : `${Math.round(view.serve.wonPct * 100)}%`}
+                    </td>
+                    <td />
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 

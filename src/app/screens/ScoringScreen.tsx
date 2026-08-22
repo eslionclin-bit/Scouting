@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type ReactElement } from 'react';
 import { EntryPanel, type NewPlayerInput } from '../components/EntryPanel';
 import { LineupSheet } from '../components/LineupSheet';
+import { OpponentLineupSheet } from '../components/OpponentLineupSheet';
 import { PairingSheet } from '../components/PairingSheet';
 import { ActionFixSheet } from '../components/ActionFixSheet';
 import { CourtEntry } from '../components/CourtEntry';
@@ -33,7 +34,7 @@ import {
 import { matchStatus, rulesOf, setOutcome } from '../../domain/scoring';
 import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
-import type { Action, Player, Quality, TeamSide, Zone } from '../../domain/types';
+import { ZONES, type Action, type Player, type Quality, type TeamSide, type Zone } from '../../domain/types';
 
 export interface ScoringScreenProps {
   matchId: string;
@@ -71,6 +72,7 @@ export function ScoringScreen({
   );
   const [explain, setExplain] = useState<Quality | null>(null);
   const [showLineup, setShowLineup] = useState(false);
+  const [showThemLineup, setShowThemLineup] = useState(false);
   const [showPairing, setShowPairing] = useState(false);
   const [showScoreFix, setShowScoreFix] = useState(false);
   const [showActionFix, setShowActionFix] = useState(false);
@@ -106,9 +108,10 @@ export function ScoringScreen({
       if (!rally) {
         return { match, ownTeam, opponent, ownPlayers, opponentPlayers, sets, set, rally: null };
       }
-      const [actions, lineup, substitutions, setActions] = await Promise.all([
+      const [actions, lineup, themLineup, substitutions, setActions] = await Promise.all([
         instance.actions.listByRally(rally.id),
         instance.lineups.forSet(set.id),
+        instance.lineups.forSet(set.id, 'them'),
         instance.substitutions.listBySet(set.id),
         instance.actions.listBySet(set.id),
       ]);
@@ -123,6 +126,7 @@ export function ScoringScreen({
         rally,
         actions,
         lineup,
+        themLineup,
         substitutions,
         setActions,
       };
@@ -165,6 +169,26 @@ export function ScoringScreen({
   }, [data?.lineup, data?.rally?.rotationUs, data?.substitutions, playersById]);
 
   /**
+   * Hun zes, als rugnummer per zone.
+   *
+   * Hun rotatie telt met precies dezelfde regel door als die van ons — zij
+   * draaien zodra zij een rally winnen waarin wij serveerden — en die stand
+   * staat al bij de rally. Vandaar dat de app na een servicefout van ons kan
+   * zeggen wie er bij hen zo aan de opslag komt, zonder dat iemand hun rotatie
+   * bijhoudt.
+   */
+  const themPositions = useMemo(() => {
+    if (!data?.themLineup) return null;
+    const ids = positionsAt(data.themLineup, data.rally?.rotationThem ?? 1);
+    const numbers = {} as Record<Zone, number | null>;
+    for (const zone of ZONES) {
+      const playerId = ids[zone];
+      numbers[zone] = playerId ? (playersById.get(playerId)?.number ?? null) : null;
+    }
+    return numbers;
+  }, [data?.themLineup, data?.rally?.rotationThem, playersById]);
+
+  /**
    * Wie er hoort te serveren. Met een opstelling weet de app dat exact: dat is
    * wie er in deze rotatie in zone 1 staat. Zonder opstelling blijft dezelfde
    * speler serveren zolang wij aan service blijven — precies zoals in het veld.
@@ -191,7 +215,17 @@ export function ScoringScreen({
   useEffect(() => {
     const open = data?.rally;
     if (!open || prefilledRallyRef.current === open.id) return;
-    if ((data?.actions?.length ?? 0) > 0 || open.servingTeam !== 'us' || !expectedServerId) return;
+    if ((data?.actions?.length ?? 0) > 0) return;
+
+    // Serveert de tegenstander, dan is dat de verwachting — niet onze service.
+    // Anders zou een tik op hun helft als serveerdoel worden gelezen terwijl
+    // zij aan de opslag zijn.
+    if (open.servingTeam !== 'us') {
+      prefilledRallyRef.current = open.id;
+      dispatchCourt({ kind: 'expect', team: 'them', type: 'serve' });
+      return;
+    }
+    if (!expectedServerId) return;
 
     prefilledRallyRef.current = open.id;
     dispatch({ kind: 'player', playerId: expectedServerId });
@@ -396,6 +430,31 @@ export function ScoringScreen({
     await store.players.create({ teamId, number: input.number, name: input.name });
   }
 
+  /**
+   * Hun opstelling bewaren. De invoerder tikt rugnummers in; spelers die we nog
+   * niet kenden worden hier aangemaakt, want zonder speler is er niets om aan
+   * op te hangen.
+   */
+  async function saveThemLineup(atStart: Record<Zone, number | null>): Promise<void> {
+    if (!data?.set) return;
+    try {
+      const teamId = data.match.opponentTeamId;
+      const positions = emptyPositions();
+      for (const zone of ZONES) {
+        const number = atStart[zone];
+        if (number === null) continue;
+        const existing = await store.players.byNumber(teamId, number);
+        const player = existing ?? (await store.players.create({ teamId, number, name: '' }));
+        positions[zone] = player.id;
+      }
+      await store.lineups.set({ setId: data.set.id, team: 'them', positions });
+      setShowThemLineup(false);
+      push('info', 'Opstelling van de tegenstander vastgelegd.');
+    } catch (cause) {
+      push('error', cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function saveLineup(
     positions: Record<Zone, string | null>,
     liberoId: string | null,
@@ -469,6 +528,15 @@ export function ScoringScreen({
             {match.homeAway === 'home' ? 'thuis' : 'uit'} tegen {opponent?.name ?? 'onbekend'} · rally{' '}
             {rally.sequence} · service {TEAM_SIDE_LABELS[rally.servingTeam].toLowerCase()} · rotatie R
             {rally.rotationUs ?? 1}
+            {/*
+              Zij draaien door zodra zij een rally winnen waarin wij serveerden.
+              Voer je dus een servicefout in, dan staat hier meteen wie er bij
+              hen aan de opslag komt — dat volgt uit hun rotatie, niemand hoeft
+              die bij te houden.
+            */}
+            {rally.servingTeam === 'them' && themPositions?.[1] != null && (
+              <> · hun service #{themPositions[1]}</>
+            )}
           </span>
         </div>
 
@@ -490,6 +558,15 @@ export function ScoringScreen({
           {leads && (
             <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
               Opstelling
+            </button>
+          )}
+          {leads && showMore && (
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => setShowThemLineup(true)}
+            >
+              Hun opstelling
             </button>
           )}
           <button type="button" className="button button--ghost" onClick={onOpenDashboard}>
@@ -610,6 +687,7 @@ export function ScoringScreen({
           positions={court?.positions ?? emptyPositions()}
           ownPlayers={data.ownPlayers}
           opponentPlayers={data.opponentPlayers}
+          opponentPositions={themPositions ?? undefined}
           settings={settingsOrDefault}
           expectedServerId={expectedServerId}
           onCommit={(quality) => void commitAction(quality)}
@@ -698,6 +776,18 @@ export function ScoringScreen({
           onSaveLineup={(positions, liberoId) => void saveLineup(positions, liberoId)}
           onSubstitute={(out, into) => void substitute(out, into)}
           onClose={() => setShowLineup(false)}
+        />
+      )}
+
+      {showThemLineup && (
+        <OpponentLineupSheet
+          current={themPositions ?? { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null }}
+          rotation={rally.rotationThem ?? 1}
+          known={[...new Set(data.opponentPlayers.map((player) => player.number))].sort(
+            (a, b) => a - b,
+          )}
+          onSave={(atStart) => void saveThemLineup(atStart)}
+          onClose={() => setShowThemLineup(false)}
         />
       )}
 

@@ -29,12 +29,23 @@ export interface CourtEntryState {
   expectedTeam: TeamSide;
   /** Heeft de invoerder de voorspelling overruled? Dan niet opnieuw voorspellen. */
   typeChosen: boolean;
+  /**
+   * Waar de bal naartoe ging: de zone op de helft van de tegenstander.
+   *
+   * Voorlopig alleen bij onze eigen service, en juist daar is het het meest
+   * waard. 'Serveer op positie 5' is pas een advies als de app weet waar er
+   * geserveerd wérd; wie daar stond volgt daarna uit hun rotatie, dus dat hoeft
+   * niemand er apart bij te tikken.
+   */
+  target: Zone | null;
 }
 
 export type CourtEntryEvent =
   | { kind: 'select'; selection: CourtSelection }
   | { kind: 'type'; type: ActionType }
   | { kind: 'serveSpot'; zone: Zone }
+  /** Doelzone op de helft van de tegenstander. */
+  | { kind: 'target'; zone: Zone }
   | { kind: 'clear' }
   /** Nieuwe verwachting na een opgeslagen actie of een nieuwe rally. */
   | { kind: 'expect'; team: TeamSide; type: ActionType; selection?: CourtSelection | null };
@@ -44,7 +55,19 @@ export function initialCourtState(
   type: ActionType = 'serve',
   selection: CourtSelection | null = null,
 ): CourtEntryState {
-  return { selection, type, expectedTeam: team, typeChosen: false };
+  return { selection, type, expectedTeam: team, typeChosen: false, target: null };
+}
+
+/**
+ * Betekent een tik op de helft van de tegenstander 'daar ging de bal naartoe'
+ * in plaats van 'zij deden iets'?
+ *
+ * Bij onze eigen service wel. Dat is het enige moment waarop hun helft leeg
+ * ligt en de tik geen andere betekenis kán hebben — en meteen het moment waarop
+ * de doelzone het meest oplevert.
+ */
+export function targetsOpponent(state: CourtEntryState): boolean {
+  return state.type === 'serve' && state.expectedTeam === 'us';
 }
 
 /**
@@ -84,6 +107,9 @@ export function courtEntryReducer(
       // Een andere ploeg kiezen wist de selectie: de vakken van de ene helft
       // zeggen niets over de andere.
       return { ...state, type: event.type, typeChosen: true };
+
+    case 'target':
+      return { ...state, target: event.zone };
 
     case 'serveSpot':
       return state.selection
@@ -166,6 +192,7 @@ export function toCourtDraft(
   playerId: string | null;
   playerNumber: number | null;
   zoneFrom: Zone | null;
+  zoneTo: Zone | null;
 } | null {
   if (!state.selection) return null;
   return {
@@ -175,5 +202,6 @@ export function toCourtDraft(
     playerId: state.selection.playerId,
     playerNumber: state.selection.playerNumber,
     zoneFrom: state.selection.zone,
+    zoneTo: state.target,
   };
 }

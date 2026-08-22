@@ -44,15 +44,20 @@ const NEXT_ZONE: Record<Zone, Zone> = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 1 };
 /**
  * Draait de opstelling met de klok mee: wie in zone 2 stond, staat na één
  * rotatie in zone 1 en serveert.
+ *
+ * Generiek in wat er per zone staat, want bij de tegenstander is dat een
+ * rugnummer en bij onszelf een speler-id. Een negatief aantal draait terug —
+ * dat is hoe een opstelling die je halverwege de set invult wordt teruggerekend
+ * naar het begin.
  */
-export function rotatePositions(
-  positions: Record<Zone, string | null>,
+export function rotatePositions<T>(
+  positions: Record<Zone, T>,
   times: number,
-): Record<Zone, string | null> {
+): Record<Zone, T> {
   const steps = ((times % 6) + 6) % 6;
   let current = { ...positions };
   for (let i = 0; i < steps; i++) {
-    const next = {} as Record<Zone, string | null>;
+    const next = {} as Record<Zone, T>;
     for (const zone of ZONES) next[zone] = current[NEXT_ZONE[zone]];
     current = next;
   }

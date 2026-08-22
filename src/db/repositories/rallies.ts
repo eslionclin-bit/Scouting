@@ -69,6 +69,9 @@ export class RallyRepository {
       // bij te houden: één systeem in plaats van rotatie op papier ernaast.
       rotationUs:
         input.rotationUs ?? rotationForNextRally(rallies, set.startingServe ?? 'us', 'us'),
+      // Hun rotatie telt op precies dezelfde manier door. Bijhouden hoeft
+      // niemand: het volgt uit de rally's die er al staan.
+      rotationThem: rotationForNextRally(rallies, set.startingServe ?? 'us', 'them'),
       scouted: true,
     });
     await commit(this.ctx, [{ entity: 'rallies', record }]);
@@ -106,6 +109,7 @@ export class RallyRepository {
               pointsUsAfter: null,
               pointsThemAfter: null,
               rotationUs: rotationForNextRally(rallies, set.startingServe ?? 'us', 'us'),
+              rotationThem: rotationForNextRally(rallies, set.startingServe ?? 'us', 'them'),
               scouted: false,
             });
 

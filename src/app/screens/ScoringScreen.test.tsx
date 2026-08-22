@@ -323,6 +323,40 @@ describe('ScoringScreen: regels van het spel', () => {
     });
   });
 
+  it('legt bij onze service met een tik op hun helft vast waar hij naartoe ging', async () => {
+    const user = userEvent.setup();
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    const [sanne, noor, fem] = fixture.players;
+
+    await store.lineups.set({
+      setId: fixture.set.id,
+      positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
+    });
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    // Wij serveren: hun helft ligt leeg, dus een tik daar is het doel en niet
+    // een actie van hen.
+    await user.click(await screen.findByRole('button', { name: 'Serveren op Zone 5 (linksachter)' }));
+    await user.click(screen.getByRole('button', { name: 'Perfect' }));
+
+    await waitFor(async () => {
+      const actions = await store.actions.listBySet(fixture.set.id);
+      expect(actions[0]).toMatchObject({ team: 'us', type: 'serve', zoneTo: 5 });
+    });
+  });
+
   it('legt een actie van de tegenstander vast door op hun zone te tikken', async () => {
     const user = userEvent.setup();
     const store = await openTestStore();
@@ -333,6 +367,9 @@ describe('ScoringScreen: regels van het spel', () => {
       setId: fixture.set.id,
       positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
     });
+    // Zij winnen een punt, dus zij serveren: nu betekent een tik op hun helft
+    // wél een actie van hen.
+    await store.rallies.addMissedPoint({ setId: fixture.set.id, wonBy: 'them' });
 
     render(
       <StoreProvider store={store}>
