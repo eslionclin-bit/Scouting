@@ -12,6 +12,7 @@ import { NewMatchScreen } from './screens/NewMatchScreen';
 import { OpponentScreen } from './screens/OpponentScreen';
 import { PlayerScreen } from './screens/PlayerScreen';
 import { ReferenceScreen } from './screens/ReferenceScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
 import { ScoringScreen } from './screens/ScoringScreen';
 import { TeamScreen } from './screens/TeamScreen';
 import { CoachScreen } from './screens/CoachScreen';
@@ -26,6 +27,7 @@ type View =
   | { name: 'opponent'; opponentId: string }
   | { name: 'player'; playerId: string; back: View }
   | { name: 'reference' }
+  | { name: 'settings' }
   | { name: 'team' };
 
 export function App(): ReactElement {
@@ -128,6 +130,8 @@ export function App(): ReactElement {
     }
     case 'reference':
       return <ReferenceScreen onExit={() => setView({ name: 'home' })} />;
+    case 'settings':
+      return <SettingsScreen onExit={() => setView({ name: 'home' })} />;
     case 'team':
       return (
         <TeamScreen
@@ -164,6 +168,7 @@ export function App(): ReactElement {
           onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
           onOpenTeam={() => setView({ name: 'team' })}
           onOpenReference={() => setView({ name: 'reference' })}
+          onOpenSettings={() => setView({ name: 'settings' })}
           onOpenMatch={(matchId, role) => {
             void store.setActiveMatchId(matchId);
             void store.setMatchRole(matchId, role);

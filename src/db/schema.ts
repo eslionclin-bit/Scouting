@@ -124,4 +124,5 @@ export const META_KEYS = {
   lastSyncAt: 'sync.lastSyncAt',
   deviceRole: 'device.role',
   activeMatchId: 'app.activeMatchId',
+  settings: 'app.settings',
 } as const;

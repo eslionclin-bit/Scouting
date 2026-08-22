@@ -8,6 +8,7 @@
 
 import { HybridClock, type HlcState } from '../domain/clock';
 import { getDeviceId } from '../domain/ids';
+import { withDefaults, type AppSettings } from '../domain/settings';
 import type { DeviceRole } from '../domain/types';
 import { applyRemoteChanges, type MergeResult } from '../sync/merge';
 import type { ChangeEnvelope } from '../sync/types';
@@ -133,6 +134,17 @@ export class ScoutingStore {
 
   async setMatchRole(matchId: string, role: DeviceRole): Promise<void> {
     await this.setMeta(`${META_KEYS.deviceRole}.${matchId}`, role);
+  }
+
+  /** Voorkeuren van dit apparaat; ontbrekende velden vallen terug op de standaard. */
+  async getSettings(): Promise<AppSettings> {
+    return withDefaults(await this.getMeta<Partial<AppSettings>>(META_KEYS.settings));
+  }
+
+  async updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+    const next = { ...(await this.getSettings()), ...patch };
+    await this.setMeta(META_KEYS.settings, next);
+    return next;
   }
 
   async getActiveMatchId(): Promise<string | null> {

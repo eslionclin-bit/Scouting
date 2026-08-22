@@ -12,7 +12,8 @@ import { EntryPanel, type NewPlayerInput } from '../components/EntryPanel';
 import { LineupSheet } from '../components/LineupSheet';
 import { PairingSheet } from '../components/PairingSheet';
 import { ActionFixSheet } from '../components/ActionFixSheet';
-import { ErrorReasonBar } from '../components/ErrorReasonBar';
+import { CourtEntry } from '../components/CourtEntry';
+import { RefineBar, type RefinePatch } from '../components/RefineBar';
 import { ScoreFixSheet } from '../components/ScoreFixSheet';
 import { ProtocolSheet } from '../components/ProtocolSheet';
 import { RallyChain } from '../components/RallyChain';
@@ -21,7 +22,14 @@ import type { PeerSession } from '../hooks/usePeerSession';
 import { useToasts } from '../hooks/useToasts';
 import { useQuery, useStore } from '../StoreProvider';
 import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryReducer';
-import { courtPositions, positionsAt } from '../../domain/rotation';
+import { courtPositions, emptyPositions, positionsAt } from '../../domain/rotation';
+import { DEFAULT_SETTINGS } from '../../domain/settings';
+import {
+  courtEntryReducer,
+  expectedNext,
+  initialCourtState,
+  toCourtDraft,
+} from '../entry/courtEntry';
 import { matchStatus, rulesOf, setOutcome } from '../../domain/scoring';
 import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
@@ -53,15 +61,27 @@ export function ScoringScreen({
   const store = useStore();
   const { messages, push, dismiss } = useToasts();
   const [entry, dispatch] = useReducer(entryReducer, initialEntryState('us'));
+  const [courtEntry, dispatchCourt] = useReducer(
+    courtEntryReducer,
+    initialCourtState('us', 'serve'),
+  );
+  // Een tablet in liggende stand; daaronder blijft de stapsgewijze invoer beter.
+  const [wideEnough, setWideEnough] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 900,
+  );
   const [explain, setExplain] = useState<Quality | null>(null);
   const [showLineup, setShowLineup] = useState(false);
   const [showPairing, setShowPairing] = useState(false);
   const [showScoreFix, setShowScoreFix] = useState(false);
   const [showActionFix, setShowActionFix] = useState(false);
-  /** De zojuist ingevoerde fout, zolang de vraag 'waardoor?' nog openstaat. */
-  const [lastError, setLastError] = useState<Action | null>(null);
+  /** De knoppen die je zelden nodig hebt staan achter één knop; de balk was vol. */
+  const [showMore, setShowMore] = useState(false);
+  /** De zojuist ingevoerde actie, zolang de verfijnbalk nog openstaat. */
+  const [refining, setRefining] = useState<Action | null>(null);
   /** Bij welke stand de invoerder 'nog niet' zei tegen het sluiten van de set. */
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
+
+  const { data: settings } = useQuery(async (instance) => instance.getSettings(), []);
 
   const { data, error } = useQuery(
     async (instance) => {
@@ -109,6 +129,12 @@ export function ScoringScreen({
     },
     [matchId, leads],
   );
+
+  useEffect(() => {
+    const onResize = (): void => setWideEnough(window.innerWidth >= 900);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const playersById = useMemo(() => {
     const map = new Map<string, Player>();
@@ -169,6 +195,19 @@ export function ScoringScreen({
 
     prefilledRallyRef.current = open.id;
     dispatch({ kind: 'player', playerId: expectedServerId });
+    // In de veldinvoer staat de server meteen geselecteerd: dan is een ace één
+    // tik. De plek achter de lijn staat op 'midden' tot je een andere kiest.
+    dispatchCourt({
+      kind: 'expect',
+      team: 'us',
+      type: 'serve',
+      selection: {
+        team: 'us',
+        playerId: expectedServerId,
+        playerNumber: null,
+        zone: 6,
+      },
+    });
   }, [data?.rally, data?.actions, expectedServerId]);
 
   if (error) return <ErrorState message={error.message} onExit={onExit} />;
@@ -197,10 +236,18 @@ export function ScoringScreen({
   const lastAction = actions?.at(-1);
   const blockedPlayerId = lastAction && lastAction.type !== 'block' ? lastAction.playerId : null;
 
+  /**
+   * Invoeren op het veld kan alleen met een opstelling: zonder die zes weet de
+   * app niet wie waar staat, en dan is de stapsgewijze invoer beter. Op een
+   * smal scherm ook: zes vakken plus knoppen passen niet op een telefoon.
+   */
+  const useCourt = court !== null && wideEnough;
+  const settingsOrDefault = settings ?? DEFAULT_SETTINGS;
+
   const needsServeChoice = set.startingServe === null;
 
   async function commitAction(quality: Quality): Promise<void> {
-    const draft = toActionDraft(entry, quality);
+    const draft = useCourt ? toCourtDraft(courtEntry, quality) : toActionDraft(entry, quality);
     if (!draft || !data?.rally) return;
 
     try {
@@ -211,9 +258,13 @@ export function ScoringScreen({
       for (const warning of warnings) push('warning', warning.message);
       dispatch({ kind: 'committed', last: action });
 
-      // Bij een fout vragen we waardoor — maar pas hierna, zodat het invoeren er
-      // niet op wacht. Negeren mag: de balk verdwijnt vanzelf.
-      setLastError(action.quality === 'error' ? action : null);
+      // Verfijnen kan hierna: tempo, blok, reden, of welke tegenstander het was.
+      // Nooit ervoor — het invoeren mag er niet op wachten.
+      setRefining(action);
+      dispatchCourt({
+        kind: 'expect',
+        ...expectedNext(action, data.rally.servingTeam, settingsOrDefault),
+      });
 
       // Fout, ace of kill: de rally is volgens het protocol voorbij. Meteen
       // afronden scheelt een tik, en de uitslag is niet voor twee uitleg vatbaar.
@@ -225,6 +276,7 @@ export function ScoringScreen({
         const { rally: completed } = await store.rallies.complete(data.rally.id);
         const next = await store.rallies.start({ setId: data.set!.id });
         dispatch({ kind: 'rallyStarted', servingTeam: next.servingTeam });
+        dispatchCourt({ kind: 'expect', team: next.servingTeam, type: 'serve' });
         push('info', `Punt ${completed.wonBy === 'us' ? 'voor ons' : 'voor de tegenstander'}.`);
       }
     } catch (cause) {
@@ -238,6 +290,7 @@ export function ScoringScreen({
       await store.rallies.complete(data.rally.id, side);
       const next = await store.rallies.start({ setId: data.set.id });
       dispatch({ kind: 'rallyStarted', servingTeam: next.servingTeam });
+      dispatchCourt({ kind: 'expect', team: next.servingTeam, type: 'serve' });
     } catch (cause) {
       push('error', cause instanceof Error ? cause.message : String(cause));
     }
@@ -319,6 +372,7 @@ export function ScoringScreen({
     try {
       await store.sets.setStartingServe(data.set.id, side);
       dispatch({ kind: 'rallyStarted', servingTeam: side });
+      dispatchCourt({ kind: 'expect', team: side, type: 'serve' });
     } catch (cause) {
       push('error', cause instanceof Error ? cause.message : String(cause));
     }
@@ -424,13 +478,15 @@ export function ScoringScreen({
               {item.pointsUs}-{item.pointsThem}
             </span>
           ))}
-          <button
-            type="button"
-            className={`button button--ghost ${session.peers > 0 ? 'button--live' : ''}`}
-            onClick={() => setShowPairing(true)}
-          >
-            {session.peers > 0 ? `Gekoppeld (${session.peers})` : 'Koppelen'}
-          </button>
+          {showMore && (
+            <button
+              type="button"
+              className={`button button--ghost ${session.peers > 0 ? 'button--live' : ''}`}
+              onClick={() => setShowPairing(true)}
+            >
+              {session.peers > 0 ? `Gekoppeld (${session.peers})` : 'Koppelen'}
+            </button>
+          )}
           {leads && (
             <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
               Opstelling
@@ -439,12 +495,12 @@ export function ScoringScreen({
           <button type="button" className="button button--ghost" onClick={onOpenDashboard}>
             Cijfers
           </button>
-          {leads && (
+          {leads && showMore && (
             <button type="button" className="button button--ghost" onClick={() => setShowScoreFix(true)}>
               Stand
             </button>
           )}
-          {leads && (
+          {leads && showMore && (
             <button
               type="button"
               className="button button--ghost"
@@ -453,23 +509,34 @@ export function ScoringScreen({
               Corrigeren
             </button>
           )}
-          {leads && (
+          {leads && showMore && (
             <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
               Wissel
             </button>
           )}
+          <button
+            type="button"
+            className="button button--ghost"
+            aria-expanded={showMore}
+            aria-label={showMore ? 'Minder knoppen' : 'Meer knoppen'}
+            onClick={() => setShowMore((open) => !open)}
+          >
+            {showMore ? '×' : '⋯'}
+          </button>
         </div>
       </header>
 
       <RallyChain actions={actions ?? []} playersById={playersById} onUndoLast={() => void undoLastAction()} />
 
-      {lastError && (
-        <ErrorReasonBar
-          action={lastError}
-          onChoose={(reason) => {
-            void store.actions.revise(lastError.id, { errorReason: reason });
+      {refining && (
+        <RefineBar
+          action={refining}
+          players={refining.team === 'us' ? data.ownPlayers : data.opponentPlayers}
+          askAttack={useCourt}
+          onRefine={(patch: RefinePatch) => {
+            void store.actions.revise(refining.id, patch);
           }}
-          onDismiss={() => setLastError(null)}
+          onDismiss={() => setRefining(null)}
         />
       )}
 
@@ -536,6 +603,18 @@ export function ScoringScreen({
             </button>
           </div>
         </section>
+      ) : useCourt ? (
+        <CourtEntry
+          state={courtEntry}
+          dispatch={dispatchCourt}
+          positions={court?.positions ?? emptyPositions()}
+          ownPlayers={data.ownPlayers}
+          opponentPlayers={data.opponentPlayers}
+          settings={settingsOrDefault}
+          expectedServerId={expectedServerId}
+          onCommit={(quality) => void commitAction(quality)}
+          onExplain={setExplain}
+        />
       ) : (
         <EntryPanel
           state={entry}

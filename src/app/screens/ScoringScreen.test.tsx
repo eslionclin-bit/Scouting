@@ -270,9 +270,89 @@ describe('ScoringScreen: regels van het spel', () => {
       </StoreProvider>,
     );
 
-    // Wij beginnen met serveren, dus de app slaat de spelerstap over: #9 staat
-    // in zone 1 en is dus aan de beurt.
-    expect(await screen.findByText('Wat deed #9 Fem?')).toBeDefined();
+    // Met een opstelling verschijnt de veldinvoer: #9 staat in zone 1, is dus
+    // aan de beurt, en staat al geselecteerd. Een ace is één tik.
+    const cell = await screen.findByRole('button', { name: '#9 Fem' });
+    expect(cell.textContent).toContain('serveert');
+    // De voorselectie volgt zodra de opstelling geladen is.
+    await waitFor(() => expect(cell.getAttribute('aria-pressed')).toBe('true'));
+    expect(await screen.findByText(/#9 Fem · zone 6/)).toBeDefined();
+  });
+
+  it('legt met de veldinvoer een actie vast in twee tikken', async () => {
+    const user = userEvent.setup();
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    const [sanne, noor, fem] = fixture.players;
+
+    await store.lineups.set({
+      setId: fixture.set.id,
+      positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
+    });
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    // Eén tik: de server staat al klaar, dus alleen nog de kwalificatie.
+    await user.click(await screen.findByRole('button', { name: 'Perfect' }));
+
+    await waitFor(async () => {
+      const actions = await store.actions.listBySet(fixture.set.id);
+      expect(actions).toHaveLength(1);
+      expect(actions[0]).toMatchObject({
+        team: 'us',
+        type: 'serve',
+        quality: 'perfect',
+        playerId: fem!.id,
+        zoneFrom: 6,
+      });
+    });
+
+    // Een ace beëindigt de rally: de volgende staat klaar met dezelfde server.
+    await waitFor(async () => {
+      expect((await store.sets.require(fixture.set.id)).pointsUs).toBe(1);
+    });
+  });
+
+  it('legt een actie van de tegenstander vast door op hun zone te tikken', async () => {
+    const user = userEvent.setup();
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    const [sanne, noor, fem] = fixture.players;
+
+    await store.lineups.set({
+      setId: fixture.set.id,
+      positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
+    });
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Tegenstander Zone 4 (linksvoor)' }));
+    await user.click(screen.getByRole('button', { name: 'Perfect' }));
+
+    await waitFor(async () => {
+      const actions = await store.actions.listBySet(fixture.set.id);
+      expect(actions[0]).toMatchObject({ team: 'them', zoneFrom: 4, playerId: null });
+    });
   });
 });
 

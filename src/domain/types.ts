@@ -18,6 +18,7 @@ import type { MatchRules } from './scoring';
 import type { TeamSide } from './teams';
 
 export type { TeamSide };
+export type { ErrorReason };
 
 /** Actietypes uit het scoutingprotocol. */
 export type ActionType =

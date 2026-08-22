@@ -189,5 +189,5 @@ Wat het kost:
   weigeren wat een scheidsrechter ook weigert; dat is pas nuttig als het echt
   voorkomt.
 - **Time-outs**: worden niet geteld.
-- **Invoeren op het veld** (hoofdstuk 5): besproken, bewust uitgesteld tot de
-  regels staan.
+- **Invoeren op het veld** (hoofdstuk 5): gebouwd. Zie
+  [invoeren.md](invoeren.md) voor hoe het werkt en waarom.

@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 190 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 202 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -54,7 +54,24 @@ set 1 en de beslissende set, want daartussen wisselen de teams om en om.
 Bij een speler kun je een rol kiezen. Dat is optioneel; alleen bij een libero
 maakt het verschil, want die serveert niet.
 
-**Rally-invoer** — het scherm waar het tijdens de wedstrijd om draait. Eén vraag
+**Rally-invoer op een tablet** — het hele veld staat op het scherm: onze zes op
+hun rotatiepositie met rugnummer en naam, hun helft als zes zones, het net
+ertussen. Eén tik op een vak legt vast wie het was, welke kant en welke zone;
+de tweede tik is de kwalificatie. Twee tikken per actie, en bij onze eigen
+service staat de server al klaar — dan is een ace één tik. Een rally van vijf
+acties kost negen tikken in plaats van ongeveer twintig.
+
+De actiesoort wordt voorspeld en staat zichtbaar naast het veld: je leest wat je
+vastlegt in plaats van het in te vullen. Tik je de andere ploeg aan dan de app
+verwachtte, dan schuift het actietype mee. Alles wat optioneel is (tempo, blok,
+foutreden, welke tegenstander) wordt ná de tik gevraagd in één verfijnbalk die
+vanzelf verdwijnt. Zie [docs/invoeren.md](docs/invoeren.md).
+
+**Instellingen** — per tablet, via het startscherm: veld links of rechts (voor
+linkshandigen), set-up altijd vragen of niet, pass van de tegenstander wel of niet
+vastleggen, rugnummers van de tegenstander tonen.
+
+**Rally-invoer (stapsgewijs)** — het scherm waar het tijdens de wedstrijd om draait. Eén vraag
 tegelijk, in de volgorde waarin je een rally ziet:
 
 1. **Wie speelde de bal?** — kant van het net, dan de speler. Een speler die er

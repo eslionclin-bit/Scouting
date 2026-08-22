@@ -20,6 +20,7 @@ export interface HomeScreenProps {
   onOpenOpponent: (opponentId: string) => void;
   onOpenTeam: () => void;
   onOpenReference: () => void;
+  onOpenSettings: () => void;
   onNewMatch: () => void;
 }
 
@@ -30,6 +31,7 @@ export function HomeScreen({
   onOpenOpponent,
   onOpenTeam,
   onOpenReference,
+  onOpenSettings,
   onNewMatch,
 }: HomeScreenProps): ReactElement {
   const store = useStore();
@@ -90,6 +92,9 @@ export function HomeScreen({
           </button>
           <button type="button" className="button" onClick={onOpenReference}>
             Referentie
+          </button>
+          <button type="button" className="button" onClick={onOpenSettings}>
+            Instellingen
           </button>
           <button type="button" className="button button--primary" onClick={onNewMatch}>
             + Nieuwe wedstrijd
