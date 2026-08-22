@@ -7,7 +7,7 @@
  */
 
 import { useState, type ReactElement } from 'react';
-import { positionsAt } from '../../domain/rotation';
+import { courtPositions, positionsAt } from '../../domain/rotation';
 import { playerLabel } from '../../domain/players';
 import type { Lineup, Player, Substitution, Zone } from '../../domain/types';
 import { ZONES } from '../../domain/types';
@@ -18,7 +18,7 @@ export interface LineupSheetProps {
   lineup: Lineup | undefined;
   substitutions: readonly Substitution[];
   rotation: number;
-  onSaveLineup: (positions: Record<Zone, string | null>) => void;
+  onSaveLineup: (positions: Record<Zone, string | null>, liberoId: string | null) => void;
   onSubstitute: (playerOutId: string, playerInId: string) => void;
   onClose: () => void;
 }
@@ -40,9 +40,22 @@ export function LineupSheet({
   );
   const [activeZone, setActiveZone] = useState<Zone>(1);
   const [playerOut, setPlayerOut] = useState<string | null>(null);
+  const [liberoId, setLiberoId] = useState<string | null>(lineup?.liberoId ?? null);
 
   const byId = new Map(players.map((player) => [player.id, player]));
   const current = lineup ? positionsAt(lineup, rotation, substitutions) : draft;
+
+  // De libero staat wél in het veld, maar hoort niet in de rotatie: wissels
+  // gaan over de zes van de opstelling, de liberowissel is er geen. Daarom
+  // wordt hij apart gemeld en niet in de wisseltegels gezet.
+  const court = lineup
+    ? courtPositions(lineup, rotation, substitutions, {
+        roleOf: (playerId) => byId.get(playerId)?.role ?? null,
+      })
+    : null;
+  const liberoZone = court?.replaced
+    ? (ZONES.find((zone) => court.positions[zone] === lineup?.liberoId) ?? null)
+    : null;
   const onCourt = ZONES.map((zone) => current[zone]).filter((id): id is string => id !== null);
   const bench = players.filter((player) => !onCourt.includes(player.id));
 
@@ -125,11 +138,44 @@ export function LineupSheet({
               ))}
             </div>
 
+            <h4 className="sheet__subtitle">Libero</h4>
+            <p className="step__hint">
+              Staat niet in de zes: hij komt in voor de middenspeler achterin, en gaat eruit als die
+              moet serveren.
+            </p>
+            <div className="grid grid--players">
+              <button
+                type="button"
+                className={`tile tile--unknown ${liberoId === null ? 'tile--selected' : ''}`}
+                onClick={() => setLiberoId(null)}
+              >
+                Geen
+              </button>
+              {players.map((player) => (
+                <button
+                  key={player.id}
+                  type="button"
+                  className={`tile tile--player ${liberoId === player.id ? 'tile--selected' : ''}`}
+                  aria-label={`${playerLabel(player)} als libero`}
+                  onClick={() => setLiberoId(player.id)}
+                >
+                  <span className="tile__number">{player.number}</span>
+                  <span className="tile__name">
+                    {player.role === 'libero' ? 'libero' : player.name || '\u00a0'}
+                  </span>
+                </button>
+              ))}
+            </div>
+
             <div className="sheet__actions">
               <button type="button" className="button button--ghost" onClick={onClose}>
                 Annuleren
               </button>
-              <button type="button" className="button button--primary" onClick={() => onSaveLineup(draft)}>
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={() => onSaveLineup(draft, liberoId)}
+              >
                 Opstelling bewaren
               </button>
             </div>
@@ -145,6 +191,13 @@ export function LineupSheet({
             </p>
 
             <h4 className="sheet__subtitle">In het veld</h4>
+            {court?.replaced && liberoZone && (
+              <p className="step__hint">
+                Libero {playerLabel(byId.get(lineup!.liberoId!)!)} staat nu in zone {liberoZone},
+                voor {playerLabel(byId.get(court.replaced)!)}. Bij de volgende doordraai naar zone 1
+                gaat die er weer in — een libero serveert niet.
+              </p>
+            )}
             <div className="grid grid--players">
               {ZONES.map((zone) => {
                 const playerId = current[zone];

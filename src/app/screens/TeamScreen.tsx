@@ -16,9 +16,10 @@ import { useQuery } from '../StoreProvider';
 export interface TeamScreenProps {
   onExit: () => void;
   onOpenMatch: (matchId: string) => void;
+  onOpenPlayer?: (playerId: string) => void;
 }
 
-export function TeamScreen({ onExit, onOpenMatch }: TeamScreenProps): ReactElement {
+export function TeamScreen({ onExit, onOpenMatch, onOpenPlayer }: TeamScreenProps): ReactElement {
   const { data, error } = useQuery(async (store) => {
     const ownTeam = await store.teams.ownTeam();
     if (!ownTeam) return { ownTeam: undefined, bundles: [] };
@@ -205,6 +206,9 @@ export function TeamScreen({ onExit, onOpenMatch }: TeamScreenProps): ReactEleme
 
       <section className="card">
         <h2>Per speler</h2>
+        {onOpenPlayer && (
+          <p className="card__hint">Tik op een naam voor het verloop over het seizoen.</p>
+        )}
         <div className="tablewrap">
           <table className="stats">
             <thead>
@@ -221,7 +225,19 @@ export function TeamScreen({ onExit, onOpenMatch }: TeamScreenProps): ReactEleme
               {profile.players.map((player) => (
                 <tr key={player.playerId}>
                   <th scope="row">
-                    <span className="stats__number">#{player.number}</span> {player.name}
+                    {onOpenPlayer ? (
+                      <button
+                        type="button"
+                        className="linkish"
+                        onClick={() => onOpenPlayer(player.playerId)}
+                      >
+                        <span className="stats__number">#{player.number}</span> {player.name}
+                      </button>
+                    ) : (
+                      <>
+                        <span className="stats__number">#{player.number}</span> {player.name}
+                      </>
+                    )}
                   </th>
                   <td>{player.overall.total}</td>
                   <td>{describe(player.byType.serve)}</td>

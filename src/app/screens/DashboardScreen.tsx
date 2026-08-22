@@ -31,12 +31,14 @@ export interface DashboardScreenProps {
   matchId: string;
   onExit: () => void;
   onOpenOpponent?: (opponentId: string) => void;
+  onOpenPlayer?: (playerId: string) => void;
 }
 
 export function DashboardScreen({
   matchId,
   onExit,
   onOpenOpponent,
+  onOpenPlayer,
 }: DashboardScreenProps): ReactElement {
   const [setId, setSetId] = useState<string | null>(null);
   const [rotation, setRotation] = useState<number | null>(null);
@@ -202,7 +204,19 @@ export function DashboardScreen({
               {view.players.map((player) => (
                 <tr key={player.playerId}>
                   <th scope="row">
-                    <span className="stats__number">#{player.number}</span> {player.name}
+                    {onOpenPlayer ? (
+                      <button
+                        type="button"
+                        className="linkish"
+                        onClick={() => onOpenPlayer(player.playerId)}
+                      >
+                        <span className="stats__number">#{player.number}</span> {player.name}
+                      </button>
+                    ) : (
+                      <>
+                        <span className="stats__number">#{player.number}</span> {player.name}
+                      </>
+                    )}
                   </th>
                   <td>{player.overall.total}</td>
                   <td>{describeScoring(player.byType.serve)}</td>

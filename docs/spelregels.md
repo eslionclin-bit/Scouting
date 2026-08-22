@@ -55,7 +55,8 @@ serveerbeurt die in het veld niet bestaat.
 
 ### Wissels
 
-- Per set een beperkt aantal wissels per team (bij FIVB-regels zes).
+- **Maximaal zes wissels per set per team** — het aantal dat in deze competitie
+  geldt.
 - Een basisspeler mag er één keer uit en één keer terug in, en dan alleen op de
   plek van degene die hem verving.
 - Er staan altijd zes spelers in het veld; een wissel verandert wie dat zijn,
@@ -73,9 +74,8 @@ serveerbeurt die in het veld niet bestaat.
 | Elke set vraagt wie begint met serveren | Alleen set 1 en set 5 zijn een toss; de rest volgt uit de vorige set |
 | De app vraagt wie serveert, ook met een opstelling | Met opstelling en rotatie ligt de server vast |
 | Geen posities of rollen bij spelers | Zonder libero-rol zet de app die speler op een serveerbeurt die niet bestaat |
-| Wissels alleen via het opstellingsscherm, zonder maximum | Tijdens een wedstrijd moet een wissel in twee tikken kunnen, en het quotum telt |
 | Undo stopt bij de setgrens | Ging de set per ongeluk dicht, dan moet je terug naar het setpoint ervoor |
-| Geen einde aan de wedstrijd | Bij drie gewonnen sets is het klaar |
+| Geen einde aan de wedstrijd | Na vier sets (of vijf bij 2-2) is het klaar |
 | Na 'speler toevoegen' springt het scherm door | Aan het begin wil je drie rugnummers achter elkaar intikken |
 
 ## 3. Wat er nu in zit
@@ -98,8 +98,20 @@ Gebouwd:
   Een **libero wordt daarbij overgeslagen** — die serveert niet.
 - **Rollen** bij spelers: spelverdeler, midden, passer-loper, diagonaal, libero.
 - **Wisselen** vanuit het invoerscherm, met het aantal wissels van deze set erbij.
+  Bij de zevende wissel weigert de app: het quotum is zes per set.
+- **Libero in het veld**: per set leg je vast wie de libero is. De app zet hem in
+  het veld op de plek van de middenspeler die achterin staat (zone 5 of 6), en
+  haalt hem er weer uit zodra diezelfde speler naar zone 1 draait — daar wordt
+  geserveerd. Een liberowissel telt niet mee voor het quotum, want het is er geen.
 - Alleen tellen wat is afgesloten: een set die na undo weer openstaat, telt niet
   als gewonnen.
+- **Per speler doorklikken**: vanuit het wedstrijddashboard en het teamdossier
+  open je één speler. Daar staat wat ze doet per actietype, hoe het verloopt over
+  het seizoen, en of ze in de laatste wedstrijd onder of boven het eigen niveau
+  speelde. Diezelfde vergelijking staat als aanwijzing op het coachscherm, zodat
+  je tijdens de wedstrijd weet dát iemand onder haar niveau zit — iets anders dan
+  'slecht spelen', en het enige van de twee dat een wissel rechtvaardigt.
+  Er wordt pas iets gezegd bij minstens zes acties nu en twintig in de historie.
 
 ## 4. Wat er nog moet veranderen
 
@@ -171,11 +183,11 @@ Wat het kost:
 
 ## 6. Wat nog openstaat
 
-- **Wisselquotum**: de app telt de wissels van een set, maar bewaakt geen
-  maximum. Zodra duidelijk is welk aantal in jullie competitie geldt, is dat een
-  waarschuwing erbij.
-- **Liberowissels**: de libero serveert niet, en dat zit erin. De rest van de
-  liberoregels — dat hij een achterspeler vervangt zonder dat het een wissel is,
-  en eruit gaat als hij naar voren draait — zit nog niet in het model.
+- **Wisselregel 'één keer uit, één keer terug'**: het aantal wissels wordt
+  bewaakt (zes per set), maar dat een basisspeler alleen terug mag op de plek van
+  degene die haar verving nog niet. In de praktijk zou de app daarvoor moeten
+  weigeren wat een scheidsrechter ook weigert; dat is pas nuttig als het echt
+  voorkomt.
+- **Time-outs**: worden niet geteld.
 - **Invoeren op het veld** (hoofdstuk 5): besproken, bewust uitgesteld tot de
   regels staan.

@@ -65,11 +65,16 @@ export const QUALITY_SCORE: Record<Quality, number> = {
 };
 
 /** Het algemene principe achter elke kwalificatie, ongeacht actietype. */
+/**
+ * De schaal loopt altijd vanuit het eigen team: perfect is het beste gevolg voor
+ * ons, fout het slechtste. Bij een service betekent dat dus: hoe meer last de
+ * tegenstander ervan heeft, hoe hoger de kwalificatie.
+ */
 export const GENERAL_PRINCIPLES: Record<Quality, string> = {
   perfect:
-    'Het beste mogelijke gevolg: geeft de volgende speler alle opties, of levert direct een punt op.',
-  good: 'Bruikbaar, de aanval of opbouw kan normaal doorgaan, met lichte beperking.',
-  poor: 'De volgende speler moet improviseren: minder opties, geforceerde keuze, of de bal blijft wel in het spel.',
+    'Het beste mogelijke gevolg voor het eigen team: geeft de volgende speler alle opties, of levert direct een punt op.',
+  good: 'Bruikbaar: de eigen aanval of opbouw kan doorgaan, of de tegenstander komt onder druk.',
+  poor: 'Weinig opgeleverd: improviseren voor de volgende speler, of geen druk op de tegenstander.',
   error:
     'De rally eindigt direct in het nadeel van het eigen team: bal uit, in het net, of punt voor de tegenstander.',
 };
@@ -109,19 +114,26 @@ const RECEPTION_CRITERIA: ActionCriteria = {
 };
 
 export const PROTOCOL_CRITERIA: Record<ActionType, ActionCriteria> = {
+  /**
+   * De service wordt beoordeeld op wat hij de *tegenstander* aandoet, en het
+   * protocoldocument had die twee middelste treden omgedraaid: daar stond 'goed'
+   * voor een service waarna de ontvanger alles nog kon. Dat is juist een matige
+   * service — zet je druk, dan is hij goed. Perfect blijft de ace.
+   */
   serve: {
     perfect: {
       criterion: 'Ace: de tegenstander raakt de bal niet of speelt hem niet terug in het veld.',
       example: 'Bal valt direct in het veld na de service.',
     },
     good: {
-      criterion: 'De passer kan alle drie de aanvalsopties (links, midden, rechts) nog gebruiken.',
-      example: 'Rustige pass op de spelverdeler.',
+      criterion:
+        'De pass komt onder druk: de ontvanger kan nog maar 1 of 2 aanvalsopties gebruiken, of de spelverdeler moet zelf naar de bal toe.',
+      example: 'Service dwingt een hoge bal af, geen snelle aanval mogelijk.',
     },
     poor: {
       criterion:
-        'De passer kan nog maar 1 of 2 aanvalsopties gebruiken, of de spelverdeler moet zelf naar de bal toe.',
-      example: 'Pass komt ver van de 3-meterlijn terecht.',
+        'Geen druk: de ontvanger kan alle drie de aanvalsopties (links, midden, rechts) gewoon gebruiken.',
+      example: 'Rustige service, pass komt zo op de spelverdeler.',
     },
     error: {
       criterion: 'Bal in het net of buiten het veld, of overtreding (voetfout, tijd).',

@@ -200,6 +200,12 @@ export interface Lineup extends BaseRecord {
   team: TeamSide;
   /** Speler-id per zone 1 t/m 6; null als de plek (nog) niet is ingevuld. */
   positions: Record<Zone, string | null>;
+  /**
+   * De libero van deze set. Die staat niet in de zes: hij vervangt een
+   * achterspeler zonder dat het een wissel is, en gaat er weer uit zodra die
+   * speler naar voren draait of moet serveren.
+   */
+  liberoId?: string | null;
 }
 
 /** Wissel: vanaf de genoemde rally staat de invaller in het veld. */

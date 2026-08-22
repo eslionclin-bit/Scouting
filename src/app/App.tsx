@@ -10,6 +10,7 @@ import { DashboardScreen } from './screens/DashboardScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { NewMatchScreen } from './screens/NewMatchScreen';
 import { OpponentScreen } from './screens/OpponentScreen';
+import { PlayerScreen } from './screens/PlayerScreen';
 import { ScoringScreen } from './screens/ScoringScreen';
 import { TeamScreen } from './screens/TeamScreen';
 import { CoachScreen } from './screens/CoachScreen';
@@ -22,6 +23,7 @@ type View =
   | { name: 'viewer'; matchId: string }
   | { name: 'dashboard'; matchId: string }
   | { name: 'opponent'; opponentId: string }
+  | { name: 'player'; playerId: string; back: View }
   | { name: 'team' };
 
 export function App(): ReactElement {
@@ -111,21 +113,35 @@ export function App(): ReactElement {
           }}
         />
       );
-    case 'dashboard':
+    case 'dashboard': {
+      const here: View = { name: 'dashboard', matchId: view.matchId };
       return (
         <DashboardScreen
           matchId={view.matchId}
           onOpenOpponent={(opponentId) => setView({ name: 'opponent', opponentId })}
+          onOpenPlayer={(playerId) => setView({ name: 'player', playerId, back: here })}
           onExit={() => setView({ name: 'scoring', matchId: view.matchId, role: 'scorer' })}
         />
       );
+    }
     case 'team':
       return (
         <TeamScreen
           onOpenMatch={(matchId) => setView({ name: 'dashboard', matchId })}
+          onOpenPlayer={(playerId) => setView({ name: 'player', playerId, back: { name: 'team' } })}
           onExit={() => setView({ name: 'home' })}
         />
       );
+    case 'player': {
+      const back = view.back;
+      return (
+        <PlayerScreen
+          playerId={view.playerId}
+          onOpenMatch={(matchId) => setView({ name: 'dashboard', matchId })}
+          onExit={() => setView(back)}
+        />
+      );
+    }
     case 'opponent':
       return (
         <OpponentScreen

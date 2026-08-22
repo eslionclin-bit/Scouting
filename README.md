@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 135 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 148 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -101,12 +101,17 @@ rondt de rally meteen af en zet de opslag van de winnaar klaar.
 Undo werkt over de rallygrens heen: is de nieuwe rally nog leeg, dan wordt de
 vorige rally heropend en dáár de laatste actie teruggedraaid.
 
-**Opstelling en wissels** — via de knop 'Opstelling' in het invoerscherm. Je zet
-alleen de zes van het begin van de set neer; welke speler tijdens rally 34 in
+**Opstelling, libero en wissels** — via de knop 'Opstelling' in het invoerscherm.
+Je zet alleen de zes van het begin van de set neer; welke speler tijdens rally 34 in
 zone 3 staat, rekent de app zelf uit. De rotatiestand staat in de kop van het
 scherm en wordt bij elke rally meegeschreven, zodat er geen rotatielijst op
 papier naast hoeft te bestaan. Een wissel geldt vanaf de rally waarin hij wordt
-ingevoerd.
+ingevoerd; er zijn er zes per set toegestaan, de zevende weigert de app.
+
+De **libero** leg je per set apart vast: hij hoort niet in de zes. De app zet hem
+in het veld op de plek van de middenspeler die achterin staat (zone 5 of 6) en
+haalt hem eruit zodra diezelfde speler naar zone 1 draait — een libero serveert
+niet. Een liberowissel telt daarom ook niet mee voor het wisselquotum.
 
 **Analysedashboard (scherm B)** — bereikbaar vanaf het startscherm en vanuit de
 invoer ('Cijfers'):
@@ -158,6 +163,15 @@ apparaten allebei een rally kunnen afronden, dan ontstaan er twee rally's en twe
 standen. De assistent ziet daarom geen 'punt wij', geen 'set afronden' en geen
 'undo rally'; wat hij invoert verschijnt binnen een seconde bij de ander. Wie
 welke kant van het net invoert, spreek je zelf af — de app bewaakt dat niet.
+
+**Eén speler** — vanuit het dashboard of het teamdossier tik je op een naam.
+Daar staat wat ze doet per actietype, hoe haar aanval verloopt over het seizoen
+(oudste wedstrijd links), en hoe de laatste wedstrijd zich verhoudt tot haar
+eigen niveau daarvoor. Dat laatste is de reden dat dit ook tijdens een wedstrijd
+nut heeft: 'onder haar niveau' is iets anders dan 'slecht', en alleen het eerste
+is een reden om te wisselen. Diezelfde vergelijking komt als aanwijzing terug op
+het coachscherm. Er wordt pas iets over vorm gezegd bij minstens zes acties nu en
+twintig in de historie — twee gemiste ballen zijn geen vormdip.
 
 **Ons team** — vanaf het startscherm: waar lopen wíj structureel vast, over alle
 wedstrijden heen. Sideout per rotatie, opstellingen vergeleken op puntverschil

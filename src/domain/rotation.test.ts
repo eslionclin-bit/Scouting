@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  courtPositions,
   emptyPositions,
   playersOnCourt,
   positionsAt,
@@ -68,5 +69,46 @@ describe('rotatie', () => {
     expect(serverAt({ positions: start }, 1)).toBe('p1');
     expect(serverAt({ positions: start }, 3)).toBe('p3');
     expect(serverAt({ positions: emptyPositions() }, 1)).toBeNull();
+  });
+});
+
+describe('libero', () => {
+  const roles = new Map<string, 'middle' | 'setter'>([
+    ['p1', 'setter'],
+    ['p3', 'middle'],
+    ['p6', 'middle'],
+  ]);
+  const roleOf = (id: string) => roles.get(id) ?? null;
+  const lineup = { positions: start, liberoId: 'lib' };
+
+  it('komt in voor de middenspeler zodra die achterin staat', () => {
+    // In rotatie 1 staat p6 (midden) in zone 6.
+    const court = courtPositions(lineup, 1, [], { roleOf });
+    expect(court.positions[6]).toBe('lib');
+    expect(court.replaced).toBe('p6');
+    expect(playersOnCourt(court.positions)).not.toContain('p6');
+  });
+
+  it('schuift mee met de middenspeler die achterin staat', () => {
+    // In rotatie 2 is p6 doorgedraaid naar zone 5; de libero gaat mee.
+    const court = courtPositions(lineup, 2, [], { roleOf });
+    expect(court.positions[5]).toBe('lib');
+    expect(court.replaced).toBe('p6');
+  });
+
+  it('staat niet in het veld als de middenspeler moet serveren', () => {
+    // In rotatie 3 staat de andere middenspeler (p3) op de serveerplek, en de
+    // achterhoek heeft geen midden meer: dan is er geen libero in het veld.
+    const court = courtPositions(lineup, 3, [], { roleOf });
+    expect(court.positions[1]).toBe('p3');
+    expect(playersOnCourt(court.positions)).not.toContain('lib');
+    expect(court.replaced).toBeNull();
+  });
+
+  it('verandert niets zonder libero of zonder bekende rollen', () => {
+    expect(courtPositions({ positions: start, liberoId: null }, 1, [], { roleOf })).toMatchObject({
+      replaced: null,
+    });
+    expect(courtPositions(lineup, 1, [])).toMatchObject({ replaced: null });
   });
 });

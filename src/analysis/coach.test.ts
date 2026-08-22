@@ -192,3 +192,76 @@ describe('verloop en volgende rotatie', () => {
     store.close();
   });
 });
+
+describe('speler onder eigen niveau', () => {
+  it('meldt het alleen als er genoeg historie is om mee te vergelijken', async () => {
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    const fem = fixture.players.find((player) => player.number === 9)!;
+
+    /** Een afgeronde wedstrijd waarin Fem een reeks aanvallen doet. */
+    async function history(date: string, qualities: Quality[]) {
+      const match = await store.matches.create({
+        date,
+        ownTeamId: fixture.ownTeam.id,
+        opponentTeamId: fixture.opponent.id,
+        homeAway: 'home',
+        status: 'finished',
+      });
+      const set = await store.sets.start({ matchId: match.id, startingServe: 'us' });
+      for (const quality of qualities) {
+        const open = await store.rallies.start({ setId: set.id });
+        await store.actions.append({
+          rallyId: open.id,
+          team: 'us',
+          type: 'attack',
+          quality,
+          playerId: fem.id,
+          zoneFrom: 4,
+        });
+        const still = await store.rallies.get(open.id);
+        if (still?.wonBy === null) await store.rallies.complete(open.id, 'us');
+      }
+      return loadMatchBundle(store, match.id);
+    }
+
+    const punten = (aantal: number): Quality[] => Array.from({ length: aantal }, () => 'perfect');
+    const fouten = (aantal: number): Quality[] => Array.from({ length: aantal }, () => 'error');
+
+    const ownHistory = [
+      await history('2026-09-05', punten(10)),
+      await history('2026-09-19', punten(10)),
+      await history('2026-09-26', punten(6)),
+    ];
+
+    // Vandaag gaat er acht keer een aanval de fout in.
+    for (const quality of fouten(8)) {
+      const open = await store.rallies.start({ setId: fixture.set.id });
+      await store.actions.append({
+        rallyId: open.id,
+        team: 'us',
+        type: 'attack',
+        quality,
+        playerId: fem.id,
+        zoneFrom: 4,
+      });
+      const still = await store.rallies.get(open.id);
+      if (still?.wonBy === null) await store.rallies.complete(open.id, 'them');
+    }
+
+    const bundle = await loadMatchBundle(store, fixture.match.id);
+
+    // Zonder historie zwijgt het scherm hierover: dan is er geen niveau bekend.
+    const blind = buildCoachBriefing(bundle);
+    expect(blind.cues.some((cue) => cue.code === 'player_below_level')).toBe(false);
+
+    const informed = buildCoachBriefing(bundle, { ownHistory });
+    const cue = informed.cues.find((entry) => entry.code === 'player_below_level');
+    expect(cue?.title).toContain('#9 Fem');
+    expect(cue?.title).toContain('onder eigen niveau');
+    expect(cue?.detail).toContain('8 acties nu');
+    expect(cue?.tone).toBe('watch');
+
+    store.close();
+  });
+});

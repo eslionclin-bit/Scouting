@@ -20,6 +20,9 @@ export interface MatchRules {
   minimumLead: number;
 }
 
+/** Wissels per team per set. Liberowissels tellen hier niet in mee. */
+export const MAX_SUBSTITUTIONS_PER_SET = 6;
+
 export const DEFAULT_RULES: MatchRules = {
   regularSets: 4,
   pointsPerSet: 25,

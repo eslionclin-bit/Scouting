@@ -1950,3 +1950,100 @@ button {
 .step--done {
   border-color: var(--perfect);
 }
+
+/* ---------- Scherm F: één speler uitgeklapt ---------- */
+
+/* Een naam in een tabel die je open kunt tikken moet er als tekst uitzien en
+   toch als knop voelen: hetzelfde raakvlak, geen knopje ernaast. */
+.linkish {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0.35rem 0;
+  margin: -0.35rem 0;
+  font: inherit;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+  min-height: 2rem;
+}
+
+.linkish:hover,
+.linkish:focus-visible {
+  text-decoration: underline;
+}
+
+/* Vorm tegenover het eigen niveau: onder niveau is een aandachtspunt, boven
+   niveau iets om te bevestigen. De rand draagt het verschil, de tekst zegt het
+   ook — kleur staat er nooit alleen voor. */
+.findings__item--onder {
+  border-left-color: var(--poor);
+}
+
+.findings__item--boven {
+  border-left-color: var(--perfect);
+}
+
+.findings__item--gelijk {
+  border-left-color: var(--line);
+}
+
+/* Verloop over het seizoen: staafjes vanaf een middenlijn, oudste links. Geen
+   as met cijfers — het getal staat onder elk staafje, dat leest sneller op een
+   tablet in het halfduister. */
+.trend {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.25rem 0 0;
+}
+
+.trend__item {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+  min-width: 3.25rem;
+}
+
+.trend__track {
+  position: relative;
+  width: 1.5rem;
+  height: 5rem;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  /* De middenlijn is nul: staafjes naar boven zijn winst, naar onder verlies. */
+  background-image: linear-gradient(var(--line), var(--line));
+  background-size: 100% 1px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.trend__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 50%;
+  max-height: 50%;
+  background: var(--perfect);
+  border-radius: 3px 3px 0 0;
+}
+
+.trend__bar--negative {
+  top: 50%;
+  bottom: auto;
+  background: var(--error);
+  border-radius: 0 0 3px 3px;
+}
+
+.trend__value {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.trend__label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}

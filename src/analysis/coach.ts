@@ -12,8 +12,11 @@
  */
 
 import type { MatchBundle } from '../db/bundle';
+import { playerLabel } from '../domain/players';
+import { ACTION_TYPE_LABELS } from '../domain/protocol';
 import type { TeamSide } from '../domain/types';
 import { ZONE_LABELS } from '../domain/zones';
+import { buildPlayerProfile, compareForm, type FormComparison } from './player';
 import { buildOpponentDossier } from './opponent';
 import { filterActions, toActionRows, toRallyRows, type RallyRow } from './rows';
 import { statsByPlayer, statsByRotation, statsByType, zoneTally, type RotationStats } from './stats';
@@ -140,6 +143,7 @@ export function buildCoachBriefing(
 
   briefing.cues = [
     ...collectCues(bundle, briefing, { setRallies, oursInSet, receiveRallies }),
+    ...formCues(bundle, options),
     ...historyCues(bundle, options),
   ];
   briefing.talkingPoints = briefing.cues
@@ -289,6 +293,55 @@ function collectCues(
   }
 
   return cues;
+}
+
+/**
+ * Wie er vandaag onder — of boven — het eigen niveau speelt.
+ *
+ * Dit is het verschil dat je op de bank niet ziet: een speler kan de hele
+ * wedstrijd ballen missen en dat toch gewoon haar niveau zijn, terwijl een ander
+ * ver onder de eigen cijfers blijft en dus een wissel waard is. Daarom telt
+ * alleen de vergelijking met de eigen historie, en alleen als er van beide kanten
+ * genoeg van gezien is.
+ */
+function formCues(bundle: MatchBundle, options: CoachBriefingOptions): CoachCue[] {
+  const history = (options.ownHistory ?? []).filter((entry) => entry.match.id !== bundle.match.id);
+  if (history.length === 0) return [];
+
+  const cues: CoachCue[] = [];
+  const rowsNow = filterActions(toActionRows(bundle), { team: 'us' });
+  const ourPlayers = bundle.players.filter((player) => player.teamId === bundle.match.ownTeamId);
+
+  for (const player of ourPlayers) {
+    const now = statsByType(filterActions(rowsNow, { playerId: player.id }));
+    const season = buildPlayerProfile(history, player).season.byType;
+
+    for (const entry of compareForm(now, season)) {
+      if (entry.verdict === 'gelijk') continue;
+      const under = entry.verdict === 'onder';
+      cues.push({
+        code: under ? 'player_below_level' : 'player_above_level',
+        source: 'live',
+        tone: under ? 'watch' : 'good',
+        title: `${playerLabel(player)} ${under ? 'onder' : 'boven'} eigen niveau op de ${ACTION_TYPE_LABELS[
+          entry.type
+        ].toLowerCase()}`,
+        detail: `${formatMetric(entry, entry.now)} nu tegenover ${formatMetric(
+          entry,
+          entry.season,
+        )} eerder (${entry.actionsNow} acties nu, ${entry.actionsSeason} eerder).`,
+        sample: entry.actionsNow,
+      });
+    }
+  }
+
+  return cues;
+}
+
+function formatMetric(entry: FormComparison, value: number): string {
+  const rounded = Math.round(value * 100);
+  if (entry.metric === 'positive') return `${rounded}% positief`;
+  return `${rounded > 0 ? '+' : ''}${rounded}%`;
 }
 
 /**

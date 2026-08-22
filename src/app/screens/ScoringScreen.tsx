@@ -310,10 +310,13 @@ export function ScoringScreen({
     await store.players.create({ teamId, number: input.number, name: input.name });
   }
 
-  async function saveLineup(positions: Record<Zone, string | null>): Promise<void> {
+  async function saveLineup(
+    positions: Record<Zone, string | null>,
+    liberoId: string | null,
+  ): Promise<void> {
     if (!data?.set) return;
     try {
-      await store.lineups.set({ setId: data.set.id, positions });
+      await store.lineups.set({ setId: data.set.id, positions, liberoId });
       setShowLineup(false);
     } catch (cause) {
       push('error', cause instanceof Error ? cause.message : String(cause));
@@ -539,7 +542,7 @@ export function ScoringScreen({
           lineup={data.lineup}
           substitutions={data.substitutions ?? []}
           rotation={rally.rotationUs ?? 1}
-          onSaveLineup={(positions) => void saveLineup(positions)}
+          onSaveLineup={(positions, liberoId) => void saveLineup(positions, liberoId)}
           onSubstitute={(out, into) => void substitute(out, into)}
           onClose={() => setShowLineup(false)}
         />

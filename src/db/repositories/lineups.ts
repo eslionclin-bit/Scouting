@@ -7,6 +7,7 @@
  */
 
 import { emptyPositions, positionsAt } from '../../domain/rotation';
+import { MAX_SUBSTITUTIONS_PER_SET } from '../../domain/scoring';
 import type { Lineup, Substitution, TeamSide, Zone } from '../../domain/types';
 import { buildRecord, commit, reviseRecord, type WriteContext } from '../mutations';
 import { alive, isAlive, NotFoundError, ValidationError } from './base';
@@ -15,6 +16,8 @@ export interface LineupInput {
   setId: string;
   positions: Record<Zone, string | null>;
   team?: TeamSide;
+  /** De libero staat niet in de zes; hij vervangt een achterspeler. */
+  liberoId?: string | null;
 }
 
 export class LineupRepository {
@@ -31,12 +34,16 @@ export class LineupRepository {
 
       const existing = await this.forSet(input.setId, team);
       const record = existing
-        ? reviseRecord(this.ctx, existing, { positions: input.positions })
+        ? reviseRecord(this.ctx, existing, {
+            positions: input.positions,
+            liberoId: input.liberoId ?? existing.liberoId ?? null,
+          })
         : buildRecord(this.ctx, 'lineups', {
             matchId: set.matchId,
             setId: set.id,
             team,
             positions: input.positions,
+            liberoId: input.liberoId ?? null,
           });
 
       await commit(this.ctx, [{ entity: 'lineups', record }]);
@@ -95,11 +102,24 @@ export class SubstitutionRepository {
         ]);
       }
 
+      // Zes wissels per set is de regel; de app laat het er niet stilletjes
+      // zeven worden.
+      const team = input.team ?? 'us';
+      const used = (await this.listBySet(rally.setId)).filter(
+        (substitution) => substitution.team === team,
+      ).length;
+      if (used >= MAX_SUBSTITUTIONS_PER_SET) {
+        throw new ValidationError(
+          `Het maximum van ${MAX_SUBSTITUTIONS_PER_SET} wissels in deze set is bereikt.`,
+          [{ code: 'substitution_limit', message: 'Geen wissels meer beschikbaar in deze set.' }],
+        );
+      }
+
       const record = buildRecord(this.ctx, 'substitutions', {
         matchId: rally.matchId,
         setId: rally.setId,
         rallyId: rally.id,
-        team: input.team ?? 'us',
+        team,
         playerOutId: input.playerOutId,
         playerInId: input.playerInId,
       });

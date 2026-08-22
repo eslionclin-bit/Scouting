@@ -309,6 +309,34 @@ describe('ScoutingStore', () => {
     expect(rallies[1]).toMatchObject({ wonBy: 'them', scouted: false });
   });
 
+  it('staat zes wissels per set toe en de zevende niet', async () => {
+    const rally = await store.rallies.start({ setId: fixture.set.id });
+    const bank = await store.players.createMany(
+      Array.from({ length: 7 }, (_, index) => ({
+        teamId: fixture.ownTeam.id,
+        number: 20 + index,
+        name: `Invaller ${index + 1}`,
+      })),
+    );
+
+    for (let i = 0; i < 6; i++) {
+      await store.substitutions.add({
+        rallyId: rally.id,
+        playerOutId: fixture.players[0]!.id,
+        playerInId: bank[i]!.id,
+      });
+    }
+    expect(await store.substitutions.listBySet(fixture.set.id)).toHaveLength(6);
+
+    await expect(
+      store.substitutions.add({
+        rallyId: rally.id,
+        playerOutId: fixture.players[0]!.id,
+        playerInId: bank[6]!.id,
+      }),
+    ).rejects.toThrow(/maximum van 6 wissels/);
+  });
+
   it('onthoudt rol en actieve wedstrijd van dit apparaat', async () => {
     expect(await store.getDeviceRole()).toBe('scorer');
     await store.setDeviceRole('viewer');
