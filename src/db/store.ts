@@ -147,6 +147,24 @@ export class ScoutingStore {
     return next;
   }
 
+  /**
+   * De ploegcode voor de online koppeling.
+   *
+   * Bewust in de meta van dit apparaat en niet in de gesynchroniseerde data:
+   * het is een sleutel, geen wedstrijdgegeven. Hij reist dus ook niet mee naar
+   * een gekoppeld apparaat — dat vult hem zelf één keer in.
+   */
+  async getTeamCode(): Promise<string | null> {
+    return (await this.getMeta<string>(META_KEYS.teamCode)) ?? null;
+  }
+
+  async setTeamCode(code: string | null): Promise<void> {
+    await this.setMeta(META_KEYS.teamCode, code === null || code.length === 0 ? null : code);
+    // De cursor hoort bij de vorige koppeling: laat je hem staan, dan mist het
+    // apparaat alles wat er vóór het koppelen al op de server stond.
+    await this.setMeta(META_KEYS.syncCursor, null);
+  }
+
   async getActiveMatchId(): Promise<string | null> {
     return (await this.getMeta<string>(META_KEYS.activeMatchId)) ?? null;
   }

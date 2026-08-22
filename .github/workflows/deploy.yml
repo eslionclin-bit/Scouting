@@ -36,6 +36,15 @@ jobs:
       - run: npm test
       - name: Bouwen
         # De app draait onder /<repo>/ op Pages, niet op de root.
+        #
+        # De twee Supabase-waarden zijn allebei publiek: de project-URL en de
+        # anon-sleutel. Ze mogen in de gebouwde app staan, want op de server mag
+        # die sleutel niets — alles loopt via functies die om de ploegcode
+        # vragen, en die code staat alleen op het apparaat zelf. Ontbreken ze,
+        # dan bouwt hij gewoon de puur lokale versie.
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: BASE_PATH="/${GITHUB_REPOSITORY#*/}/" npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

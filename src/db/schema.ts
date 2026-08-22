@@ -125,4 +125,6 @@ export const META_KEYS = {
   deviceRole: 'device.role',
   activeMatchId: 'app.activeMatchId',
   settings: 'app.settings',
+  /** Ploegcode voor de online koppeling; blijft op dit apparaat. */
+  teamCode: 'sync.teamCode',
 } as const;

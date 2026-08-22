@@ -6,7 +6,8 @@
  * enige wat er tijdens een wedstrijd echt toe doet.
  */
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
+import { useCloudSync } from '../hooks/useCloudSync';
 import { OPPONENT_DETAILS, type AppSettings, type OpponentDetail } from '../../domain/settings';
 import { useQuery, useStore } from '../StoreProvider';
 
@@ -74,6 +75,34 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
   const { data } = useQuery(async (instance) => instance.getSettings(), []);
   const [busy, setBusy] = useState(false);
 
+  // De ploegcode staat in de meta van dit apparaat; hij reist niet mee.
+  const [teamCode, setTeamCode] = useState<string | null>(null);
+  const [codeDraft, setCodeDraft] = useState('');
+  const cloud = useCloudSync(teamCode);
+
+  useEffect(() => {
+    let cancelled = false;
+    void store.getTeamCode().then((code) => {
+      if (cancelled) return;
+      setTeamCode(code);
+      setCodeDraft(code ?? '');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [store]);
+
+  async function saveCode(code: string | null): Promise<void> {
+    setBusy(true);
+    try {
+      await store.setTeamCode(code);
+      setTeamCode(code);
+      setCodeDraft(code ?? '');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function choose(patch: Partial<AppSettings>): Promise<void> {
     setBusy(true);
     try {
@@ -137,6 +166,74 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
       </section>
 
       <section className="card">
+        <h2>Online koppeling</h2>
+        {!cloud.available ? (
+          <p className="card__hint">
+            Er is nog geen online project ingesteld. Zonder blijft alles op dit apparaat staan en
+            koppel je alleen met een tablet in dezelfde zaal.
+          </p>
+        ) : (
+          <>
+            <p className="card__hint">
+              Vul de ploegcode in en de wedstrijden van dit apparaat lopen vanzelf mee naar de
+              andere apparaten van de ploeg, zodra er internet is. Zonder verbinding gaat het
+              invoeren gewoon door — wat er nog niet weg is, blijft klaarstaan.
+            </p>
+
+            {teamCode === null ? (
+              <>
+                <label className="field">
+                  <span>Ploegcode</span>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={codeDraft}
+                    onChange={(event) => setCodeDraft(event.target.value)}
+                    placeholder="van de trainer of de vorige tablet"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="button button--primary"
+                  disabled={busy || codeDraft.trim().length === 0}
+                  onClick={() => void saveCode(codeDraft.trim())}
+                >
+                  Koppelen
+                </button>
+              </>
+            ) : (
+              <>
+                <ul className="settings">
+                  <li className="settings__item">
+                    <div className="settings__text">
+                      <strong>{cloudLabel(cloud.state.status)}</strong>
+                      <span className="settings__hint">
+                        {cloud.state.lastSyncAt
+                          ? `Laatst bijgewerkt om ${new Date(cloud.state.lastSyncAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}.`
+                          : 'Nog niet bijgewerkt sinds het koppelen.'}
+                        {cloud.state.pending > 0
+                          ? ` ${cloud.state.pending} wijziging${cloud.state.pending === 1 ? '' : 'en'} staat nog klaar.`
+                          : ' Alles is weggeschreven.'}
+                      </span>
+                    </div>
+                  </li>
+                </ul>
+                {cloud.state.lastError && <p className="setup__error">{cloud.state.lastError}</p>}
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  disabled={busy}
+                  onClick={() => void saveCode(null)}
+                >
+                  Koppeling losmaken
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </section>
+
+      <section className="card">
         <h2>Van de tegenstander</h2>
         <p className="card__hint">
           De invoer is er om ons eigen spel te sturen. Wat zij doen telt mee voor zover wij er iets
@@ -183,4 +280,18 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
       </section>
     </div>
   );
+}
+
+/** De vier standen van de sync, in gewone taal. */
+function cloudLabel(status: string): string {
+  switch (status) {
+    case 'syncing':
+      return 'Bezig met bijwerken';
+    case 'offline':
+      return 'Geen verbinding — het wacht';
+    case 'error':
+      return 'Er ging iets mis';
+    default:
+      return 'Gekoppeld';
+  }
 }

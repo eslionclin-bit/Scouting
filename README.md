@@ -344,9 +344,9 @@ tooltipFor('attack', 'good');
 in de outbox staan, loopt de wachttijd exponentieel op en gaat invoeren gewoon
 door.
 
-Twee transports zitten in de repo: `LoopbackHub` (in het geheugen, voor tests) en
-`PeerClient` over een WebRTC-datakanaal — dat laatste is wat live meelezen
-mogelijk maakt.
+Drie transports zitten in de repo: `LoopbackHub` (in het geheugen, voor tests),
+`PeerClient` over een WebRTC-datakanaal — dat is wat live meelezen mogelijk
+maakt — en `SupabaseTransport` voor de online koppeling.
 
 **Koppelen zonder server.** Een browser kan geen server zijn, dus twee tablets
 vinden elkaar niet vanzelf. Wat wél kan is een rechtstreekse verbinding waarbij
@@ -358,6 +358,15 @@ vereisen en op een lokaal netwerk niets toevoegen.
 Wat je nodig hebt: beide apparaten op hetzelfde netwerk (de wifi van de sporthal
 of een hotspot vanaf één van de telefoons), en op allebei de app al een keer
 geopend zodat hij lokaal staat. Internet is niet nodig.
+
+**Koppelen mét server.** Apparaten die niet tegelijk aan staan, hebben aan het
+bovenstaande niets. Daarvoor is de online koppeling: een Supabase-project dat per
+record de nieuwste versie bewaart en teruggeeft wat er sinds de vorige keer bij
+kwam. De tabellen staan dicht; alles loopt via twee functies die om een
+ploegcode vragen, en die code staat alleen op het apparaat. Opzetten en de
+afwegingen staan in [docs/online-koppeling.md](docs/online-koppeling.md).
+Ontbreken de projectgegevens, dan blijft de app puur lokaal — dat is nog steeds
+de standaard.
 
 ## Ontwerpkeuzes
 
