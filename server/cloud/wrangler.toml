@@ -9,6 +9,10 @@ compatibility_date = "2026-01-01"
 # `weur` is West-Europa: daarmee staan spelersnamen en wedstrijdgegevens hier
 # en niet aan de andere kant van de oceaan. Het commando drukt een database_id
 # af; die hoort hieronder.
+#
+# Rolt GitHub de server voor je uit, laat de plaatshouder dan staan: de
+# workflow vult hem in vanuit het secret CLOUDFLARE_D1_ID. De id wijst naar het
+# account van de eigenaar en hoort daarom niet in de repository.
 [[d1_databases]]
 binding = "DB"
 database_name = "volley-scouting"

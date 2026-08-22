@@ -110,6 +110,25 @@ npx wrangler deploy
 Dat adres zet je in GitHub onder *Settings → Secrets and variables → Actions* als
 `SYNC_URL`. De eerstvolgende deploy neemt het mee.
 
+### Door GitHub laten doen
+
+De prettigste manier, en de enige waarbij je nooit meer code in een dashboard
+hoeft te plakken: `.github/workflows/sync-server.yml` rolt de server uit zodra
+er iets in `server/cloud/` verandert. Drie secrets instellen, en klaar:
+
+| Secret | Waar je hem vindt |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Create Token. Rechten: **Workers Scripts: Edit** en **D1: Edit** op je account. |
+| `CLOUDFLARE_ACCOUNT_ID` | Het lange stuk in het adres van je dashboard, direct na `dash.cloudflare.com/`. |
+| `CLOUDFLARE_D1_ID` | Op de pagina van de D1-database, als **Database ID**. |
+
+Daarna: Actions → **Sync-server** → *Run workflow*. Hij zet de tabel klaar (alle
+statements zijn `if not exists`, dus dat mag elke keer) en rolt de worker uit.
+Het adres staat in de uitvoer van de laatste stap.
+
+Ontbreken de secrets, dan slaat de workflow zichzelf over. Dat is de normale
+situatie voor wie de online koppeling niet gebruikt.
+
 ### Zonder terminal
 
 Het kan ook helemaal via het dashboard, en dat is handig als je op een tablet

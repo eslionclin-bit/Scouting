@@ -1,0 +1,70 @@
+# Zet de sync-server op Cloudflare, zodat niemand ooit code in een dashboard
+# hoeft te plakken.
+#
+# Draait alleen als er iets aan de server verandert — de app zelf heeft zijn
+# eigen workflow. Ontbreken de twee secrets, dan slaat hij zichzelf over: dat is
+# de normale situatie voor wie de online koppeling niet gebruikt.
+#
+# Eenmalig instellen (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   — een token met rechten 'Workers Scripts: Edit' en
+#                            'D1: Edit' op je account
+#   CLOUDFLARE_ACCOUNT_ID  — staat in het adres van je Cloudflare-dashboard, het
+#                            lange stuk na dash.cloudflare.com/
+#   CLOUDFLARE_D1_ID       — de Database ID van je D1-database, te vinden op de
+#                            pagina van die database
+
+name: Sync-server
+
+on:
+  push:
+    branches: ['main']
+    paths: ['server/cloud/**', '.github/workflows/sync-server.yml']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Zijn de gegevens er?
+        id: check
+        run: |
+          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] && [ -n "${{ secrets.CLOUDFLARE_D1_ID }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Geen Cloudflare-gegevens ingesteld; de sync-server wordt overgeslagen."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.ready == 'true'
+        with:
+          node-version: 22
+
+      # De database-id hoort niet in de repository: hij wijst naar het account
+      # van de eigenaar, en die kan wisselen. Daarom staat er een plaatshouder
+      # in wrangler.toml die hier wordt ingevuld.
+      - name: Database-id invullen
+        if: steps.check.outputs.ready == 'true'
+        working-directory: server/cloud
+        run: |
+          sed -i "s|vul-hier-de-id-in-die-wrangler-afdrukt|${{ secrets.CLOUDFLARE_D1_ID }}|" wrangler.toml
+          grep database_id wrangler.toml
+
+      - name: Tabel klaarzetten
+        if: steps.check.outputs.ready == 'true'
+        working-directory: server/cloud
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Alle statements zijn 'if not exists', dus dit mag elke keer draaien.
+        run: npx --yes wrangler@4 d1 execute volley-scouting --remote --file schema.sql --yes
+
+      - name: Uitrollen
+        if: steps.check.outputs.ready == 'true'
+        working-directory: server/cloud
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy
