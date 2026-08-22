@@ -11,7 +11,8 @@
 import type { ActionRow, RallyRow } from './rows';
 import { summarize, type ActionStats } from './stats';
 import type { MatchBundle } from '../db/bundle';
-import type { AttackTempo, BlockCount, Player, Quality, TeamSide } from '../domain/types';
+import type { ErrorReason } from '../domain/errors';
+import type { ActionType, AttackTempo, BlockCount, Player, Quality, TeamSide } from '../domain/types';
 import { ATTACK_TEMPOS, BLOCK_COUNTS, QUALITIES } from '../domain/types';
 import { toActionRows, toRallyRows } from './rows';
 
@@ -287,4 +288,61 @@ export function attackByBlock(
     known: known.length,
     unknown: attacks.length - known.length,
   };
+}
+
+export interface ReasonCount {
+  reason: ErrorReason;
+  count: number;
+  share: number;
+}
+
+export interface ErrorBreakdown {
+  type: ActionType;
+  errors: number;
+  /** Fouten waarbij een reden is ingevuld. */
+  known: number;
+  reasons: ReasonCount[];
+}
+
+/**
+ * Waar de fouten heen gaan, per actietype.
+ *
+ * Twaalf servicefouten is een telling; negen daarvan in het net is een
+ * trainingsopdracht. Fouten zonder ingevulde reden tellen niet mee in de
+ * verdeling, maar het aantal staat er wel bij — anders zou 'drie in het net' er
+ * uitzien als het hele verhaal terwijl er twintig fouten waren.
+ */
+export function errorsByReason(
+  rows: readonly ActionRow[],
+  side: TeamSide = 'us',
+): ErrorBreakdown[] {
+  const perType = new Map<ActionType, ActionRow[]>();
+  for (const row of rows) {
+    if (row.action.team !== side || row.action.quality !== 'error') continue;
+    perType.set(row.action.type, [...(perType.get(row.action.type) ?? []), row]);
+  }
+
+  return [...perType.entries()]
+    .map(([type, list]) => {
+      const known = list.filter((row) => row.action.errorReason != null);
+      const counts = new Map<ErrorReason, number>();
+      for (const row of known) {
+        const reason = row.action.errorReason!;
+        counts.set(reason, (counts.get(reason) ?? 0) + 1);
+      }
+
+      return {
+        type,
+        errors: list.length,
+        known: known.length,
+        reasons: [...counts.entries()]
+          .map(([reason, count]) => ({
+            reason,
+            count,
+            share: known.length > 0 ? count / known.length : 0,
+          }))
+          .sort((a, b) => b.count - a.count),
+      };
+    })
+    .sort((a, b) => b.errors - a.errors);
 }

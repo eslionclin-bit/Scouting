@@ -151,6 +151,7 @@ export class ImportRepository {
             quality: action.quality,
             tempo: action.tempo,
             blockers: action.blockers,
+            errorReason: action.errorReason,
             videoTimestampMs: null,
           });
           ops.push({ entity: 'actions', record, skipOutbox: true });

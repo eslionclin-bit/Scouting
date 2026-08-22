@@ -28,6 +28,8 @@ En één die wél een extra tik kost, alleen bij een aanval:
 
 - **Tempo en blok**: van welke ballen de punten komen, en wat het blok
   ertegenover doet. Dat laatste is wat een laag aanvalsrendement verklaart.
+- **Waar de fouten heen gaan**: de reden per fout, gevraagd nádat de fout is
+  ingevoerd zodat het invoeren er niet op wacht.
 
 ## De zes kerngetallen
 

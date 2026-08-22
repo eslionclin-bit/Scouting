@@ -78,6 +78,7 @@ export class ActionRepository {
       quality: input.quality,
       tempo: input.tempo ?? null,
       blockers: input.blockers ?? null,
+      errorReason: input.errorReason ?? null,
       videoTimestampMs: input.videoTimestampMs ?? null,
     });
 
@@ -141,7 +142,14 @@ export class ActionRepository {
     id: string,
     patch: Pick<
       Partial<Action>,
-      'quality' | 'playerId' | 'zoneFrom' | 'zoneTo' | 'type' | 'tempo' | 'blockers'
+      | 'quality'
+      | 'playerId'
+      | 'zoneFrom'
+      | 'zoneTo'
+      | 'type'
+      | 'tempo'
+      | 'blockers'
+      | 'errorReason'
     >,
   ): Promise<Action> {
     return this.ctx.lock.run(async () => {

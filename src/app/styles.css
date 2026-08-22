@@ -2311,3 +2311,60 @@ button {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ---------- 'Waardoor ging die bal verloren?' ---------- */
+
+/* Staat onder de rally-keten, niet in de weg van de invoer: de rally loopt
+   door terwijl deze balk er staat, en hij verdwijnt vanzelf. */
+.reasonbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--error);
+  background: var(--bg-panel);
+}
+
+.reasonbar__label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-right: 0.25rem;
+}
+
+.reasonbar__button {
+  min-height: 2.4rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.reasonbar__button--chosen {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reasonbar__close {
+  margin-left: auto;
+  min-width: 2.4rem;
+  min-height: 2.4rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.fixlist__time {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--muted);
+}

@@ -8,6 +8,7 @@
  * ingelezen wedstrijd cijfers opleveren die er precies uitzien en het niet zijn.
  */
 
+import type { ErrorReason } from '../../domain/errors';
 import type { ActionType, AttackTempo, BlockCount, Quality, TeamSide, Zone } from '../../domain/types';
 import type { DvwFile, DvwRole, DvwRow } from './parse';
 
@@ -20,6 +21,7 @@ export interface ImportedAction {
   zoneTo: Zone | null;
   tempo: AttackTempo | null;
   blockers: BlockCount | null;
+  errorReason: ErrorReason | null;
   /** De oorspronkelijke code, zodat een cijfer terug te zoeken is. */
   code: string;
 }
@@ -139,6 +141,22 @@ const TEMPO_BY_TYPE: Record<string, AttackTempo> = {
 
 const BACK_ROW_ZONES: readonly Zone[] = [1, 5, 6] as const;
 
+/**
+ * De 'special codes' van DataVolley: één letter die zegt waardoor de bal
+ * verloren ging. Per vaardigheid betekent dezelfde letter net iets anders, dus
+ * dit is een tabel per vaardigheid.
+ */
+const REASONS: Partial<Record<ActionType, Record<string, ErrorReason>>> = {
+  // O/L/R zijn 'lang', 'links' en 'rechts' uit; N is in het net.
+  serve: { O: 'out', L: 'out', R: 'out', N: 'net', Z: 'other' },
+  // S/O zijn zij- en achteruit; I is netcontact, A de antenne.
+  attack: { S: 'out', O: 'out', N: 'net', I: 'net', A: 'other', Z: 'other' },
+  block: { S: 'out', O: 'out', N: 'net', I: 'net', X: 'other', A: 'other', P: 'other', T: 'other', Z: 'other' },
+  reception: { U: 'unplayable', X: 'handling', P: 'handling', E: 'other', Z: 'other' },
+  dig: { U: 'unplayable', X: 'handling', P: 'handling', E: 'other', Z: 'other' },
+  set: { W: 'handling', I: 'net', Z: 'handling' },
+};
+
 const SKILL_CODE = /^([*a])(\$\$|\d+)([SREABDF])/;
 const POINT_CODE = /^([*a])p(\d+):(\d+)/;
 const END_OF_SET = /^\*\*(\d+)set/i;
@@ -238,8 +256,24 @@ function actionFrom(row: DvwRow): ImportedAction | null {
     zoneTo: ZONE_MAP[rest.charAt(7)] ?? null,
     tempo: type === 'attack' ? tempoOf(rest.charAt(1), zoneFrom) : null,
     blockers: type === 'attack' ? blockersOf(rest.charAt(10)) : null,
+    errorReason: reasonOf(type, quality, evaluation, rest.charAt(11)),
     code: row.code,
   };
+}
+
+/**
+ * Waarom de bal verloren ging. Eén geval komt gratis: een aanval met code `/`
+ * is geblokt, en dat staat al in de waardering zelf.
+ */
+function reasonOf(
+  type: ActionType,
+  quality: Quality,
+  evaluation: string,
+  special: string,
+): ErrorReason | null {
+  if (quality !== 'error') return null;
+  if (type === 'attack' && evaluation === '/') return 'blocked';
+  return REASONS[type]?.[special] ?? null;
 }
 
 function tempoOf(typeCode: string, zoneFrom: Zone | null): AttackTempo | null {

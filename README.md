@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 188 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 190 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -109,6 +109,13 @@ aanval, want dat is de actie waar het antwoord het meest verklaart: tegen één
 blokkeerder hoort een aanval veel beter te scoren dan tegen drie, en zonder dat
 gegeven is een laag aanvalsrendement niet te duiden. Het staat ook in de
 CSV-export, en is achteraf te corrigeren.
+
+**Waardoor ging die bal verloren?** — na een fout verschijnt onder de keten een
+rijtje redenen: bij een service 'in het net / uit / anders', bij een aanval ook
+'geblokt', bij een pass 'onhoudbaar / technische fout'. De vraag komt pas nádat
+de fout is opgeslagen, dus het invoeren wacht er nooit op — de rally loopt door
+en de balk verdwijnt vanzelf. Twaalf servicefouten is een telling; negen daarvan
+in het net is een trainingsopdracht.
 
 **Corrigeren** — undo werkt zolang je de fout meteen ziet. Ontdek je pas drie
 rally's later dat die pass matig was in plaats van goed, dan staat onder
@@ -201,6 +208,11 @@ transitie alles weggeven.
 **Wie krijgt de bal, per rotatie** — de verdeling van onze aanvallen per rotatie
 met het rendement erachter. Eén speler die alles krijgt is prima, zolang het
 rendement er is.
+
+**Waar onze fouten heen gaan** — per actietype de verdeling over de redenen, met
+erbij van hoeveel fouten de reden bekend is. Overslaan mag, dus dat aantal hoort
+erbij: anders leest 'drie in het net' als het hele verhaal terwijl er twintig
+fouten waren.
 
 **Aanval per tempo en blok** — welke ballen de punten opleveren, en wat het blok
 ertegenover doet, voor beide ploegen naast elkaar. Op de ingelezen PlusLiga-

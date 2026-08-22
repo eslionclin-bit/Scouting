@@ -13,6 +13,7 @@ import {
   attackByBlock,
   attackByPhase,
   attackByTempo,
+  errorsByReason,
   compareMetrics,
   filterActions,
   filterRallies,
@@ -30,6 +31,7 @@ import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { ACTION_TYPES, type ActionType } from '../../domain/types';
 import { QualityBar, QualityLegend } from '../components/QualityBar';
 import { ATTACK_TEMPO_LABELS, BLOCK_LABELS } from '../../domain/attack';
+import { ERROR_REASON_LABELS } from '../../domain/errors';
 import { MetricTable } from '../components/MetricTable';
 import { PassValue } from '../components/PassValue';
 import { useReference } from '../hooks/useReference';
@@ -122,6 +124,7 @@ export function DashboardScreen({
       phases: attackByPhase(actionRows),
       tempo: { us: attackByTempo(actionRows, 'us'), them: attackByTempo(actionRows, 'them') },
       block: { us: attackByBlock(actionRows, 'us'), them: attackByBlock(actionRows, 'them') },
+      errors: errorsByReason(actionRows, 'us'),
       pointsUs: rallyRows.filter((row) => row.rally.wonBy === 'us').length,
       pointsThem: rallyRows.filter((row) => row.rally.wonBy === 'them').length,
       sideoutPct: receiveRallies > 0 ? sideouts / receiveRallies : null,
@@ -374,6 +377,51 @@ export function DashboardScreen({
           <p className="card__hint">
             Nog geen aanval waarbij het blok is ingevuld. Dat is de tweede tik in de aanvalsvraag.
           </p>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Waar onze fouten heen gaan</h2>
+        {view.errors.length === 0 ? (
+          <p className="card__hint">Nog geen fouten van ons in deze selectie.</p>
+        ) : (
+          <>
+            <p className="card__hint">
+              De reden wordt gevraagd nadat een fout is ingevoerd, en overslaan mag — daarom staat
+              erbij van hoeveel fouten hij bekend is.
+            </p>
+            <div className="tablewrap">
+              <table className="stats">
+                <thead>
+                  <tr>
+                    <th scope="col">Actie</th>
+                    <th scope="col">Fouten</th>
+                    <th scope="col">Reden bekend</th>
+                    <th scope="col">Verdeling</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {view.errors.map((entry) => (
+                    <tr key={entry.type}>
+                      <th scope="row">{ACTION_TYPE_LABELS[entry.type]}</th>
+                      <td>{entry.errors}</td>
+                      <td>{entry.known}</td>
+                      <td>
+                        {entry.reasons.length === 0
+                          ? '—'
+                          : entry.reasons
+                              .map(
+                                (reason) =>
+                                  `${ERROR_REASON_LABELS[reason.reason].toLowerCase()} ${reason.count}`,
+                              )
+                              .join(' · ')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 

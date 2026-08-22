@@ -15,6 +15,7 @@
 
 import { useState, type ReactElement } from 'react';
 import { ATTACK_TEMPO_LABELS, BLOCK_LABELS } from '../../domain/attack';
+import { errorReasonsFor, ERROR_REASON_LABELS } from '../../domain/errors';
 import { rallyOutcomeFor } from '../../domain/rules';
 import { playerLabel } from '../../domain/players';
 import { ACTION_TYPE_LABELS, QUALITY_LABELS } from '../../domain/protocol';
@@ -26,6 +27,12 @@ export interface ActionFixSheetProps {
   setId: string;
   players: readonly Player[];
   onClose: () => void;
+}
+
+/** Het tijdstip van invoeren, zodat je een moment in een opname terugvindt. */
+function clockTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : date.toTimeString().slice(0, 5);
 }
 
 /** Zoveel acties terug kun je corrigeren; verder terug hoort in het dashboard thuis. */
@@ -112,6 +119,7 @@ export function ActionFixSheet({ setId, players, onClose }: ActionFixSheetProps)
                   >
                     <span className="fixlist__rally">
                       rally {data?.sequenceOf.get(entry.rallyId) ?? '?'}
+                      <span className="fixlist__time">{clockTime(entry.createdAt)}</span>
                     </span>
                     <span className="fixlist__what">
                       {entry.team === 'us' ? 'wij' : 'zij'} · {ACTION_TYPE_LABELS[entry.type]}
@@ -157,6 +165,26 @@ export function ActionFixSheet({ setId, players, onClose }: ActionFixSheetProps)
                 </button>
               ))}
             </div>
+
+            {action.quality === 'error' && (
+              <>
+                <h4 className="sheet__subtitle">Waardoor ging de bal verloren?</h4>
+                <div className="grid grid--tempo">
+                  {errorReasonsFor(action.type).map((reason) => (
+                    <button
+                      key={reason}
+                      type="button"
+                      className={`tile tile--type ${
+                        action.errorReason === reason ? 'tile--selected' : ''
+                      }`}
+                      onClick={() => void change({ errorReason: reason })}
+                    >
+                      <span className="tile__name">{ERROR_REASON_LABELS[reason]}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
             {action.type === 'attack' && (
               <>

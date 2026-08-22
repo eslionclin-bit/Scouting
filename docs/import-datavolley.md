@@ -76,6 +76,12 @@ blokaantal en ontbreekt de startzone bij aanvallen, waardoor daar geen
 achterbalaanvallen te herkennen zijn. Dat is 'onbekend', geen nul — de app telt
 het apart.
 
+**Foutreden**: de 'special code' van DataVolley — één letter die zegt waardoor
+de bal verloren ging — wordt per vaardigheid vertaald naar onze zes redenen
+(uit, in het net, geblokt, technische fout, onhoudbaar, anders). Een geblokte
+aanval komt gratis: die staat al in de waardering (`/`). Ook hier vult niet elke
+scout het in: in twee van onze vier testbestanden staat geen enkele reden.
+
 **Zones**: DataVolley verdeelt het veld in negen zones. De drie diepe zones
 vallen bij ons samen met de achterzone erboven (7→5, 8→6, 9→1).
 

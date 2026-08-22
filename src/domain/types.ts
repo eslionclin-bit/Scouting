@@ -13,6 +13,7 @@
  *   een verdwenen rij niet. Undo van een actie is dus gewoon een tombstone.
  */
 
+import type { ErrorReason } from './errors';
 import type { MatchRules } from './scoring';
 import type { TeamSide } from './teams';
 
@@ -224,6 +225,11 @@ export interface Action extends BaseRecord {
    * scoren van tegen een dubbel blok.
    */
   blockers?: BlockCount | null;
+  /**
+   * Waarom de bal verloren ging. Alleen bij een fout, en altijd optioneel: hij
+   * wordt gevraagd nadat de actie al is opgeslagen.
+   */
+  errorReason?: ErrorReason | null;
   /** Alleen relevant bij invoer tijdens video-terugkijken. */
   videoTimestampMs?: number | null;
 }

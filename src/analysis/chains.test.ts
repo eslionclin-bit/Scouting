@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   attackByBlock,
+  errorsByReason,
   attackByPhase,
   attackByTempo,
   attackDistribution,
@@ -220,6 +221,72 @@ describe('tempo en blok', () => {
     expect(one.stats.total).toBeGreaterThan(10);
     expect(three.stats.total).toBeGreaterThan(5);
     expect(one.stats.efficiency!).toBeGreaterThan(three.stats.efficiency!);
+
+    store.close();
+  });
+});
+
+describe('foutredenen', () => {
+  it('telt per actietype waar de fouten heen gaan, en hoeveel er onbekend zijn', async () => {
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+
+    async function serveError(reason?: 'net' | 'out'): Promise<void> {
+      const rally = await store.rallies.start({ setId: fixture.set.id, servingTeam: 'us' });
+      const { action } = await store.actions.append({
+        rallyId: rally.id,
+        team: 'us',
+        type: 'serve',
+        quality: 'error',
+        playerId: fixture.players[0]!.id,
+        zoneFrom: 1 as Zone,
+        ...(reason ? { errorReason: reason } : {}),
+      });
+      expect(action.quality).toBe('error');
+      const open = await store.rallies.get(rally.id);
+      if (open?.wonBy === null) await store.rallies.complete(rally.id, 'them');
+    }
+
+    await serveError('net');
+    await serveError('net');
+    await serveError('out');
+    await serveError();
+
+    const rows = toActionRows(await loadMatchBundle(store, fixture.match.id));
+    const breakdown = errorsByReason(rows).find((entry) => entry.type === 'serve')!;
+
+    expect(breakdown.errors).toBe(4);
+    expect(breakdown.known).toBe(3);
+    expect(breakdown.reasons[0]).toMatchObject({ reason: 'net', count: 2 });
+    expect(breakdown.reasons[0]?.share).toBeCloseTo(2 / 3);
+
+    store.close();
+  });
+
+  it('haalt de foutreden uit een DataVolley-bestand, voor zover die erin staat', async () => {
+    const store = await openTestStore();
+    // Niet elk bestand vult de reden in: in twee van onze vier staat er geen
+    // enkele. In dit bestand wel.
+    const path = new URL('../../fixtures/dvw/braslovce-branik-2015.dvw', import.meta.url);
+    const imported = interpretDvw(parseDvw(decodeDvw(readFileSync(path).buffer as ArrayBuffer)));
+    const summary = await store.imports.importScoutedMatch(imported, { fileName: 'test.dvw' });
+    const rows = toActionRows(await loadMatchBundle(store, summary.matchId));
+
+    const breakdown = errorsByReason(rows);
+    const known = breakdown.reduce((sum, entry) => sum + entry.known, 0);
+    expect(known).toBeGreaterThan(10);
+
+    const serve = breakdown.find((entry) => entry.type === 'serve')!;
+    expect(serve.errors).toBeGreaterThan(5);
+    // Een servicefout gaat in het net of uit; iets anders bestaat er nauwelijks.
+    expect(serve.reasons.every((entry) => ['net', 'out', 'other'].includes(entry.reason))).toBe(
+      true,
+    );
+
+    // Een geblokte aanval krijgt zijn reden gratis uit de waardering, ook als de
+    // scout geen reden invulde.
+    const attack = breakdown.find((entry) => entry.type === 'attack')!;
+    expect(attack.reasons.some((entry) => entry.reason === 'blocked')).toBe(true);
 
     store.close();
   });

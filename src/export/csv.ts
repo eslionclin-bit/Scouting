@@ -8,6 +8,7 @@
 
 import type { MatchBundle } from '../db/bundle';
 import { ATTACK_TEMPO_LABELS } from '../domain/attack';
+import { ERROR_REASON_LABELS } from '../domain/errors';
 import { ACTION_TYPE_LABELS, QUALITY_LABELS, TEAM_SIDE_LABELS } from '../domain/protocol';
 
 export const CSV_COLUMNS = [
@@ -30,6 +31,8 @@ export const CSV_COLUMNS = [
   'kwalificatie',
   'tempo',
   'blok',
+  'foutreden',
+  'tijdstip',
   'video_ms',
   'actie_id',
 ] as const;
@@ -64,6 +67,11 @@ export function toMatchCsv(bundle: MatchBundle, delimiter = ';'): string {
             QUALITY_LABELS[action.quality],
             action.tempo ? ATTACK_TEMPO_LABELS[action.tempo] : '',
             action.blockers ?? '',
+            action.errorReason ? ERROR_REASON_LABELS[action.errorReason] : '',
+            // Het tijdstip waarop de actie is ingevoerd. Daarmee is een moment
+            // terug te vinden in een opname: zoek één actie op in het beeld en
+            // het verschil geldt voor de hele wedstrijd.
+            clockTime(action.createdAt),
             action.videoTimestampMs ?? '',
             action.id,
           ]
@@ -75,6 +83,13 @@ export function toMatchCsv(bundle: MatchBundle, delimiter = ';'): string {
   }
 
   return rows.join('\r\n');
+}
+
+/** ISO-tijd naar hh:mm:ss; leeg als er geen leesbare tijd in staat. */
+function clockTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toTimeString().slice(0, 8);
 }
 
 function escapeCsv(value: string | number, delimiter: string): string {

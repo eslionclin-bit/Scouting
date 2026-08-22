@@ -12,6 +12,7 @@ import { EntryPanel, type NewPlayerInput } from '../components/EntryPanel';
 import { LineupSheet } from '../components/LineupSheet';
 import { PairingSheet } from '../components/PairingSheet';
 import { ActionFixSheet } from '../components/ActionFixSheet';
+import { ErrorReasonBar } from '../components/ErrorReasonBar';
 import { ScoreFixSheet } from '../components/ScoreFixSheet';
 import { ProtocolSheet } from '../components/ProtocolSheet';
 import { RallyChain } from '../components/RallyChain';
@@ -24,7 +25,7 @@ import { courtPositions, positionsAt } from '../../domain/rotation';
 import { matchStatus, rulesOf, setOutcome } from '../../domain/scoring';
 import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
-import type { Player, Quality, TeamSide, Zone } from '../../domain/types';
+import type { Action, Player, Quality, TeamSide, Zone } from '../../domain/types';
 
 export interface ScoringScreenProps {
   matchId: string;
@@ -57,6 +58,8 @@ export function ScoringScreen({
   const [showPairing, setShowPairing] = useState(false);
   const [showScoreFix, setShowScoreFix] = useState(false);
   const [showActionFix, setShowActionFix] = useState(false);
+  /** De zojuist ingevoerde fout, zolang de vraag 'waardoor?' nog openstaat. */
+  const [lastError, setLastError] = useState<Action | null>(null);
   /** Bij welke stand de invoerder 'nog niet' zei tegen het sluiten van de set. */
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
 
@@ -207,6 +210,10 @@ export function ScoringScreen({
       );
       for (const warning of warnings) push('warning', warning.message);
       dispatch({ kind: 'committed', last: action });
+
+      // Bij een fout vragen we waardoor — maar pas hierna, zodat het invoeren er
+      // niet op wacht. Negeren mag: de balk verdwijnt vanzelf.
+      setLastError(action.quality === 'error' ? action : null);
 
       // Fout, ace of kill: de rally is volgens het protocol voorbij. Meteen
       // afronden scheelt een tik, en de uitslag is niet voor twee uitleg vatbaar.
@@ -455,6 +462,16 @@ export function ScoringScreen({
       </header>
 
       <RallyChain actions={actions ?? []} playersById={playersById} onUndoLast={() => void undoLastAction()} />
+
+      {lastError && (
+        <ErrorReasonBar
+          action={lastError}
+          onChoose={(reason) => {
+            void store.actions.revise(lastError.id, { errorReason: reason });
+          }}
+          onDismiss={() => setLastError(null)}
+        />
+      )}
 
       {status.complete ? (
         <section className="step step--done">

@@ -8,6 +8,7 @@
  *   - `warning` : dit kan kloppen, maar wijkt af van het protocol — laat het zien.
  */
 
+import type { ErrorReason } from './errors';
 import type {
   Action,
   ActionType,
@@ -78,6 +79,7 @@ export interface ActionDraft {
   /** Alleen bij een aanval. */
   tempo?: AttackTempo | null;
   blockers?: BlockCount | null;
+  errorReason?: ErrorReason | null;
   videoTimestampMs?: number | null;
 }
 
