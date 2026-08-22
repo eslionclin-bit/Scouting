@@ -17,6 +17,8 @@ export interface MetricTableProps {
   /** Kop boven de tweede kolom. Weglaten als er geen eigen gemiddelde is. */
   ownLabel?: string;
   referenceLabel: string;
+  /** Alleen de referentiekolom tonen — voor het scherm waar die zelf onderwerp is. */
+  hideNow?: boolean;
 }
 
 export function MetricTable({
@@ -24,6 +26,7 @@ export function MetricTable({
   nowLabel,
   ownLabel,
   referenceLabel,
+  hideNow = false,
 }: MetricTableProps): ReactElement {
   const [openSource, setOpenSource] = useState<MetricKey | null>(null);
 
@@ -33,8 +36,8 @@ export function MetricTable({
         <thead>
           <tr>
             <th scope="col">Wat</th>
-            <th scope="col">{nowLabel}</th>
-            {ownLabel && <th scope="col">{ownLabel}</th>}
+            {!hideNow && <th scope="col">{nowLabel}</th>}
+            {ownLabel && !hideNow && <th scope="col">{ownLabel}</th>}
             <th scope="col">{referenceLabel}</th>
           </tr>
         </thead>
@@ -49,6 +52,7 @@ export function MetricTable({
                     <span className="metrics__label">{row.metric.label}</span>
                     <span className="metrics__explain">{row.metric.explain}</span>
                   </th>
+                  {!hideNow && (
                   <td className={row.vsOwn ? `metrics__now metrics__now--${row.vsOwn}` : 'metrics__now'}>
                     <span className="metrics__value">{formatMetric(key, row.now.value)}</span>
                     <span className="metrics__sample">
@@ -56,7 +60,8 @@ export function MetricTable({
                       {row.vsOwn && row.vsOwn !== 'gelijk' ? ` · ${row.vsOwn} niveau` : ''}
                     </span>
                   </td>
-                  {ownLabel && (
+                  )}
+                  {ownLabel && !hideNow && (
                     <td>
                       <span className="metrics__value">{formatMetric(key, row.own.value)}</span>
                       <span className="metrics__sample">
@@ -78,7 +83,7 @@ export function MetricTable({
                 </tr>
                 {open && (
                   <tr className="metrics__sourcerow">
-                    <td colSpan={ownLabel ? 4 : 3}>{row.reference.source}</td>
+                    <td colSpan={hideNow ? 2 : ownLabel ? 4 : 3}>{row.reference.source}</td>
                   </tr>
                 )}
               </Fragment>

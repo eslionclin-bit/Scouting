@@ -26,6 +26,7 @@ import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { ACTION_TYPES, type ActionType } from '../../domain/types';
 import { QualityBar, QualityLegend } from '../components/QualityBar';
 import { MetricTable } from '../components/MetricTable';
+import { useReference } from '../hooks/useReference';
 import { StatTile } from '../components/StatTile';
 import { ZoneHeatmap } from '../components/ZoneHeatmap';
 import { useQuery } from '../StoreProvider';
@@ -65,14 +66,16 @@ export function DashboardScreen({
   );
 
   const bundle = data?.bundle ?? null;
+  const reference = useReference();
 
   const metrics = useMemo(() => {
     if (!data) return null;
     return compareMetrics(
       measureMetrics([data.bundle], setId ? { setId } : {}),
       measureMetrics(data.history),
+      reference.level,
     );
-  }, [data, setId]);
+  }, [data, setId, reference.level]);
 
   const view = useMemo(() => {
     if (!bundle) return null;
@@ -213,14 +216,14 @@ export function DashboardScreen({
         <h2>Hoe verhoudt dit zich?</h2>
         <p className="card__hint">
           {data.history.length > 0
-            ? 'Een percentage is pas te lezen naast iets anders: ons eigen gemiddelde over de andere wedstrijden, en waar het op topniveau ligt. Tik op een referentiegetal om te zien waar het vandaan komt.'
-            : 'Dit is de eerste wedstrijd van dit team, dus er is nog geen eigen gemiddelde om naast te leggen. Wat er wel naast staat is het topniveau — tik erop om te zien waar dat getal vandaan komt.'}
+            ? `Een percentage is pas te lezen naast iets anders: ons eigen gemiddelde over de andere wedstrijden, en ${referenceHint(reference)}. Tik op een referentiegetal om te zien waar het vandaan komt.`
+            : `Dit is de eerste wedstrijd van dit team, dus er is nog geen eigen gemiddelde om naast te leggen. Wat er wel naast staat is ${referenceHint(reference)} — tik erop om te zien waar dat getal vandaan komt.`}
         </p>
         <MetricTable
           rows={metrics}
           nowLabel={setId ? 'Deze set' : 'Deze wedstrijd'}
           {...(data.history.length > 0 ? { ownLabel: 'Ons gemiddelde' } : {})}
-          referenceLabel="Topniveau"
+          referenceLabel={reference.level.label}
         />
       </section>
 
@@ -435,6 +438,13 @@ function describePassing(stats: Stats): string {
 
 function describeAny(stats: Stats): string {
   return stats.pointPct === null ? describePassing(stats) : describeScoring(stats);
+}
+
+/** Zegt waar de referentiekolom vandaan komt: geteld of geschat. */
+function referenceHint(reference: ReturnType<typeof useReference>): string {
+  return reference.computed
+    ? `wat het is in de ${reference.computed.source.matches} ingelezen referentiewedstrijden`
+    : 'waar het op topniveau ligt';
 }
 
 function formatPct(value: number): string {

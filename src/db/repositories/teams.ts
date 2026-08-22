@@ -9,6 +9,8 @@ export interface TeamInput {
   isOwnTeam?: boolean;
   club?: string | null;
   level?: string | null;
+  /** Ploeg uit ingelezen referentiemateriaal. */
+  reference?: boolean;
 }
 
 export class TeamRepository {
@@ -20,6 +22,7 @@ export class TeamRepository {
       isOwnTeam: input.isOwnTeam ?? false,
       club: input.club ?? null,
       level: input.level ?? null,
+      reference: input.reference ?? false,
     };
     const record = buildRecord(this.ctx, 'teams', draft);
     await commit(this.ctx, [{ entity: 'teams', record }]);
@@ -46,8 +49,33 @@ export class TeamRepository {
     return (await this.list()).find((team) => team.isOwnTeam);
   }
 
+  /** Tegenstanders die wij zelf gespeeld hebben — dus zonder referentieploegen. */
   async opponents(): Promise<Team[]> {
-    return (await this.list()).filter((team) => !team.isOwnTeam);
+    return (await this.list()).filter((team) => !team.isOwnTeam && !team.reference);
+  }
+
+  /**
+   * Ploeg uit een ingelezen bestand. Dezelfde ploeg in twee bestanden wordt één
+   * ploeg, zodat 'Allianz MTV Stuttgart' niet drie keer in de lijst staat.
+   */
+  async findOrCreateReference(name: string): Promise<Team> {
+    return this.ctx.lock.run(async () => {
+      const normalized = name.trim();
+      const existing = (await this.list()).find(
+        (team) => team.reference && team.name.toLowerCase() === normalized.toLowerCase(),
+      );
+      if (existing) return existing;
+
+      const record = buildRecord(this.ctx, 'teams', {
+        name: normalized,
+        isOwnTeam: false,
+        club: null,
+        level: null,
+        reference: true,
+      });
+      await commit(this.ctx, [{ entity: 'teams', record }]);
+      return record;
+    });
   }
 
   /**

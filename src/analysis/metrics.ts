@@ -8,6 +8,7 @@
  */
 
 import type { MatchBundle } from '../db/bundle';
+import type { TeamSide } from '../domain/types';
 import { filterActions, toActionRows, toRallyRows } from './rows';
 import { statsByType } from './stats';
 
@@ -106,11 +107,34 @@ export type MetricSet = Record<MetricKey, MetricValue>;
  */
 export const MIN_BASELINE_SAMPLE = 25;
 
-/** Meet de zes getallen over een stapel wedstrijden — of over één. */
-export function measureMetrics(
+/**
+ * De ruwe tellingen achter een getal: teller en noemer apart.
+ *
+ * Dat is nodig om te kunnen optellen. Twee wedstrijden met 50% en 60% sideout
+ * hebben samen niet 55% sideout — dat hangt af van het aantal rally's. Alleen
+ * met tellers en noemers komt er iets kloppends uit.
+ */
+export interface MetricTally {
+  part: number;
+  total: number;
+}
+
+export type MetricTallies = Record<MetricKey, MetricTally>;
+
+export interface MeasureOptions {
+  setId?: string;
+  /** Vanuit welke ploeg gekeken wordt. Standaard onze eigen kant. */
+  side?: TeamSide;
+}
+
+/** Telt de zes getallen over een stapel wedstrijden — of over één. */
+export function tallyMetrics(
   bundles: readonly MatchBundle[],
-  options: { setId?: string } = {},
-): MetricSet {
+  options: MeasureOptions = {},
+): MetricTallies {
+  const side: TeamSide = options.side ?? 'us';
+  const other: TeamSide = side === 'us' ? 'them' : 'us';
+
   const rallies = bundles
     .flatMap((bundle) => toRallyRows(bundle))
     .filter((row) => (options.setId ? row.setId === options.setId : true))
@@ -119,37 +143,56 @@ export function measureMetrics(
   const actions = bundles
     .flatMap((bundle) => toActionRows(bundle))
     .filter((row) => (options.setId ? row.setId === options.setId : true));
-  const ours = statsByType(filterActions(actions, { team: 'us' }));
+  const ours = statsByType(filterActions(actions, { team: side }));
 
-  const receiving = rallies.filter((row) => row.rally.servingTeam === 'them');
-  const serving = rallies.filter((row) => row.rally.servingTeam === 'us');
+  const receiving = rallies.filter((row) => row.rally.servingTeam === other);
+  const serving = rallies.filter((row) => row.rally.servingTeam === side);
 
   return {
     sideout: {
-      value: share(receiving.filter((row) => row.rally.wonBy === 'us').length, receiving.length),
-      sample: receiving.length,
+      part: receiving.filter((row) => row.rally.wonBy === side).length,
+      total: receiving.length,
     },
     breakPoint: {
-      value: share(serving.filter((row) => row.rally.wonBy === 'us').length, serving.length),
-      sample: serving.length,
+      part: serving.filter((row) => row.rally.wonBy === side).length,
+      total: serving.length,
     },
     receptionPositive: {
-      value: ours.reception.total > 0 ? ours.reception.positivePct : null,
-      sample: ours.reception.total,
+      part: ours.reception.counts.perfect + ours.reception.counts.good,
+      total: ours.reception.total,
     },
-    attackKill: {
-      value: ours.attack.total > 0 ? ours.attack.pointPct : null,
-      sample: ours.attack.total,
-    },
+    attackKill: { part: ours.attack.counts.perfect, total: ours.attack.total },
     attackEfficiency: {
-      value: ours.attack.total > 0 ? ours.attack.efficiency : null,
-      sample: ours.attack.total,
+      part: ours.attack.counts.perfect - ours.attack.counts.error,
+      total: ours.attack.total,
     },
-    serveError: {
-      value: ours.serve.total > 0 ? ours.serve.errorPct : null,
-      sample: ours.serve.total,
-    },
+    serveError: { part: ours.serve.counts.error, total: ours.serve.total },
   };
+}
+
+/** Telt twee metingen bij elkaar op — tellers bij tellers, noemers bij noemers. */
+export function addTallies(a: MetricTallies, b: MetricTallies): MetricTallies {
+  const sum = {} as MetricTallies;
+  for (const key of METRIC_KEYS) {
+    sum[key] = { part: a[key].part + b[key].part, total: a[key].total + b[key].total };
+  }
+  return sum;
+}
+
+export function toMetricSet(tallies: MetricTallies): MetricSet {
+  const result = {} as MetricSet;
+  for (const key of METRIC_KEYS) {
+    const { part, total } = tallies[key];
+    result[key] = { value: total > 0 ? part / total : null, sample: total };
+  }
+  return result;
+}
+
+export function measureMetrics(
+  bundles: readonly MatchBundle[],
+  options: MeasureOptions = {},
+): MetricSet {
+  return toMetricSet(tallyMetrics(bundles, options));
 }
 
 /** Lege meting, voor als er nog niets gespeeld is. */
@@ -159,8 +202,10 @@ export function emptyMetrics(): MetricSet {
   return empty;
 }
 
-function share(part: number, total: number): number | null {
-  return total > 0 ? part / total : null;
+export function emptyTallies(): MetricTallies {
+  const empty = {} as MetricTallies;
+  for (const key of METRIC_KEYS) empty[key] = { part: 0, total: 0 };
+  return empty;
 }
 
 export function formatMetric(key: MetricKey, value: number | null): string {

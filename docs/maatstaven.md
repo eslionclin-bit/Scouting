@@ -65,19 +65,33 @@ de code: een beter onderbouwd getal is een regel aanpassen.
 
 ## Hoe ze harde getallen worden
 
-Door ze te berekenen uit echte wedstrijden. Het veld `basis` in een referentie
-kan `berekend` zijn in plaats van `indicatief`, met het aantal wedstrijden erbij
-— dan is het pas een maatstaf.
+Door ze te berekenen uit echte wedstrijden — en dat kan nu. Via 'Referentie' op
+het startscherm lees je **DataVolley-bestanden** (`.dvw`) in, het formaat waarin
+op hoger niveau al jaren wordt gescout. Eén bestand is één wedstrijd, actie voor
+actie. Zodra er genoeg waarnemingen achter een getal zitten (honderd), staat er
+`berekend` in plaats van `indicatief`, met het aantal wedstrijden en de
+competities erbij.
 
-De route daarnaartoe is het inlezen van **DataVolley-bestanden** (`.dvw`), het
-formaat waarin op hoger niveau al jaren wordt gescout. Eén bestand is één
-wedstrijd, actie voor actie. Wat dat oplevert:
+Wat het oplevert:
 
 - referentiewaarden die uit tellingen komen in plaats van uit literatuur;
-- een toets voor de analyse zelf: dezelfde wedstrijd door onze code en door
-  bestaande software gehaald hoort dezelfde cijfers op te leveren;
+- een toets voor de analyse zelf: de setstanden die wij uit de rally's optellen
+  moeten precies gelijk zijn aan wat het bestand zelf noteert. Bij alle vier de
+  testbestanden is dat zo;
 - een migratiepad voor iedereen die al in DataVolley scout.
 
+Twee dingen die daarbij horen, allebei uitgelegd in
+[import-datavolley.md](import-datavolley.md):
+
+- **Beide ploegen tellen mee.** Wie alleen naar de thuisploeg kijkt, meet of die
+  won in plaats van wat het niveau is.
+- **Alleen sideout en punt op eigen service zijn hard te vergelijken.** Die
+  volgen uit de uitslag van een rally. De vier actiecijfers komen uit een
+  waardering die vertaald is van de zesdelige DataVolley-schaal naar onze vier;
+  die vertaling staat vast en gedocumenteerd, maar hij blijft een vertaling.
+
 Wat het niet oplevert: cijfers uit jullie eigen competitie. Die worden nergens
-op actieniveau vastgelegd, door niemand. Het eigen gemiddelde blijft dus de
-belangrijkste maatstaf — en die wordt beter met elke wedstrijd die erin gaat.
+op actieniveau vastgelegd, door niemand — er is ook geen openbare database met
+scoutbestanden; wat publiek is, is een handvol wedstrijden uit het
+openvolley-project. Het eigen gemiddelde blijft dus de belangrijkste maatstaf, en
+die wordt beter met elke wedstrijd die erin gaat.

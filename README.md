@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 153 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 171 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -172,11 +172,25 @@ sideout zegt niets; 50% tegenover onze eigen 53% en 64% op topniveau zegt alles.
 Op het coachscherm staat het eigen gemiddelde beknopt onder de cijfers die
 tijdens een set tellen.
 
-De eerste twee kolommen zijn tellingen. De derde niet: die waarden zijn
-*indicatief* — ordegroottes die in de volleybalanalyse voor topniveau worden
-aangehouden, niet door ons uit een dataset gerekend. Dat staat er bij elk getal
-bij, en tikken toont de herkomst. Zie [docs/maatstaven.md](docs/maatstaven.md)
-voor hoe ze harde getallen worden.
+De eerste twee kolommen zijn tellingen. De derde ook, zodra er scoutbestanden
+zijn ingelezen (zie hieronder); zolang dat niet zo is, staat er *indicatief* bij
+— een ordegrootte uit de volleybalanalyse in plaats van een telling. Dat label
+staat bij elk getal, en tikken toont de herkomst. Zie
+[docs/maatstaven.md](docs/maatstaven.md).
+
+**Referentiemateriaal inlezen** — via 'Referentie' op het startscherm lees je
+DataVolley-bestanden (`.dvw`) in: het formaat waarin op hoger niveau al jaren
+gescout wordt. Eén bestand is één wedstrijd, actie voor actie. Daarmee wordt de
+referentiekolom een telling ('58% uit 3 ingelezen wedstrijden') in plaats van een
+ordegrootte, en wordt onze eigen analyse getoetst: de setstanden die wij uit de
+rally's optellen moeten precies gelijk zijn aan wat het bestand zelf noteert.
+
+Ingelezen wedstrijden staan apart van de eigen wedstrijden: ze verschijnen niet
+in de wedstrijdlijst en tellen niet mee in ons eigen gemiddelde. Beide ploegen
+tellen wel mee voor de referentie. Wat de vertaling van de DataVolley-schaal naar
+onze vier kwalificaties wel en niet toelaat, staat in
+[docs/import-datavolley.md](docs/import-datavolley.md) — kort: sideout en punt op
+eigen service zijn hard te vergelijken, de vier actiecijfers zijn een richting.
 
 Het eigen gemiddelde is ook drempel geworden waar dat eerlijker is: een rotatie
 is zwak als hij twaalf procentpunt onder onze eigen andere rotaties ligt, niet

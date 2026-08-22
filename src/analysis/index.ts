@@ -2,6 +2,7 @@ export * from './rows';
 export * from './metrics';
 export * from './benchmarks';
 export * from './comparison';
+export * from './reference';
 export * from './stats';
 export * from './opponent';
 export * from './coach';

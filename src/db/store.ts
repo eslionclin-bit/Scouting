@@ -16,6 +16,7 @@ import { Mutex } from './mutex';
 import type { WriteContext, WriteOp } from './mutations';
 import { META_KEYS } from './schema';
 import { ActionRepository } from './repositories/actions';
+import { ImportRepository } from './repositories/imports';
 import { LineupRepository, SubstitutionRepository } from './repositories/lineups';
 import { MatchRepository } from './repositories/matches';
 import { PlayerRepository } from './repositories/players';
@@ -38,6 +39,8 @@ export class ScoutingStore {
   readonly actions: ActionRepository;
   readonly lineups: LineupRepository;
   readonly substitutions: SubstitutionRepository;
+  /** Wedstrijden uit scoutbestanden van anderen, als referentiemateriaal. */
+  readonly imports: ImportRepository;
 
   private readonly listeners = new Set<(ops: readonly WriteOp[]) => void>();
 
@@ -51,6 +54,7 @@ export class ScoutingStore {
     this.actions = new ActionRepository(ctx, this.rallies, this.players);
     this.lineups = new LineupRepository(ctx);
     this.substitutions = new SubstitutionRepository(ctx);
+    this.imports = new ImportRepository(ctx, this.teams, this.players);
   }
 
   static async open(options: StoreOptions = {}): Promise<ScoutingStore> {

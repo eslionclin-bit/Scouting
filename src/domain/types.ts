@@ -85,6 +85,8 @@ export interface Team extends BaseRecord {
   isOwnTeam: boolean;
   club?: string | null;
   level?: string | null;
+  /** Ploeg uit ingelezen referentiemateriaal; hoort niet bij onze tegenstanders. */
+  reference?: boolean;
 }
 
 /**
@@ -121,6 +123,15 @@ export interface Match extends BaseRecord {
   competition?: string | null;
   status: MatchStatus;
   notes?: string | null;
+  /**
+   * Referentiemateriaal: een ingelezen wedstrijd van andere ploegen, bedoeld om
+   * onze cijfers tegen af te zetten. Zulke wedstrijden horen niet in de eigen
+   * wedstrijdlijst en tellen niet mee in ons eigen gemiddelde — anders zou de
+   * Bundesliga onze seizoenscijfers optillen.
+   */
+  reference?: boolean;
+  /** Bestandsnaam waar deze wedstrijd uit komt, als hij is ingelezen. */
+  source?: string | null;
 }
 
 export type SetStatus = 'pending' | 'live' | 'finished';

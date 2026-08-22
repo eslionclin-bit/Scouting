@@ -16,6 +16,9 @@ export interface MatchInput {
   competition?: string | null;
   status?: MatchStatus;
   notes?: string | null;
+  /** Ingelezen referentiewedstrijd in plaats van een eigen wedstrijd. */
+  reference?: boolean;
+  source?: string | null;
 }
 
 export class MatchRepository {
@@ -32,6 +35,8 @@ export class MatchRepository {
       competition: input.competition ?? null,
       status: input.status ?? 'planned',
       notes: input.notes ?? null,
+      reference: input.reference ?? false,
+      source: input.source ?? null,
     });
     await commit(this.ctx, [{ entity: 'matches', record }]);
     return record;
@@ -48,8 +53,21 @@ export class MatchRepository {
     return match;
   }
 
-  /** Nieuwste eerst — dat is de volgorde waarin een coach zijn wedstrijden zoekt. */
+  /**
+   * Onze eigen wedstrijden, nieuwste eerst — dat is de volgorde waarin een coach
+   * zoekt. Ingelezen referentiewedstrijden blijven eruit: die zijn geen
+   * wedstrijd van ons.
+   */
   async list(): Promise<Match[]> {
+    return (await this.listAll()).filter((match) => !match.reference);
+  }
+
+  /** Alleen het ingelezen referentiemateriaal. */
+  async listReference(): Promise<Match[]> {
+    return (await this.listAll()).filter((match) => match.reference === true);
+  }
+
+  private async listAll(): Promise<Match[]> {
     return alive(await this.ctx.db.getAll('matches')).sort((a, b) => b.date.localeCompare(a.date));
   }
 
