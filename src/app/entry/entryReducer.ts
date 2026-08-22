@@ -10,9 +10,17 @@
  */
 
 import { requiresZoneFrom, suggestNextAction } from '../../domain/rules';
-import type { Action, ActionType, Quality, TeamSide, Zone } from '../../domain/types';
+import type {
+  Action,
+  ActionType,
+  AttackTempo,
+  BlockCount,
+  Quality,
+  TeamSide,
+  Zone,
+} from '../../domain/types';
 
-export type EntryStep = 'player' | 'type' | 'zone' | 'quality';
+export type EntryStep = 'player' | 'type' | 'zone' | 'attack' | 'quality';
 
 export interface EntryState {
   team: TeamSide;
@@ -22,6 +30,9 @@ export interface EntryState {
   type: ActionType | null;
   zoneFrom: Zone | null;
   zoneTo: Zone | null;
+  /** Alleen bij een aanval; allebei mag leeg blijven. */
+  tempo: AttackTempo | null;
+  blockers: BlockCount | null;
   step: EntryStep;
   /** Wat er volgens de rally-keten waarschijnlijk komt; alleen een hint. */
   suggestion: ActionType | null;
@@ -34,6 +45,9 @@ export type EntryEvent =
   | { kind: 'zoneFrom'; zone: Zone }
   | { kind: 'zoneTo'; zone: Zone | null }
   | { kind: 'skipZone' }
+  | { kind: 'tempo'; tempo: AttackTempo }
+  | { kind: 'blockers'; blockers: BlockCount }
+  | { kind: 'skipAttack' }
   | { kind: 'goTo'; step: EntryStep }
   | { kind: 'back' }
   | { kind: 'reset'; team?: TeamSide }
@@ -50,6 +64,8 @@ export function initialEntryState(team: TeamSide = 'us', suggestion: ActionType 
     type: null,
     zoneFrom: null,
     zoneTo: null,
+    tempo: null,
+    blockers: null,
     step: 'player',
     suggestion,
   };
@@ -70,6 +86,15 @@ export function needsZoneStep(type: ActionType): boolean {
   return type !== 'reception';
 }
 
+/**
+ * De extra vraag bij een aanval: welk tempo, en hoeveel blok stond ertegenover.
+ * Alleen bij een aanval — dat is de actie waar het antwoord het meest verklaart,
+ * en de enige waar twee tikken extra te verantwoorden zijn.
+ */
+export function needsAttackStep(type: ActionType): boolean {
+  return type === 'attack';
+}
+
 export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
   switch (event.kind) {
     case 'team':
@@ -85,11 +110,24 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
         type: event.type,
         zoneFrom: null,
         zoneTo: null,
-        step: needsZoneStep(event.type) ? 'zone' : 'quality',
+        tempo: null,
+        blockers: null,
+        step: needsZoneStep(event.type) ? 'zone' : nextAfterZone(event.type),
       };
 
     case 'zoneFrom':
-      return { ...state, zoneFrom: event.zone, step: 'quality' };
+      return { ...state, zoneFrom: event.zone, step: nextAfterZone(state.type) };
+
+    // Het tempo kiezen laat de stap staan: daarna volgt het blok, en dát tikje
+    // brengt je naar de kwalificatie. Zo blijft het bij twee tikken.
+    case 'tempo':
+      return { ...state, tempo: event.tempo };
+
+    case 'blockers':
+      return { ...state, blockers: event.blockers, step: 'quality' };
+
+    case 'skipAttack':
+      return { ...state, step: 'quality' };
 
     case 'zoneTo':
       return { ...state, zoneTo: event.zone };
@@ -97,7 +135,7 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
     case 'skipZone':
       // Alleen toegestaan waar het protocol de zone niet verplicht stelt.
       if (state.type && requiresZoneFrom(state.type)) return state;
-      return { ...state, step: 'quality' };
+      return { ...state, step: nextAfterZone(state.type) };
 
     case 'goTo':
       return { ...state, step: event.step };
@@ -122,13 +160,23 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
   }
 }
 
+/** Waar je heen gaat als de zone klaar is: bij een aanval nog één vraag. */
+function nextAfterZone(type: ActionType | null): EntryStep {
+  return type && needsAttackStep(type) ? 'attack' : 'quality';
+}
+
 function stepBack(state: EntryState): EntryState {
   switch (state.step) {
     case 'quality':
+      if (state.type && needsAttackStep(state.type)) {
+        return { ...state, tempo: null, blockers: null, step: 'attack' };
+      }
       if (state.type && needsZoneStep(state.type)) {
         return { ...state, zoneFrom: null, zoneTo: null, step: 'zone' };
       }
       return { ...state, type: null, step: 'type' };
+    case 'attack':
+      return { ...state, zoneFrom: null, zoneTo: null, tempo: null, blockers: null, step: 'zone' };
     case 'zone':
       return { ...state, type: null, zoneFrom: null, zoneTo: null, step: 'type' };
     case 'type':
@@ -150,6 +198,8 @@ export function toActionDraft(
   playerId: string | null;
   zoneFrom: Zone | null;
   zoneTo: Zone | null;
+  tempo: AttackTempo | null;
+  blockers: BlockCount | null;
 } | null {
   if (!isReadyToCommit(state)) return null;
   return {
@@ -159,5 +209,8 @@ export function toActionDraft(
     playerId: state.playerId,
     zoneFrom: state.zoneFrom,
     zoneTo: state.zoneTo,
+    // Tempo en blok horen alleen bij een aanval; bij de rest zou het ruis zijn.
+    tempo: needsAttackStep(state.type) ? state.tempo : null,
+    blockers: needsAttackStep(state.type) ? state.blockers : null,
   };
 }

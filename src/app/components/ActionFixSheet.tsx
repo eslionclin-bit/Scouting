@@ -14,11 +14,12 @@
  */
 
 import { useState, type ReactElement } from 'react';
+import { ATTACK_TEMPO_LABELS, BLOCK_LABELS } from '../../domain/attack';
 import { rallyOutcomeFor } from '../../domain/rules';
 import { playerLabel } from '../../domain/players';
 import { ACTION_TYPE_LABELS, QUALITY_LABELS } from '../../domain/protocol';
 import type { Action, Player, Rally } from '../../domain/types';
-import { QUALITIES } from '../../domain/types';
+import { ATTACK_TEMPOS, BLOCK_COUNTS, QUALITIES } from '../../domain/types';
 import { useQuery, useStore } from '../StoreProvider';
 
 export interface ActionFixSheetProps {
@@ -156,6 +157,38 @@ export function ActionFixSheet({ setId, players, onClose }: ActionFixSheetProps)
                 </button>
               ))}
             </div>
+
+            {action.type === 'attack' && (
+              <>
+                <h4 className="sheet__subtitle">Tempo en blok</h4>
+                <div className="grid grid--tempo">
+                  {ATTACK_TEMPOS.map((tempo) => (
+                    <button
+                      key={tempo}
+                      type="button"
+                      className={`tile tile--type ${action.tempo === tempo ? 'tile--selected' : ''}`}
+                      onClick={() => void change({ tempo })}
+                    >
+                      <span className="tile__name">{ATTACK_TEMPO_LABELS[tempo]}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid--block">
+                  {BLOCK_COUNTS.map((blockers) => (
+                    <button
+                      key={blockers}
+                      type="button"
+                      className={`tile tile--type ${
+                        action.blockers === blockers ? 'tile--selected' : ''
+                      }`}
+                      onClick={() => void change({ blockers })}
+                    >
+                      <span className="tile__name">{BLOCK_LABELS[blockers]}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
             {action.team === 'us' && (
               <>

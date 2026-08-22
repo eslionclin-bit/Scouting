@@ -8,7 +8,7 @@
  * ingelezen wedstrijd cijfers opleveren die er precies uitzien en het niet zijn.
  */
 
-import type { ActionType, Quality, TeamSide, Zone } from '../../domain/types';
+import type { ActionType, AttackTempo, BlockCount, Quality, TeamSide, Zone } from '../../domain/types';
 import type { DvwFile, DvwRole, DvwRow } from './parse';
 
 export interface ImportedAction {
@@ -18,6 +18,8 @@ export interface ImportedAction {
   quality: Quality;
   zoneFrom: Zone | null;
   zoneTo: Zone | null;
+  tempo: AttackTempo | null;
+  blockers: BlockCount | null;
   /** De oorspronkelijke code, zodat een cijfer terug te zoeken is. */
   code: string;
 }
@@ -115,6 +117,28 @@ const ZONE_MAP: Record<string, Zone> = {
   '9': 1,
 };
 
+/**
+ * Tempo van een aanval uit de typecode van DataVolley.
+ *
+ * Onze vier soorten gaan over tempo, niet over plaats: `H` (hoge bal) is
+ * langzaam, en `Q` (snel), `M` (half), `F` (fast), `N` (slide), `T` (gestrekte
+ * bal) en `U` (super) zijn allemaal snel — of ze nu in het midden of naar de
+ * antenne gaan. `O` is de restcategorie. Een aanval vanaf een achterzone heet
+ * bij ons 'achter', ongeacht de code: dat is wat een coach ziet.
+ */
+const TEMPO_BY_TYPE: Record<string, AttackTempo> = {
+  H: 'high',
+  Q: 'quick',
+  M: 'quick',
+  F: 'quick',
+  N: 'quick',
+  T: 'quick',
+  U: 'quick',
+  O: 'other',
+};
+
+const BACK_ROW_ZONES: readonly Zone[] = [1, 5, 6] as const;
+
 const SKILL_CODE = /^([*a])(\$\$|\d+)([SREABDF])/;
 const POINT_CODE = /^([*a])p(\d+):(\d+)/;
 const END_OF_SET = /^\*\*(\d+)set/i;
@@ -203,15 +227,46 @@ function actionFrom(row: DvwRow): ImportedAction | null {
   const quality = QUALITIES[type][evaluation];
   if (!quality) return null;
 
+  const zoneFrom = ZONE_MAP[rest.charAt(6)] ?? null;
+
   return {
     team,
     playerNumber,
     type,
     quality,
-    zoneFrom: ZONE_MAP[rest.charAt(6)] ?? null,
+    zoneFrom,
     zoneTo: ZONE_MAP[rest.charAt(7)] ?? null,
+    tempo: type === 'attack' ? tempoOf(rest.charAt(1), zoneFrom) : null,
+    blockers: type === 'attack' ? blockersOf(rest.charAt(10)) : null,
     code: row.code,
   };
+}
+
+function tempoOf(typeCode: string, zoneFrom: Zone | null): AttackTempo | null {
+  if (zoneFrom !== null && BACK_ROW_ZONES.includes(zoneFrom)) return 'back';
+  return TEMPO_BY_TYPE[typeCode] ?? null;
+}
+
+/**
+ * Het aantal blokkeerders staat als cijfer in de code: 0 tot 3, en 4 voor een
+ * blok met een gat erin. Die laatste tellen we als een dubbel blok — er staan
+ * twee mensen, alleen niet goed.
+ */
+function blockersOf(code: string): BlockCount | null {
+  switch (code) {
+    case '0':
+      return 0;
+    case '1':
+      return 1;
+    case '2':
+      return 2;
+    case '3':
+      return 3;
+    case '4':
+      return 2;
+    default:
+      return null;
+  }
 }
 
 /**

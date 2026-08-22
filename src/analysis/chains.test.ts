@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { attackByPhase, attackDistribution, sideoutByPass } from './chains';
+import {
+  attackByBlock,
+  attackByPhase,
+  attackByTempo,
+  attackDistribution,
+  sideoutByPass,
+} from './chains';
 import { toActionRows } from './rows';
 import { loadMatchBundle, type MatchBundle } from '../db/bundle';
 import type { ScoutingStore } from '../db/store';
@@ -145,6 +151,77 @@ describe('ketens binnen een rally', () => {
     expect(rotation.attacks).toBe(2);
     expect(rotation.attackers[0]).toMatchObject({ number: 9, attacks: 2, share: 1 });
     expect(rotation.attackers[0]?.stats.efficiency).toBe(0);
+  });
+});
+
+describe('tempo en blok', () => {
+  it('splitst de aanvallen uit en laat het aantal zonder tempo apart zien', async () => {
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+
+    /** Eén aanval met de opgegeven kenmerken. */
+    async function attack(
+      quality: Quality,
+      extra: { tempo?: 'high' | 'quick' | 'back' | 'other'; blockers?: 0 | 1 | 2 | 3 } = {},
+    ): Promise<void> {
+      const rally = await store.rallies.start({ setId: fixture.set.id });
+      await store.actions.append({
+        rallyId: rally.id,
+        team: 'us',
+        type: 'attack',
+        quality,
+        playerId: fixture.players[2]!.id,
+        zoneFrom: 4 as Zone,
+        ...extra,
+      });
+      const open = await store.rallies.get(rally.id);
+      if (open?.wonBy === null) await store.rallies.complete(rally.id, 'us');
+    }
+
+    await attack('perfect', { tempo: 'quick', blockers: 1 });
+    await attack('perfect', { tempo: 'quick', blockers: 1 });
+    await attack('error', { tempo: 'high', blockers: 3 });
+    await attack('good'); // zonder tempo en zonder blok
+
+    const rows = toActionRows(await loadMatchBundle(store, fixture.match.id));
+    const tempo = attackByTempo(rows);
+    const block = attackByBlock(rows);
+
+    expect(tempo.known).toBe(3);
+    expect(tempo.unknown).toBe(1);
+    const quick = tempo.rows.find((row) => row.tempo === 'quick')!;
+    expect(quick.stats.total).toBe(2);
+    expect(quick.stats.efficiency).toBe(1);
+    expect(quick.share).toBeCloseTo(2 / 3);
+
+    expect(block.known).toBe(3);
+    expect(block.rows.find((row) => row.blockers === 3)?.stats.efficiency).toBe(-1);
+    expect(block.rows.find((row) => row.blockers === 0)?.stats.total).toBe(0);
+
+    store.close();
+  });
+
+  it('leest tempo en blok uit een DataVolley-bestand', async () => {
+    const store = await openTestStore();
+    const path = new URL('../../fixtures/dvw/katowice-bedzin-2019.dvw', import.meta.url);
+    const imported = interpretDvw(parseDvw(decodeDvw(readFileSync(path).buffer as ArrayBuffer)));
+    const summary = await store.imports.importScoutedMatch(imported, { fileName: 'test.dvw' });
+    const rows = toActionRows(await loadMatchBundle(store, summary.matchId));
+
+    const tempo = attackByTempo(rows);
+    expect(tempo.known).toBeGreaterThan(100);
+    expect(tempo.rows.find((row) => row.tempo === 'back')?.stats.total).toBeGreaterThan(10);
+
+    // Het cijfer waar het om gaat: tegen drie blokkeerders scoort een aanval
+    // veel slechter dan tegen één. Zo niet, dan zit er een fout in de vertaling.
+    const block = attackByBlock(rows);
+    const one = block.rows.find((row) => row.blockers === 1)!;
+    const three = block.rows.find((row) => row.blockers === 3)!;
+    expect(one.stats.total).toBeGreaterThan(10);
+    expect(three.stats.total).toBeGreaterThan(5);
+    expect(one.stats.efficiency!).toBeGreaterThan(three.stats.efficiency!);
+
+    store.close();
   });
 });
 

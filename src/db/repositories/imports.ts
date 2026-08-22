@@ -149,6 +149,8 @@ export class ImportRepository {
             zoneFrom: action.zoneFrom,
             zoneTo: action.zoneTo,
             quality: action.quality,
+            tempo: action.tempo,
+            blockers: action.blockers,
             videoTimestampMs: null,
           });
           ops.push({ entity: 'actions', record, skipOutbox: true });

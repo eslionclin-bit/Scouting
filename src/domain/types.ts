@@ -179,6 +179,23 @@ export interface Rally extends BaseRecord {
   scouted?: boolean;
 }
 
+/**
+ * Tempo van een aanval.
+ *
+ * Vier soorten, want dat is wat een invoerder tijdens een rally betrouwbaar ziet:
+ * een hoge bal buitenom, een snelle bal in het midden, een bal vanaf de
+ * achterlijn, en de rest (prikballen, noodoplossingen, tweede bal van de
+ * spelverdeler).
+ */
+export type AttackTempo = 'high' | 'quick' | 'back' | 'other';
+
+export const ATTACK_TEMPOS: readonly AttackTempo[] = ['high', 'quick', 'back', 'other'] as const;
+
+/** Aantal blokkeerders tegenover een aanval. */
+export type BlockCount = 0 | 1 | 2 | 3;
+
+export const BLOCK_COUNTS: readonly BlockCount[] = [0, 1, 2, 3] as const;
+
 export interface Action extends BaseRecord {
   matchId: string;
   setId: string;
@@ -196,6 +213,17 @@ export interface Action extends BaseRecord {
   /** Landingszone: altijd optioneel. */
   zoneTo: Zone | null;
   quality: Quality;
+  /**
+   * Tempo van de aanval. Alleen bij een aanval, en altijd optioneel: liever een
+   * aanval zonder tempo dan een invoerder die achterloopt op het spel.
+   */
+  tempo?: AttackTempo | null;
+  /**
+   * Hoeveel blokkeerders er tegenover stonden. Dit is wat een laag
+   * aanvalsrendement verklaart: tegen een enkel blok hoort het dubbele te
+   * scoren van tegen een dubbel blok.
+   */
+  blockers?: BlockCount | null;
   /** Alleen relevant bij invoer tijdens video-terugkijken. */
   videoTimestampMs?: number | null;
 }

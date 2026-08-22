@@ -9,6 +9,7 @@
  */
 
 import { useState, type ReactElement } from 'react';
+import { ATTACK_TEMPO_HINTS, ATTACK_TEMPO_LABELS, BLOCK_LABELS } from '../../domain/attack';
 import {
   ACTION_TYPE_LABELS,
   QUALITY_LABELS,
@@ -17,7 +18,16 @@ import {
 } from '../../domain/protocol';
 import { playerLabel } from '../../domain/players';
 import { requiresZoneFrom } from '../../domain/rules';
-import { ACTION_TYPES, QUALITIES, type Player, type Quality, type TeamSide, type Zone } from '../../domain/types';
+import {
+  ACTION_TYPES,
+  ATTACK_TEMPOS,
+  BLOCK_COUNTS,
+  QUALITIES,
+  type Player,
+  type Quality,
+  type TeamSide,
+  type Zone,
+} from '../../domain/types';
 import { COURT_GRID, ZONE_LABELS } from '../../domain/zones';
 import { useLongPress } from '../hooks/useLongPress';
 import type { EntryEvent, EntryState } from '../entry/entryReducer';
@@ -60,6 +70,7 @@ export function EntryPanel(props: EntryPanelProps): ReactElement {
         ) : (
           <ZoneStep state={state} dispatch={dispatch} />
         ))}
+      {state.step === 'attack' && <AttackStep state={state} dispatch={dispatch} />}
       {state.step === 'quality' && (
         <QualityStep state={state} onCommit={props.onCommit} onExplain={props.onExplain} />
       )}
@@ -76,7 +87,7 @@ function DraftBar({
   const who = !state.playerChosen ? null : chosen ? playerLabel(chosen) : 'onbekende speler';
 
   return (
-    <div className="draft">
+    <div className={`draft ${state.type === 'attack' ? 'draft--attack' : ''}`}>
       <button
         type="button"
         className={`draft__chip ${state.step === 'player' ? 'draft__chip--active' : ''}`}
@@ -110,6 +121,27 @@ function DraftBar({
           {state.zoneFrom ? `zone ${state.zoneFrom}${state.zoneTo ? ` → ${state.zoneTo}` : ''}` : '—'}
         </span>
       </button>
+
+      {state.type === 'attack' && (
+        <button
+          type="button"
+          className={`draft__chip ${state.step === 'attack' ? 'draft__chip--active' : ''}`}
+          disabled={state.zoneFrom === null}
+          onClick={() => dispatch({ kind: 'goTo', step: 'attack' })}
+        >
+          <span className="draft__label">Hoe</span>
+          <span className="draft__value">
+            {state.tempo === null && state.blockers === null
+              ? '—'
+              : [
+                  state.tempo ? ATTACK_TEMPO_LABELS[state.tempo].toLowerCase() : null,
+                  state.blockers === null ? null : BLOCK_LABELS[state.blockers].toLowerCase(),
+                ]
+                  .filter((part): part is string => part !== null)
+                  .join(' · ')}
+          </span>
+        </button>
+      )}
 
       <button
         type="button"
@@ -438,6 +470,65 @@ function ZoneStep({
             Geen landingszone
           </button>
         )}
+      </div>
+    </StepCard>
+  );
+}
+
+/**
+ * De enige extra vraag in de invoer, en alleen bij een aanval: welk tempo, en
+ * hoeveel blok stond ertegenover. Twee tikken, en allebei over te slaan — een
+ * invoerder die achterloopt op het spel is erger dan een aanval zonder tempo.
+ *
+ * Het tempo blijft staan als je het kiest; het blok brengt je door naar de
+ * kwalificatie. Zo is het bij twee tikken klaar.
+ */
+function AttackStep({
+  state,
+  dispatch,
+}: {
+  state: EntryState;
+  dispatch: (event: EntryEvent) => void;
+}): ReactElement {
+  return (
+    <StepCard
+      title="Hoe ging de aanval?"
+      hint="Tempo, en hoeveel blok ertegenover stond. Overslaan mag."
+    >
+      <div className="grid grid--tempo" role="group" aria-label="Tempo">
+        {ATTACK_TEMPOS.map((tempo) => (
+          <button
+            key={tempo}
+            type="button"
+            className={`tile tile--type ${state.tempo === tempo ? 'tile--selected' : ''}`}
+            aria-label={ATTACK_TEMPO_LABELS[tempo]}
+            aria-pressed={state.tempo === tempo}
+            onClick={() => dispatch({ kind: 'tempo', tempo })}
+          >
+            <span className="tile__name">{ATTACK_TEMPO_LABELS[tempo]}</span>
+            <span className="tile__hint">{ATTACK_TEMPO_HINTS[tempo]}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid--block" role="group" aria-label="Blok">
+        {BLOCK_COUNTS.map((blockers) => (
+          <button
+            key={blockers}
+            type="button"
+            className={`tile tile--type ${state.blockers === blockers ? 'tile--selected' : ''}`}
+            aria-label={BLOCK_LABELS[blockers]}
+            onClick={() => dispatch({ kind: 'blockers', blockers })}
+          >
+            <span className="tile__name">{BLOCK_LABELS[blockers]}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="step__actions">
+        <button type="button" className="button" onClick={() => dispatch({ kind: 'skipAttack' })}>
+          Overslaan
+        </button>
       </div>
     </StepCard>
   );

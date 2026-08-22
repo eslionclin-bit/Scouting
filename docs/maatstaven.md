@@ -24,6 +24,11 @@ tellingen niet zeggen:
   verdediging.
 - **Wie krijgt de bal, per rotatie**: de aanvalsverdeling met rendement.
 
+En één die wél een extra tik kost, alleen bij een aanval:
+
+- **Tempo en blok**: van welke ballen de punten komen, en wat het blok
+  ertegenover doet. Dat laatste is wat een laag aanvalsrendement verklaart.
+
 ## De zes kerngetallen
 
 Ze staan in `src/analysis/metrics.ts`, en ze worden overal op dezelfde manier

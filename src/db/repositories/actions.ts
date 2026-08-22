@@ -76,6 +76,8 @@ export class ActionRepository {
       zoneFrom: (input.zoneFrom ?? null) as Zone | null,
       zoneTo: (input.zoneTo ?? null) as Zone | null,
       quality: input.quality,
+      tempo: input.tempo ?? null,
+      blockers: input.blockers ?? null,
       videoTimestampMs: input.videoTimestampMs ?? null,
     });
 
@@ -137,7 +139,10 @@ export class ActionRepository {
    */
   async revise(
     id: string,
-    patch: Pick<Partial<Action>, 'quality' | 'playerId' | 'zoneFrom' | 'zoneTo' | 'type'>,
+    patch: Pick<
+      Partial<Action>,
+      'quality' | 'playerId' | 'zoneFrom' | 'zoneTo' | 'type' | 'tempo' | 'blockers'
+    >,
   ): Promise<Action> {
     return this.ctx.lock.run(async () => {
       const current = await this.require(id);

@@ -22,7 +22,7 @@ npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
 npm run build   # typecheck + productiebuild inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 183 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 188 tests: domein, opslag, sync, rotatie, analyse, schermen, export
 ```
 
 ## Wat er nu staat
@@ -100,6 +100,15 @@ rondt de rally meteen af en zet de opslag van de winnaar klaar.
 
 Undo werkt over de rallygrens heen: is de nieuwe rally nog leeg, dan wordt de
 vorige rally heropend en dáár de laatste actie teruggedraaid.
+
+**Tempo en blok bij een aanval** — na de zone volgt bij een aanval één extra
+vraag: welk tempo (hoog, snel, achter, overig) en hoeveel blok stond
+ertegenover (geen, 1, 2, 3). Twee tikken, allebei over te slaan — een invoerder
+die achterloopt op het spel is erger dan een aanval zonder tempo. Alleen bij de
+aanval, want dat is de actie waar het antwoord het meest verklaart: tegen één
+blokkeerder hoort een aanval veel beter te scoren dan tegen drie, en zonder dat
+gegeven is een laag aanvalsrendement niet te duiden. Het staat ook in de
+CSV-export, en is achteraf te corrigeren.
 
 **Corrigeren** — undo werkt zolang je de fout meteen ziet. Ontdek je pas drie
 rally's later dat die pass matig was in plaats van goed, dan staat onder
@@ -192,6 +201,12 @@ transitie alles weggeven.
 **Wie krijgt de bal, per rotatie** — de verdeling van onze aanvallen per rotatie
 met het rendement erachter. Eén speler die alles krijgt is prima, zolang het
 rendement er is.
+
+**Aanval per tempo en blok** — welke ballen de punten opleveren, en wat het blok
+ertegenover doet, voor beide ploegen naast elkaar. Op de ingelezen PlusLiga-
+wedstrijd komt daar het schoolvoorbeeld uit: tegen één blokkeerder +61%
+rendement, tegen twee +41%, tegen drie −17%. Aanvallen zonder ingevuld tempo
+blijven eruit; hoeveel dat er zijn staat erbij.
 
 **Nu, wij gemiddeld, topniveau** — op het dashboard en in het teamdossier staan
 zes kerngetallen (sideout, punt op eigen service, pass positief, aanval punt,

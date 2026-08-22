@@ -79,6 +79,12 @@ describe('ScoringScreen', () => {
     await user.click(screen.getByRole('button', { name: '#9 Fem' }));
     await user.click(screen.getByRole('button', { name: 'Aanval' }));
     await user.click(screen.getByRole('button', { name: 'Zone 4 (linksvoor)' }));
+
+    // Bij een aanval komt de vraag naar tempo en blok ertussen; het blok brengt
+    // je door naar de kwalificatie.
+    expect(screen.getByText('Hoe ging de aanval?')).toBeDefined();
+    await user.click(screen.getByRole('button', { name: 'Snel' }));
+    await user.click(screen.getByRole('button', { name: '2 blok' }));
     await user.click(screen.getByRole('button', { name: /^Perfect/ }));
 
     // Perfecte aanval = direct punt, dus de setstand loopt op en er staat een
@@ -151,6 +157,7 @@ describe('ScoringScreen als assistent', () => {
     await user.click(screen.getByRole('button', { name: '#9 Fem' }));
     await user.click(screen.getByRole('button', { name: 'Aanval' }));
     await user.click(screen.getByRole('button', { name: 'Zone 4 (linksvoor)' }));
+    await user.click(screen.getByRole('button', { name: 'Overslaan' }));
     await user.click(screen.getByRole('button', { name: /^Fout/ }));
 
     // De actie staat er, maar de stand blijft aan de hoofdinvoerder.
@@ -312,10 +319,14 @@ describe('ScoringScreen: setverloop', () => {
     await waitFor(async () => {
       expect((await store.sets.require(fixture.set.id)).status).toBe('finished');
     });
-    // En er staat meteen een volgende set klaar, met de service aan de andere kant.
-    const sets = await store.sets.listByMatch(fixture.match.id);
-    expect(sets).toHaveLength(2);
-    expect(sets[1]?.startingServe).toBe('them');
+    // En er staat meteen een volgende set klaar, met de service aan de andere
+    // kant. Die wordt aangemaakt nadat de set is afgesloten, dus erop wachten:
+    // anders is het toeval of de test hem al ziet.
+    await waitFor(async () => {
+      const sets = await store.sets.listByMatch(fixture.match.id);
+      expect(sets).toHaveLength(2);
+      expect(sets[1]?.startingServe).toBe('them');
+    });
   });
 
   it('sluit niet bij 25-24, want er moeten twee punten verschil zijn', async () => {

@@ -540,6 +540,11 @@ button {
   gap: 0.5rem;
 }
 
+/* Bij een aanval komt er een vierde stap bij ('hoe'), dus dan vier kolommen. */
+.draft--attack {
+  grid-template-columns: repeat(4, 1fr) auto;
+}
+
 .draft__chip {
   display: grid;
   gap: 0.1rem;
@@ -2283,5 +2288,26 @@ button {
     grid-template-columns: 4rem 1fr;
     grid-template-areas: 'rally what' 'who quality';
     padding: 0.4rem 0.6rem;
+  }
+}
+
+/* De aanvalsvraag: tempo in twee rijen van twee, het blok in één rij van vier.
+   Zo staat elke rij vol en is in één oogopslag te zien dat het twee vragen zijn. */
+.grid--tempo {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.grid--block {
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .grid--block {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .draft--attack {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

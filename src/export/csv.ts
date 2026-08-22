@@ -7,6 +7,7 @@
  */
 
 import type { MatchBundle } from '../db/bundle';
+import { ATTACK_TEMPO_LABELS } from '../domain/attack';
 import { ACTION_TYPE_LABELS, QUALITY_LABELS, TEAM_SIDE_LABELS } from '../domain/protocol';
 
 export const CSV_COLUMNS = [
@@ -27,6 +28,8 @@ export const CSV_COLUMNS = [
   'zone_vertrek',
   'zone_landing',
   'kwalificatie',
+  'tempo',
+  'blok',
   'video_ms',
   'actie_id',
 ] as const;
@@ -59,6 +62,8 @@ export function toMatchCsv(bundle: MatchBundle, delimiter = ';'): string {
             action.zoneFrom ?? '',
             action.zoneTo ?? '',
             QUALITY_LABELS[action.quality],
+            action.tempo ? ATTACK_TEMPO_LABELS[action.tempo] : '',
+            action.blockers ?? '',
             action.videoTimestampMs ?? '',
             action.id,
           ]

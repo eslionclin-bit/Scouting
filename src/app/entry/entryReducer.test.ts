@@ -21,16 +21,65 @@ describe('entryReducer', () => {
     expect(afterType.step).toBe('zone');
     expect(isReadyToCommit(afterType)).toBe(false);
 
+    // Bij een aanval komt er één vraag bij: tempo en blok.
     const afterZone = entryReducer(afterType, { kind: 'zoneFrom', zone: 4 });
-    expect(afterZone.step).toBe('quality');
-    expect(toActionDraft(afterZone, 'perfect')).toStrictEqual({
+    expect(afterZone.step).toBe('attack');
+
+    const afterTempo = entryReducer(afterZone, { kind: 'tempo', tempo: 'quick' });
+    expect(afterTempo.step).toBe('attack');
+
+    const afterBlock = entryReducer(afterTempo, { kind: 'blockers', blockers: 2 });
+    expect(afterBlock.step).toBe('quality');
+    expect(toActionDraft(afterBlock, 'perfect')).toStrictEqual({
       team: 'us',
       type: 'attack',
       quality: 'perfect',
       playerId: 'p1',
       zoneFrom: 4,
       zoneTo: null,
+      tempo: 'quick',
+      blockers: 2,
     });
+  });
+
+  it('laat tempo en blok overslaan', () => {
+    const state = run(
+      initialEntryState('us'),
+      { kind: 'player', playerId: 'p1' },
+      { kind: 'type', type: 'attack' },
+      { kind: 'zoneFrom', zone: 4 },
+      { kind: 'skipAttack' },
+    );
+
+    expect(state.step).toBe('quality');
+    expect(toActionDraft(state, 'error')).toMatchObject({ tempo: null, blockers: null });
+  });
+
+  it('geeft tempo en blok alleen mee bij een aanval', () => {
+    const state = run(
+      initialEntryState('us'),
+      { kind: 'player', playerId: 'p1' },
+      { kind: 'type', type: 'dig' },
+      { kind: 'skipZone' },
+    );
+
+    expect(state.step).toBe('quality');
+    expect(toActionDraft(state, 'good')).toMatchObject({ tempo: null, blockers: null });
+  });
+
+  it('gaat vanuit de kwalificatie terug naar de aanvalsvraag', () => {
+    const state = run(
+      initialEntryState('us'),
+      { kind: 'player', playerId: 'p1' },
+      { kind: 'type', type: 'attack' },
+      { kind: 'zoneFrom', zone: 4 },
+      { kind: 'blockers', blockers: 1 },
+      { kind: 'back' },
+    );
+
+    expect(state.step).toBe('attack');
+    expect(state.blockers).toBeNull();
+    expect(state.zoneFrom).toBe(4);
   });
 
   it('rekent een onbekende speler als gemaakte keuze', () => {

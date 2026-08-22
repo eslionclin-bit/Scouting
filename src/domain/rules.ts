@@ -8,7 +8,17 @@
  *   - `warning` : dit kan kloppen, maar wijkt af van het protocol — laat het zien.
  */
 
-import type { Action, ActionType, PlayerRole, Quality, Rally, TeamSide, Zone } from './types';
+import type {
+  Action,
+  ActionType,
+  AttackTempo,
+  BlockCount,
+  PlayerRole,
+  Quality,
+  Rally,
+  TeamSide,
+  Zone,
+} from './types';
 import { ACTION_TYPES, QUALITIES } from './types';
 import { isZone } from './zones';
 
@@ -65,6 +75,9 @@ export interface ActionDraft {
   playerNumber?: number | null;
   zoneFrom?: number | null;
   zoneTo?: number | null;
+  /** Alleen bij een aanval. */
+  tempo?: AttackTempo | null;
+  blockers?: BlockCount | null;
   videoTimestampMs?: number | null;
 }
 

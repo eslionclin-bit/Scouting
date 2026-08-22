@@ -10,7 +10,9 @@
 import { useMemo, useState, type ReactElement } from 'react';
 import { loadMatchBundle } from '../../db/bundle';
 import {
+  attackByBlock,
   attackByPhase,
+  attackByTempo,
   compareMetrics,
   filterActions,
   filterRallies,
@@ -27,6 +29,7 @@ import {
 import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { ACTION_TYPES, type ActionType } from '../../domain/types';
 import { QualityBar, QualityLegend } from '../components/QualityBar';
+import { ATTACK_TEMPO_LABELS, BLOCK_LABELS } from '../../domain/attack';
 import { MetricTable } from '../components/MetricTable';
 import { PassValue } from '../components/PassValue';
 import { useReference } from '../hooks/useReference';
@@ -117,6 +120,8 @@ export function DashboardScreen({
       ),
       rotations,
       phases: attackByPhase(actionRows),
+      tempo: { us: attackByTempo(actionRows, 'us'), them: attackByTempo(actionRows, 'them') },
+      block: { us: attackByBlock(actionRows, 'us'), them: attackByBlock(actionRows, 'them') },
       pointsUs: rallyRows.filter((row) => row.rally.wonBy === 'us').length,
       pointsThem: rallyRows.filter((row) => row.rally.wonBy === 'them').length,
       sideoutPct: receiveRallies > 0 ? sideouts / receiveRallies : null,
@@ -289,6 +294,87 @@ export function DashboardScreen({
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="card">
+        <h2>Aanval per tempo en blok</h2>
+        <p className="card__hint">
+          {view.tempo.us.unknown > 0
+            ? `Van ${view.tempo.us.unknown} van onze aanvallen is geen tempo ingevuld; die staan hier niet tussen.`
+            : 'Van welke ballen komen de punten, en wat doet het blok ertegenover.'}
+        </p>
+        <div className="tablewrap">
+          <table className="stats">
+            <thead>
+              <tr>
+                <th scope="col">Tempo</th>
+                <th scope="col">Wij</th>
+                <th scope="col">Rendement</th>
+                <th scope="col">Zij</th>
+                <th scope="col">Rendement</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.tempo.us.rows.map((row, index) => {
+                const theirs = view.tempo.them.rows[index];
+                return (
+                  <tr key={row.tempo}>
+                    <th scope="row">{ATTACK_TEMPO_LABELS[row.tempo]}</th>
+                    <td>{describeAttacks(row.stats.total, row.share)}</td>
+                    <td className={rendementClass(row.stats.efficiency)}>
+                      {row.stats.total > 0 ? formatSigned(row.stats.efficiency ?? 0) : '—'}
+                    </td>
+                    <td>{describeAttacks(theirs?.stats.total ?? 0, theirs?.share ?? 0)}</td>
+                    <td className={rendementClass(theirs?.stats.efficiency ?? null)}>
+                      {(theirs?.stats.total ?? 0) > 0
+                        ? formatSigned(theirs?.stats.efficiency ?? 0)
+                        : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="tablewrap">
+          <table className="stats">
+            <thead>
+              <tr>
+                <th scope="col">Blok ertegenover</th>
+                <th scope="col">Wij</th>
+                <th scope="col">Rendement</th>
+                <th scope="col">Zij</th>
+                <th scope="col">Rendement</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.block.us.rows.map((row, index) => {
+                const theirs = view.block.them.rows[index];
+                return (
+                  <tr key={row.blockers}>
+                    <th scope="row">{BLOCK_LABELS[row.blockers]}</th>
+                    <td>{describeAttacks(row.stats.total, row.share)}</td>
+                    <td className={rendementClass(row.stats.efficiency)}>
+                      {row.stats.total > 0 ? formatSigned(row.stats.efficiency ?? 0) : '—'}
+                    </td>
+                    <td>{describeAttacks(theirs?.stats.total ?? 0, theirs?.share ?? 0)}</td>
+                    <td className={rendementClass(theirs?.stats.efficiency ?? null)}>
+                      {(theirs?.stats.total ?? 0) > 0
+                        ? formatSigned(theirs?.stats.efficiency ?? 0)
+                        : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {view.block.us.known === 0 && view.block.them.known === 0 && (
+          <p className="card__hint">
+            Nog geen aanval waarbij het blok is ingevuld. Dat is de tweede tik in de aanvalsvraag.
+          </p>
+        )}
       </section>
 
       <section className="card">
@@ -517,6 +603,17 @@ function referenceHint(reference: ReturnType<typeof useReference>): string {
   return reference.computed
     ? `wat het is in de ${reference.computed.source.matches} ingelezen referentiewedstrijden`
     : 'waar het op topniveau ligt';
+}
+
+/** 'n · aandeel%', of een streepje als er niets is. */
+function describeAttacks(total: number, share: number): string {
+  if (total === 0) return '—';
+  return `${total} · ${Math.round(share * 100)}%`;
+}
+
+function rendementClass(efficiency: number | null): string {
+  if (efficiency === null) return '';
+  return efficiency >= 0 ? 'stats__good' : 'stats__bad';
 }
 
 function formatPct(value: number): string {

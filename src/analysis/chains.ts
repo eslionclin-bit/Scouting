@@ -11,8 +11,8 @@
 import type { ActionRow, RallyRow } from './rows';
 import { summarize, type ActionStats } from './stats';
 import type { MatchBundle } from '../db/bundle';
-import type { Player, Quality, TeamSide } from '../domain/types';
-import { QUALITIES } from '../domain/types';
+import type { AttackTempo, BlockCount, Player, Quality, TeamSide } from '../domain/types';
+import { ATTACK_TEMPOS, BLOCK_COUNTS, QUALITIES } from '../domain/types';
 import { toActionRows, toRallyRows } from './rows';
 
 /** Onder dit aantal passes van één soort zeggen we er niets over. */
@@ -218,4 +218,73 @@ export function attackDistribution(
       return { rotation, attacks, attackers };
     })
     .sort((a, b) => a.rotation - b.rotation);
+}
+
+export interface TempoStats {
+  tempo: AttackTempo;
+  stats: ActionStats;
+  /** Aandeel van alle aanvallen waarvan het tempo bekend is. */
+  share: number;
+}
+
+/**
+ * Aanvallen per tempo.
+ *
+ * Aanvallen zonder ingevuld tempo blijven eruit — meetellen zou het aandeel van
+ * de rest verwateren. Het aantal daarvan staat apart, zodat je ziet hoeveel van
+ * de wedstrijd dit beslaat.
+ */
+export function attackByTempo(
+  rows: readonly ActionRow[],
+  side: TeamSide = 'us',
+): { rows: TempoStats[]; known: number; unknown: number } {
+  const attacks = rows.filter((row) => row.action.team === side && row.action.type === 'attack');
+  const known = attacks.filter((row) => row.action.tempo != null);
+
+  return {
+    rows: ATTACK_TEMPOS.map((tempo) => {
+      const list = known.filter((row) => row.action.tempo === tempo);
+      return {
+        tempo,
+        stats: summarize(list, 'attack'),
+        share: known.length > 0 ? list.length / known.length : 0,
+      };
+    }),
+    known: known.length,
+    unknown: attacks.length - known.length,
+  };
+}
+
+export interface BlockStats {
+  blockers: BlockCount;
+  stats: ActionStats;
+  share: number;
+}
+
+/**
+ * Aanvallen tegenover het aantal blokkeerders.
+ *
+ * Dit is het cijfer dat een laag aanvalsrendement verklaart: tegen een enkel
+ * blok hoort een aanval veel beter te scoren dan tegen een dubbel. Scoort een
+ * ploeg tegen één blokkeerder net zo slecht, dan ligt het niet aan het blok.
+ */
+export function attackByBlock(
+  rows: readonly ActionRow[],
+  side: TeamSide = 'us',
+): { rows: BlockStats[]; known: number; unknown: number } {
+  const attacks = rows.filter((row) => row.action.team === side && row.action.type === 'attack');
+  const known = attacks.filter((row) => row.action.blockers != null);
+
+  return {
+    rows: BLOCK_COUNTS.map((blockers) => {
+      const list = known.filter((row) => row.action.blockers === blockers);
+      return {
+        blockers,
+        stats: summarize(list, 'attack'),
+        share: known.length > 0 ? list.length / known.length : 0,
+      };
+    }),
+    known: known.length,
+    unknown: attacks.length - known.length,
+  };
 }

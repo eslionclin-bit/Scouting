@@ -64,6 +64,18 @@ De gevolgen daarvan hoor je te kennen voordat je de cijfers gebruikt:
   precies 'pass positief' in een DataVolley-bestand, omdat de grens tussen goed
   en matig ergens anders ligt. Dat staat ook in de app bij het cijfer.
 
+**Tempo en blok**: het aanvalstempo komt uit de typecode (`H` hoog; `Q`, `M`,
+`F`, `N`, `T`, `U` snel; `O` overig) en wordt 'achter' zodra de aanval vanaf een
+achterzone komt. Onze vier soorten gaan over tempo, niet over plaats — een
+gestrekte bal naar de antenne is net zo goed 'snel' als een korte bal in het
+midden. Het aantal blokkeerders komt uit de code voor het aantal spelers; een
+'blok met een gat' (code 4) telt als dubbel blok, want er staan twee mensen.
+
+Niet elk bestand vult beide in: in de Bundesliga-wedstrijd staat geen enkel
+blokaantal en ontbreekt de startzone bij aanvallen, waardoor daar geen
+achterbalaanvallen te herkennen zijn. Dat is 'onbekend', geen nul — de app telt
+het apart.
+
 **Zones**: DataVolley verdeelt het veld in negen zones. De drie diepe zones
 vallen bij ons samen met de achterzone erboven (7→5, 8→6, 9→1).
 
