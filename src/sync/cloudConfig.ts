@@ -17,11 +17,17 @@ function fromEnv(name: string): string {
   return (env[name] ?? '').trim();
 }
 
-export function isCloudConfigured(): boolean {
-  return fromEnv(URL_KEY).length > 0;
-}
-
-export function cloudUrl(): string {
+/**
+ * Het ingebouwde adres, als het er is.
+ *
+ * Bewust niet meer het enige antwoord. Een adres dat bij het bouwen wordt
+ * ingebakken is onzichtbaar: je kunt niet zien of het erin zit, je moet een
+ * bouw afwachten om het te veranderen, en een browser die een oude kopie
+ * vasthoudt geeft je een app zonder adres zonder dat iemand weet waarom. Dat
+ * kostte een avond. Het adres van een apparaat kan daarom ook gewoon worden
+ * ingesteld, en het reist mee in de koppellink.
+ */
+export function builtInUrl(): string {
   return fromEnv(URL_KEY);
 }
 
@@ -94,9 +100,19 @@ export function generateTeamCode(): string {
  */
 const LINK_KEY = 'ploeg';
 
-export function couplingLink(code: string): string {
+export function couplingLink(code: string, url: string): string {
   const base = `${globalThis.location?.origin ?? ''}${globalThis.location?.pathname ?? '/'}`;
-  return `${base}#${LINK_KEY}=${encodeURIComponent(code)}`;
+  // Het adres gaat mee. Zo hoeft het andere apparaat niets te weten, ook niet
+  // of er iets is ingebakken — het krijgt alles wat het nodig heeft in één tik.
+  return `${base}#${LINK_KEY}=${encodeURIComponent(code)}&${SERVER_KEY}=${encodeURIComponent(url)}`;
+}
+
+const SERVER_KEY = 'server';
+
+export interface CouplingFromLink {
+  code: string;
+  /** Leeg als de link nog van de oude soort was, zonder adres. */
+  url: string;
 }
 
 /**
@@ -105,12 +121,14 @@ export function couplingLink(code: string): string {
  * Dat opruimen is niet cosmetisch: anders staat de code in de geschiedenis van
  * de browser en in elke schermafbeelding die iemand van de app maakt.
  */
-export function takeCouplingCode(): string | null {
+export function takeCouplingCode(): CouplingFromLink | null {
   const hash = globalThis.location?.hash ?? '';
   const match = new RegExp(`[#&]${LINK_KEY}=([^&]+)`).exec(hash);
   if (!match?.[1]) return null;
 
   const code = normalizeTeamCode(decodeURIComponent(match[1]));
+  const server = new RegExp(`[#&]${SERVER_KEY}=([^&]+)`).exec(hash);
+  const url = server?.[1] ? decodeURIComponent(server[1]).trim() : '';
 
   try {
     const { origin, pathname, search } = globalThis.location;
@@ -120,5 +138,5 @@ export function takeCouplingCode(): string | null {
     // zwaarder dan een nette adresbalk.
   }
 
-  return code.length >= MIN_CODE_LENGTH ? code : null;
+  return code.length >= MIN_CODE_LENGTH ? { code, url } : null;
 }

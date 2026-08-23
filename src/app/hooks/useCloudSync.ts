@@ -14,12 +14,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SyncEngine } from '../../sync/engine';
 import { CloudTransport } from '../../sync/cloud';
-import { cloudUrl, isCloudConfigured } from '../../sync/cloudConfig';
+
 import type { SyncState } from '../../sync/types';
 import { useStore } from '../StoreProvider';
 
 export interface CloudSync {
-  /** Is er überhaupt een server ingebouwd om mee te koppelen? */
+  /** Is er een serveradres bekend om mee te koppelen? */
   available: boolean;
   /** Draait de koppeling nu? */
   connected: boolean;
@@ -45,7 +45,7 @@ const IDLE: SyncState = {
   failures: 0,
 };
 
-export function useCloudSync(teamCode: string | null): CloudSync {
+export function useCloudSync(teamCode: string | null, url: string | null): CloudSync {
   const store = useStore();
   const [state, setState] = useState<SyncState>(IDLE);
   const [onServer, setOnServer] = useState<number | null>(null);
@@ -70,17 +70,17 @@ export function useCloudSync(teamCode: string | null): CloudSync {
       setOnServer(null);
     }
   }, [store]);
-  const available = isCloudConfigured();
+  const available = (url ?? '').length > 0;
   const active = available && teamCode !== null && teamCode.length > 0;
 
   useEffect(() => {
-    if (!active || teamCode === null) {
+    if (!active || teamCode === null || url === null) {
       setState(IDLE);
       setOnServer(null);
       return;
     }
 
-    const transport = new CloudTransport({ url: cloudUrl(), teamCode });
+    const transport = new CloudTransport({ url, teamCode });
     transportRef.current = transport;
     let cancelled = false;
 
@@ -112,7 +112,7 @@ export function useCloudSync(teamCode: string | null): CloudSync {
       engineRef.current = null;
       transportRef.current = null;
     };
-  }, [store, active, teamCode]);
+  }, [store, active, teamCode, url]);
 
   return { available, connected: active, state, onServer, syncNow };
 }

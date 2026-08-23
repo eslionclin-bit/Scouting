@@ -17,7 +17,7 @@ import { ScoringScreen } from './screens/ScoringScreen';
 import { TeamScreen } from './screens/TeamScreen';
 import { CoachScreen } from './screens/CoachScreen';
 import { useStore } from './StoreProvider';
-import { takeCouplingCode } from '../sync/cloudConfig';
+import { builtInUrl, takeCouplingCode } from '../sync/cloudConfig';
 import { enqueueAll } from '../sync/outbox';
 import { useCloudSync } from './hooks/useCloudSync';
 
@@ -105,12 +105,21 @@ export function App(): ReactElement {
    * zolang de app open is.
    */
   const [teamCode, setTeamCode] = useState<string | null>(null);
-  const cloud = useCloudSync(teamCode);
+  const [syncUrl, setSyncUrl] = useState<string | null>(null);
+  const cloud = useCloudSync(teamCode, syncUrl);
 
   const setCode = useCallback(
     async (code: string | null): Promise<void> => {
       await store.setTeamCode(code);
       setTeamCode(code);
+    },
+    [store],
+  );
+
+  const setServer = useCallback(
+    async (url: string | null): Promise<void> => {
+      await store.setSyncUrl(url);
+      setSyncUrl((url?.trim() ?? '').length > 0 ? url!.trim() : (builtInUrl() || null));
     },
     [store],
   );
@@ -122,12 +131,19 @@ export function App(): ReactElement {
     void (async () => {
       // Eerst de link: staat daar een ploegcode in, dan hoort dit apparaat er
       // vanaf nu bij, nog voor er een scherm getekend wordt.
+      // Een koppellink draagt de ploegcode én het adres van de server. Daarmee
+      // hoeft dit apparaat vooraf niets te weten — ook niet wat er bij het
+      // bouwen is ingebakken.
       const fromLink = takeCouplingCode();
-      if (fromLink) await store.setTeamCode(fromLink);
+      if (fromLink) {
+        if (fromLink.url) await store.setSyncUrl(fromLink.url);
+        await store.setTeamCode(fromLink.code);
+      }
 
-      const code = await store.getTeamCode();
+      const [code, stored] = await Promise.all([store.getTeamCode(), store.getSyncUrl()]);
       if (cancelled) return;
       setTeamCode(code);
+      setSyncUrl(stored ?? (builtInUrl() || null));
       if (fromLink) setCoupled(true);
 
       const matchId = await store.getActiveMatchId();
@@ -217,6 +233,8 @@ export function App(): ReactElement {
           cloud={cloud}
           teamCode={teamCode}
           onSetTeamCode={setCode}
+          syncUrl={syncUrl}
+          onSetSyncUrl={setServer}
           onResend={() => enqueueAll(store.db)}
         />
       );

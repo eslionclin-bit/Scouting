@@ -179,6 +179,24 @@ export class ScoutingStore {
     }
   }
 
+  /**
+   * Het adres van de sync-server voor dit apparaat.
+   *
+   * Staat er niets, dan geldt wat er bij het bouwen is ingebakken. Dat
+   * ingebakken adres was eerst het enige antwoord, en dat is een slechte plek
+   * voor iets dat je moet kunnen zien en veranderen: onzichtbaar in de app, pas
+   * te wijzigen na een bouw, en weg zodra een browser een oude kopie
+   * vasthoudt.
+   */
+  async getSyncUrl(): Promise<string | null> {
+    return (await this.getMeta<string>(META_KEYS.syncUrl)) ?? null;
+  }
+
+  async setSyncUrl(url: string | null): Promise<void> {
+    const trimmed = url?.trim() ?? '';
+    await this.setMeta(META_KEYS.syncUrl, trimmed.length > 0 ? trimmed : null);
+  }
+
   async getActiveMatchId(): Promise<string | null> {
     return (await this.getMeta<string>(META_KEYS.activeMatchId)) ?? null;
   }

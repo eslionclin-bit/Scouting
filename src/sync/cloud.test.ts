@@ -140,22 +140,26 @@ describe('koppelen via een link', () => {
     vi.stubGlobal('history', { replaceState: vi.fn() });
   }
 
-  it('zet de code achter een hekje, zodat hij nooit naar een server gaat', () => {
+  it('draagt de code én het adres, achter een hekje', () => {
     at('');
-    const link = couplingLink('wilg-molen-waard-wilg-1343');
+    const link = couplingLink('wilg-molen-waard-wilg-1343', 'https://sync.example.dev');
 
-    expect(link).toBe(
-      'https://eslionclin-bit.github.io/Scouting/#ploeg=wilg-molen-waard-wilg-1343',
-    );
+    // Het adres gaat mee, zodat het andere apparaat vooraf niets hoeft te
+    // weten — ook niet wat er bij het bouwen is ingebakken.
+    expect(link).toContain('ploeg=wilg-molen-waard-wilg-1343');
+    expect(link).toContain('server=https%3A%2F%2Fsync.example.dev');
     // Alles ná het hekje blijft in de browser. Dat is het hele punt: de server
     // die de app uitlevert ziet de code niet.
     expect(link.split('#')[0]).not.toContain('wilg');
   });
 
-  it('leest de code uit de link en haalt hem uit de adresbalk', () => {
-    at('#ploeg=wilg-molen-waard-wilg-1343');
+  it('leest code en adres uit de link en haalt ze uit de adresbalk', () => {
+    at('#ploeg=wilg-molen-waard-wilg-1343&server=https%3A%2F%2Fsync.example.dev');
 
-    expect(takeCouplingCode()).toBe('wilg-molen-waard-wilg-1343');
+    expect(takeCouplingCode()).toStrictEqual({
+      code: 'wilg-molen-waard-wilg-1343',
+      url: 'https://sync.example.dev',
+    });
     // Opruimen is niet cosmetisch: anders staat de code in de geschiedenis van
     // de browser en op elke schermafbeelding van de app.
     expect(globalThis.history.replaceState).toHaveBeenCalledWith(
@@ -167,7 +171,15 @@ describe('koppelen via een link', () => {
 
   it('vlakt af wat een klavier ervan gemaakt heeft', () => {
     at('#ploeg=Wilg-Molen-Waard-Wilg-1343');
-    expect(takeCouplingCode()).toBe('wilg-molen-waard-wilg-1343');
+    expect(takeCouplingCode()?.code).toBe('wilg-molen-waard-wilg-1343');
+  });
+
+  it('werkt ook met een oude link zonder adres erin', () => {
+    at('#ploeg=wilg-molen-waard-wilg-1343');
+    expect(takeCouplingCode()).toStrictEqual({
+      code: 'wilg-molen-waard-wilg-1343',
+      url: '',
+    });
   });
 
   it('geeft niets terug bij een gewone start of een te korte code', () => {

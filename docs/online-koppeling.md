@@ -107,8 +107,16 @@ npx wrangler deploy
 #   https://volley-scouting-sync.<naam>.workers.dev
 ```
 
-Dat adres zet je in GitHub onder *Settings → Secrets and variables → Actions* als
-`SYNC_URL`. De eerstvolgende deploy neemt het mee.
+Dat adres vul je in de app in: **Instellingen → Online koppeling → adres van de
+sync-server**. Eén keer, op het eerste apparaat; de rest krijgt het via de
+koppellink.
+
+Je kúnt het ook in GitHub zetten als secret `SYNC_URL`, dan staat het al ingevuld
+voor wie de app voor het eerst opent. Nodig is dat niet, en het heeft een nadeel:
+ingebakken bij het bouwen is het onzichtbaar. Je kunt niet zien of het erin zit,
+je moet een bouw afwachten om het te veranderen, en een browser die een oude
+kopie vasthoudt geeft je een app zonder adres zonder dat iemand begrijpt waarom.
+Dat laatste kostte een avond zoeken.
 
 ### Door GitHub laten doen
 

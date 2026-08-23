@@ -9,7 +9,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import type { CloudSync } from '../hooks/useCloudSync';
 import {
-  cloudUrl,
   couplingLink,
   generateTeamCode,
   normalizeTeamCode,
@@ -34,6 +33,15 @@ export interface SettingsScreenProps {
   onSetTeamCode: (code: string | null) => Promise<void>;
   /** Alles wat op dit apparaat staat opnieuw naar de ploeg sturen. */
   onResend: () => Promise<number>;
+  /**
+   * Het adres van de sync-server.
+   *
+   * Zichtbaar en in te stellen, want ingebakken bij het bouwen is het
+   * onzichtbaar: dan kun je niet zien of het klopt en moet je een bouw
+   * afwachten om het te veranderen.
+   */
+  syncUrl: string | null;
+  onSetSyncUrl: (url: string | null) => Promise<void>;
 }
 
 /** Alleen de ja/nee-instellingen; de tegenstander heeft drie standen. */
@@ -97,12 +105,15 @@ export function SettingsScreen({
   teamCode,
   onSetTeamCode,
   onResend,
+  syncUrl,
+  onSetSyncUrl,
 }: SettingsScreenProps): ReactElement {
   const store = useStore();
   const { data } = useQuery(async (instance) => instance.getSettings(), []);
   const [busy, setBusy] = useState(false);
   const [codeDraft, setCodeDraft] = useState(teamCode ?? '');
   const [resent, setResent] = useState<string | null>(null);
+  const [urlDraft, setUrlDraft] = useState(syncUrl ?? '');
 
   /**
    * De koppeling doorgeven.
@@ -115,7 +126,7 @@ export function SettingsScreen({
   const [shared, setShared] = useState<string | null>(null);
 
   async function shareCoupling(code: string): Promise<void> {
-    const link = couplingLink(code);
+    const link = couplingLink(code, syncUrl ?? '');
     const share = (globalThis.navigator as { share?: (data: unknown) => Promise<void> }).share;
 
     if (typeof share === 'function') {
@@ -229,10 +240,37 @@ export function SettingsScreen({
       <section className="card">
         <h2>Online koppeling</h2>
         {!cloud.available ? (
-          <p className="card__hint">
-            Er is nog geen sync-server ingesteld. Zonder blijft alles op dit apparaat staan en
-            koppel je alleen met een tablet in dezelfde zaal.
-          </p>
+          <>
+            <p className="card__hint">
+              Er is nog geen sync-server ingesteld. Zonder blijft alles op dit apparaat staan en
+              koppel je alleen met een tablet in dezelfde zaal.
+            </p>
+            <p className="card__hint">
+              Heb je een link gekregen van een apparaat dat al gekoppeld is? Tik die aan — dan is
+              dit klaar. Ben je de eerste, vul dan het adres van je server in.
+            </p>
+            <label className="field">
+              <span>Adres van de sync-server</span>
+              <input
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={urlDraft}
+                onChange={(event) => setUrlDraft(event.target.value)}
+                placeholder="https://…workers.dev"
+              />
+            </label>
+            <button
+              type="button"
+              className="button button--primary"
+              disabled={busy || !/^https?:\/\/\S+$/.test(urlDraft.trim())}
+              onClick={() => void onSetSyncUrl(urlDraft.trim())}
+            >
+              Adres bewaren
+            </button>
+          </>
         ) : (
           <>
             <p className="card__hint">
@@ -351,17 +389,22 @@ export function SettingsScreen({
                   gebouwde app — en met dit ene regeltje kun je het zelf openen
                   en zien wat er gebeurt.
                 */}
-                {/^Failed to fetch|NetworkError|Load failed/i.test(cloud.state.lastError ?? '') && (
-                  <p className="settings__hint">
-                    De app kwam niet bij de server. Open dit adres eens in een tabblad — hoort{' '}
-                    <code>{'{"error":"Alleen POST."}'}</code> te tonen:{' '}
-                    <a href={cloudUrl()} target="_blank" rel="noreferrer">
-                      {cloudUrl()}
-                    </a>
-                    . Gebeurt daar niets, dan houdt je browser het tegen (bij Brave: schildje in de
-                    adresbalk, Shields uit voor deze site) of klopt het adres niet.
-                  </p>
-                )}
+                <p className="settings__hint">
+                  Server:{' '}
+                  <a href={syncUrl ?? ''} target="_blank" rel="noreferrer">
+                    {syncUrl}
+                  </a>{' '}
+                  — open dit adres eens in een tabblad; er hoort{' '}
+                  <code>{'{"error":"Alleen POST."}'}</code> te staan.{' '}
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    disabled={busy}
+                    onClick={() => void onSetSyncUrl(null)}
+                  >
+                    Ander adres
+                  </button>
+                </p>
 
                 {/*
                   Het enige geval dat de server niet zelf kan zien: een typefout

@@ -127,4 +127,6 @@ export const META_KEYS = {
   settings: 'app.settings',
   /** Ploegcode voor de online koppeling; blijft op dit apparaat. */
   teamCode: 'sync.teamCode',
+  /** Adres van de sync-server; ingesteld of meegekomen met een koppellink. */
+  syncUrl: 'sync.url',
 } as const;

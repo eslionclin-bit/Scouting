@@ -37,9 +37,11 @@ jobs:
       - name: Bouwen
         # De app draait onder /<repo>/ op Pages, niet op de root.
         #
-        # Het adres van de sync-server mag in de gebouwde app staan: hij doet
-        # niets zonder ploegcode, en die staat alleen op het apparaat zelf.
-        # Ontbreekt het secret, dan bouwt hij gewoon de puur lokale versie.
+        # Het adres van de sync-server, optioneel. Het mag in de gebouwde app
+        # staan — hij doet niets zonder ploegcode, en die staat alleen op het
+        # apparaat zelf — maar nodig is het niet: je kunt het adres ook in de app
+        # invullen, en het reist mee in de koppellink. Dat is te verkiezen, want
+        # ingebakken is het onzichtbaar en pas na een bouw te veranderen.
         env:
           VITE_SYNC_URL: ${{ secrets.SYNC_URL }}
         run: BASE_PATH="/${GITHUB_REPOSITORY#*/}/" npm run build
