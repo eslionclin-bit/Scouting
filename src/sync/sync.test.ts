@@ -279,3 +279,32 @@ describe('van ploeg wisselen', () => {
     }
   });
 });
+
+describe('een apparaat dat net gekoppeld is', () => {
+  it('verstuurt zijn hele geschiedenis in één ronde', async () => {
+    const hub = new LoopbackHub();
+    const store = await openTestStore('vers-apparaat');
+    try {
+      const fixture = await seedMatch(store);
+
+      // Ruim meer dan één batch (100). Zo ziet een seizoen eruit dat in één
+      // keer naar de ploeg moet.
+      for (let i = 0; i < 150; i++) {
+        await store.rallies.addMissedPoint({ setId: fixture.set.id, wonBy: 'us' });
+      }
+      expect(await pendingCount(store.db)).toBeGreaterThan(100);
+
+      const engine = new SyncEngine(store, hub.transport('vers-apparaat'), {
+        intervalMs: 60_000,
+      });
+      // Eén ronde, niet vier: anders kijk je minuten naar een getal dat niet
+      // zakt, en dat lijkt op stuk terwijl het alleen traag is.
+      await engine.syncNow({ force: true });
+
+      expect(await pendingCount(store.db)).toBe(0);
+      engine.stop();
+    } finally {
+      store.close();
+    }
+  });
+});

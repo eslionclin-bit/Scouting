@@ -177,6 +177,17 @@ Onder Instellingen staat daarom **Alles opnieuw versturen**. Dubbel kan het niet
 worden: elke wijziging draagt haar eigen revisie, en wat er al staat blijft zoals
 het is.
 
+## Hoe lang het duurt
+
+Een ronde stuurt alles wat klaarstaat, in batches van honderd achter elkaar, en
+haalt daarna op wat er ligt. Een apparaat dat net gekoppeld is heeft zijn hele
+geschiedenis klaarstaan — een paar honderd wijzigingen is normaal — en die zijn
+in een paar seconden weg.
+
+Daarna loopt er elke halve minuut een ronde, en die is leeg zolang je niets
+invoert. Tijdens een wedstrijd betekent dat: wat je invoert staat binnen een
+halve minuut op het andere apparaat.
+
 ## Wat je ervan merkt
 
 Niets, als het goed is. Onder Instellingen staat wanneer er voor het laatst is

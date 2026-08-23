@@ -150,7 +150,7 @@ export class SyncEngine {
     this.running = true;
     this.update({ status: 'syncing' });
     try {
-      await this.pushOnce();
+      await this.pushAll();
       await this.pullOnce();
       const lastSyncAt = new Date(this.options.now()).toISOString();
       await this.store.setMeta(META_KEYS.lastSyncAt, lastSyncAt);
@@ -199,12 +199,34 @@ export class SyncEngine {
     }
   }
 
-  private async pushOnce(): Promise<void> {
+  /**
+   * Blijven duwen tot de outbox leeg is.
+   *
+   * Eén batch per ronde was te zuinig. Een apparaat dat net gekoppeld is heeft
+   * zijn hele geschiedenis klaarstaan — al gauw een paar honderd wijzigingen —
+   * en met honderd per ronde en een ronde per halve minuut kijk je minuten naar
+   * een getal dat maar niet zakt. Dat lijkt op stuk, en het is alleen maar
+   * traag.
+   *
+   * Het ophalen deed dit al; het versturen niet. De grens van vijftig rondes is
+   * er tegen de enige manier waarop dit kon blijven hangen: een server die
+   * netjes antwoordt maar niets aanneemt.
+   */
+  private async pushAll(): Promise<void> {
+    let guard = 0;
+    while (guard++ < 50) {
+      const sent = await this.pushOnce();
+      if (sent === 0) break;
+    }
+  }
+
+  /** Verstuurt één batch en geeft terug hoeveel er uit de outbox verdween. */
+  private async pushOnce(): Promise<number> {
     const entries = await peekOutbox(this.store.db, {
       limit: this.options.batchSize,
       matchId: this.matchId,
     });
-    if (entries.length === 0) return;
+    if (entries.length === 0) return 0;
 
     try {
       const response = await this.transport.push({
@@ -217,6 +239,9 @@ export class SyncEngine {
         .map((entry) => entry.seq)
         .filter((seq): seq is number => seq != null);
       await ackOutbox(this.store.db, done);
+      // Nul betekent: de server nam niets aan. Nog een ronde levert hetzelfde
+      // op, dus dan is stoppen beter dan doorgaan.
+      return done.length;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await markOutboxFailure(
