@@ -8,7 +8,7 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import { useCloudSync } from '../hooks/useCloudSync';
-import { generateTeamCode, MIN_CODE_LENGTH } from '../../sync/cloudConfig';
+import { generateTeamCode, normalizeTeamCode, MIN_CODE_LENGTH } from '../../sync/cloudConfig';
 import { OPPONENT_DETAILS, type AppSettings, type OpponentDetail } from '../../domain/settings';
 import { useQuery, useStore } from '../StoreProvider';
 
@@ -204,8 +204,8 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
                   <button
                     type="button"
                     className="button button--primary"
-                    disabled={busy || codeDraft.trim().length < MIN_CODE_LENGTH}
-                    onClick={() => void saveCode(codeDraft.trim())}
+                    disabled={busy || normalizeTeamCode(codeDraft).length < MIN_CODE_LENGTH}
+                    onClick={() => void saveCode(normalizeTeamCode(codeDraft))}
                   >
                     Koppelen
                   </button>

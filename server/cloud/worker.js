@@ -220,8 +220,15 @@ async function pull(request, env, origin) {
  * maar raden, en daar is lengte het antwoord op.
  */
 async function teamOf(code) {
-  if (typeof code !== 'string' || code.trim().length < MIN_CODE_LENGTH) return null;
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code.trim()));
+  if (typeof code !== 'string') return null;
+  // Kleine letters en geen witruimte, precies zoals de app het doet. Een
+  // telefoonklavier zet een hoofdletter aan het begin en plakt er soms een
+  // spatie achter; zonder dit afvlakken levert die hulpvaardigheid een andere,
+  // lege ploeg op — en wel zonder foutmelding, want de server kent geen
+  // accounts en kan het verschil niet zien.
+  const normalized = code.toLowerCase().replace(/\s+/g, '');
+  if (normalized.length < MIN_CODE_LENGTH) return null;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 

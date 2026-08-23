@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CloudTransport, SyncCodeError } from './cloud';
-import { generateTeamCode, MIN_CODE_LENGTH } from './cloudConfig';
+import { generateTeamCode, normalizeTeamCode, MIN_CODE_LENGTH } from './cloudConfig';
 import type { ChangeEnvelope } from './types';
 
 const config = { url: 'https://sync.example.workers.dev/', teamCode: 'wad-riet-molen-tij-0042' };
@@ -96,5 +96,25 @@ describe('een ploegcode', () => {
     // Woorden en cijfers met streepjes ertussen; geen hoofdletters of tekens
     // die op een tablet fout worden overgenomen.
     expect(generateTeamCode()).toMatch(/^[a-z]+(-[a-z]+){3}-\d{4}$/);
+  });
+});
+
+describe('een code die met de hand is overgetikt', () => {
+  it('leest hoofdletters en spaties als dezelfde ploeg', () => {
+    // Dit is precies wat een telefoonklavier ervan maakt: een hoofdletter aan
+    // het begin, en soms een spatie erachter na automatisch aanvullen. Zonder
+    // afvlakken levert dat een andere, lege ploeg op — zonder foutmelding, want
+    // de server kent geen accounts en kan het verschil niet zien.
+    const code = 'wad-riet-molen-tij-0042';
+
+    expect(normalizeTeamCode('Wad-Riet-Molen-Tij-0042')).toBe(code);
+    expect(normalizeTeamCode('  wad-riet-molen-tij-0042 ')).toBe(code);
+    expect(normalizeTeamCode('wad-riet-molen-tij-0042\n')).toBe(code);
+    expect(normalizeTeamCode('WAD-RIET-MOLEN-TIJ-0042')).toBe(code);
+  });
+
+  it('laat een code die al goed is met rust', () => {
+    const code = generateTeamCode();
+    expect(normalizeTeamCode(code)).toBe(code);
   });
 });

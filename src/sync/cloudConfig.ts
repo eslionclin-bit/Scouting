@@ -50,6 +50,23 @@ const WORDS = [
   'tij', 'veen', 'vlier', 'vloed', 'waard', 'wad', 'wilg', 'zeil',
 ] as const;
 
+/**
+ * De code zoals de server hem ziet: kleine letters, geen witruimte.
+ *
+ * Dit is geen vormvoorkeur maar een noodzaak. De ploeg *is* de code — de server
+ * hasht hem en kent geen accounts — dus één afwijkend teken levert een andere,
+ * lege ploeg op, zonder foutmelding. En precies dat gebeurt op een telefoon: het
+ * klavier zet een hoofdletter aan het begin, of plakt er een spatie achter na
+ * automatisch aanvullen. Door aan beide kanten hetzelfde af te vlakken kan die
+ * hulpvaardigheid geen kwaad meer.
+ *
+ * De worker doet exact hetzelfde (zie `server/cloud/worker.js`); die twee horen
+ * gelijk te blijven.
+ */
+export function normalizeTeamCode(raw: string): string {
+  return raw.toLowerCase().replace(/\s+/g, '');
+}
+
 /** Een verse ploegcode. Wie hem heeft, ziet de wedstrijden van de ploeg. */
 export function generateTeamCode(): string {
   const random = new Uint32Array(5);
