@@ -18,27 +18,44 @@ export interface LineupSheetProps {
   lineup: Lineup | undefined;
   substitutions: readonly Substitution[];
   rotation: number;
+  /** De afspraken van deze wedstrijd: wie passen er, en voor wie komt de libero erin. */
+  receiverIds: readonly string[];
+  liberoForIds: readonly string[];
   onSaveLineup: (
     positions: Record<Zone, string | null>,
     liberoId: string | null,
     liberoForId: string | null,
   ) => void;
+  onSaveAgreement: (receiverIds: string[], liberoForIds: string[]) => void;
   onSubstitute: (playerOutId: string, playerInId: string) => void;
   onClose: () => void;
 }
 
-type Mode = 'lineup' | 'sub';
+type Mode = 'lineup' | 'sub' | 'system';
+
+/** Aantikken zet iemand erbij of haalt haar eraf; de volgorde blijft. */
+function toggle(ids: readonly string[], id: string): string[] {
+  return ids.includes(id) ? ids.filter((entry) => entry !== id) : [...ids, id];
+}
 
 export function LineupSheet({
   players,
   lineup,
   substitutions,
   rotation,
+  receiverIds,
+  liberoForIds,
   onSaveLineup,
+  onSaveAgreement,
   onSubstitute,
   onClose,
 }: LineupSheetProps): ReactElement {
-  const [mode, setMode] = useState<Mode>(lineup ? 'sub' : 'lineup');
+  // Zonder afspraken begint het daar: wie passen er, en voor wie komt de libero
+  // erin. Die vraag hoort vóór het eerste punt gesteld te worden, want daarna
+  // gaat de app raden en staat de diagonaal ineens als passer in beeld.
+  const [mode, setMode] = useState<Mode>(
+    receiverIds.length === 0 && liberoForIds.length === 0 ? 'system' : lineup ? 'sub' : 'lineup',
+  );
   const [draft, setDraft] = useState<Record<Zone, string | null>>(
     () => lineup?.positions ?? { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null },
   );
@@ -46,6 +63,8 @@ export function LineupSheet({
   const [playerOut, setPlayerOut] = useState<string | null>(null);
   const [liberoId, setLiberoId] = useState<string | null>(lineup?.liberoId ?? null);
   const [liberoForId, setLiberoForId] = useState<string | null>(lineup?.liberoForId ?? null);
+  const [receivers, setReceivers] = useState<string[]>(() => [...receiverIds]);
+  const [liberoFor, setLiberoFor] = useState<string[]>(() => [...liberoForIds]);
 
   const byId = new Map(players.map((player) => [player.id, player]));
 
@@ -104,9 +123,95 @@ export function LineupSheet({
           >
             Wissel
           </button>
+          <button
+            type="button"
+            className={`chip ${mode === 'system' ? 'chip--active' : ''}`}
+            onClick={() => setMode('system')}
+          >
+            Ons systeem
+          </button>
         </div>
 
-        {mode === 'lineup' ? (
+        {mode === 'system' ? (
+          <>
+            <p className="sheet__principle">
+              Twee afspraken die de hele wedstrijd gelden. Zonder deze raadt de app het uit de
+              posities, en dat gaat mis: staat er niets ingevuld, dan valt hij terug op de
+              achterlijn en komt de diagonaal als passer in beeld terwijl ze dat niet is.
+            </p>
+
+            <h4 className="sheet__subtitle">Wie passen er</h4>
+            <p className="step__hint">
+              De vaste passers. De libero telt altijd mee, ook als je haar hier niet aantikt.
+            </p>
+            <div className="grid grid--players">
+              {players.map((player) => (
+                <button
+                  key={player.id}
+                  type="button"
+                  className={`tile tile--player ${
+                    receivers.includes(player.id) ? 'tile--selected' : ''
+                  }`}
+                  aria-pressed={receivers.includes(player.id)}
+                  aria-label={`${playerLabel(player)} passt`}
+                  onClick={() => setReceivers((current) => toggle(current, player.id))}
+                >
+                  <span className="tile__number">{player.number}</span>
+                  <span className="tile__name">{player.name || '\u00a0'}</span>
+                </button>
+              ))}
+            </div>
+
+            <h4 className="sheet__subtitle">Voor wie komt de libero erin</h4>
+            <p className="step__hint">
+              Meestal de twee middenspeelsters. Staat er van deze lijst precies één achterin, dan
+              wisselt de app haar er zelf in. Staan er twee tegelijk achterin, dan vraagt hij tijdens
+              de set wie het is — gokken zou betekenen dat er iemand in het veld staat die er niet
+              staat.
+            </p>
+            <div className="grid grid--players">
+              {players
+                // Een libero komt niet voor zichzelf in, en ook niet voor een
+                // andere libero: die staan allebei niet in de zes.
+                .filter(
+                  (player) =>
+                    player.id !== liberoId &&
+                    !(canPlay(player, 'libero') && rolesOf(player).length === 1),
+                )
+                .map((player) => (
+                  <button
+                    key={player.id}
+                    type="button"
+                    className={`tile tile--player ${
+                      liberoFor.includes(player.id) ? 'tile--selected' : ''
+                    }`}
+                    aria-pressed={liberoFor.includes(player.id)}
+                    aria-label={`Libero komt in voor ${playerLabel(player)}`}
+                    onClick={() => setLiberoFor((current) => toggle(current, player.id))}
+                  >
+                    <span className="tile__number">{player.number}</span>
+                    <span className="tile__name">{player.name || '\u00a0'}</span>
+                  </button>
+                ))}
+            </div>
+
+            <div className="sheet__actions">
+              <button type="button" className="button button--ghost" onClick={onClose}>
+                Annuleren
+              </button>
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={() => {
+                  onSaveAgreement(receivers, liberoFor);
+                  setMode('lineup');
+                }}
+              >
+                Afspraken bewaren
+              </button>
+            </div>
+          </>
+        ) : mode === 'lineup' ? (
           <>
             <p className="sheet__principle">
               Zet de zes van het begin van deze set neer. Tik een zone en kies de speler; de

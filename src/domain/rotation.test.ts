@@ -196,3 +196,61 @@ describe('de libero kan niet twee keer in het veld staan', () => {
     expect(replaced).toBeNull();
   });
 });
+
+describe('de afspraak: voor wie komt de libero erin', () => {
+  const roles: Record<string, PlayerRole[]> = {
+    'midden-a': ['middle'],
+    'midden-b': ['middle'],
+    libero: ['libero'],
+  };
+  const lineup = {
+    positions: {
+      1: 'diagonaal',
+      2: 'passer-a',
+      3: 'midden-a',
+      4: 'passer-b',
+      5: 'midden-b',
+      6: 'spelverdeler',
+    } as Record<Zone, string | null>,
+    liberoId: 'libero',
+    liberoForId: null,
+  };
+
+  it('wisselt haar in voor de enige van de lijst die achterin staat', () => {
+    const { positions, replaced, ambiguous } = courtPositions(lineup, 1, [], {
+      liberoForIds: ['midden-a', 'midden-b'],
+    });
+    expect(replaced).toBe('midden-b');
+    expect(positions[5]).toBe('libero');
+    expect(ambiguous).toStrictEqual([]);
+  });
+
+  it('vraagt het als er twee van de lijst achterin staan', () => {
+    // Zone 5 en 6 liggen naast elkaar, dus twee afgesproken speelsters kunnen
+    // er tegelijk staan. Dan verandert er niets en staat de vraag klaar.
+    const { positions, replaced, ambiguous } = courtPositions(lineup, 1, [], {
+      liberoForIds: ['midden-b', 'spelverdeler'],
+    });
+    expect(replaced).toBeNull();
+    expect(positions[5]).toBe('midden-b');
+    expect(positions[6]).toBe('spelverdeler');
+    expect([...ambiguous].sort()).toStrictEqual(['midden-b', 'spelverdeler']);
+  });
+
+  it('gebruikt het antwoord dat tijdens de set is gegeven', () => {
+    const answered = { ...lineup, liberoChoices: { 1: 'spelverdeler' } };
+    const { positions, replaced, ambiguous } = courtPositions(answered, 1, [], {
+      liberoForIds: ['midden-b', 'spelverdeler'],
+    });
+    expect(replaced).toBe('spelverdeler');
+    expect(positions[6]).toBe('libero');
+    expect(ambiguous).toStrictEqual([]);
+  });
+
+  it('valt zonder afspraak terug op de enige middenspeelster achterin', () => {
+    const { replaced } = courtPositions(lineup, 1, [], {
+      rolesOf: (id) => roles[id] ?? [],
+    });
+    expect(replaced).toBe('midden-b');
+  });
+});

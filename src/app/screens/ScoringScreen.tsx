@@ -38,7 +38,7 @@ import {
 import { matchStatus, rulesOf, setOutcome } from '../../domain/scoring';
 import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
-import { canPlay, primaryRoleOf, rolesOf } from '../../domain/players';
+import { canPlay, playerLabel, primaryRoleOf, rolesOf } from '../../domain/players';
 import {
   ZONES,
   type Action,
@@ -175,11 +175,12 @@ export function ScoringScreen({
    */
   const court = useMemo(() => {
     if (!data?.lineup) return null;
-    const { positions } = courtPositions(
+    const { positions, ambiguous } = courtPositions(
       data.lineup,
       data.rally?.rotationUs ?? 1,
       data.substitutions ?? [],
       {
+        liberoForIds: data.match.liberoForIds ?? null,
         rolesOf: (playerId) => {
           const player = playersById.get(playerId);
           return player ? rolesOf(player) : [];
@@ -188,9 +189,16 @@ export function ScoringScreen({
     );
     return {
       positions,
+      ambiguous,
       roleOf: (playerId: string) => primaryRoleOf(playersById.get(playerId) ?? { role: null }),
     };
-  }, [data?.lineup, data?.rally?.rotationUs, data?.substitutions, playersById]);
+  }, [
+    data?.lineup,
+    data?.match.liberoForIds,
+    data?.rally?.rotationUs,
+    data?.substitutions,
+    playersById,
+  ]);
 
   /**
    * Wie er in deze rotatie passt.
@@ -202,13 +210,14 @@ export function ScoringScreen({
   const receivers = useMemo(() => {
     if (!court) return [];
     return receiversFor(court.positions, {
+      receiverIds: data?.match.receiverIds ?? null,
       rolesOf: (playerId) => {
         const player = playersById.get(playerId);
         return player ? rolesOf(player) : [];
       },
       liberoId: data?.lineup?.liberoId ?? null,
     });
-  }, [court, playersById, data?.lineup?.liberoId]);
+  }, [court, playersById, data?.match.receiverIds, data?.lineup?.liberoId]);
 
   /**
    * Hun zes, als rugnummer per zone.
@@ -717,6 +726,40 @@ export function ScoringScreen({
     }
   }
 
+  /** Het antwoord op de liberovraag voor déze rotatiestand vastleggen. */
+  async function chooseLiberoFor(playerId: string): Promise<void> {
+    if (!data?.set) return;
+    try {
+      await store.lineups.setLiberoChoice({
+        setId: data.set.id,
+        rotation: data.rally?.rotationUs ?? 1,
+        playerId,
+      });
+      const player = playersById.get(playerId);
+      push('info', `Libero komt erin voor ${player ? playerLabel(player) : 'die speelster'}.`);
+    } catch (cause) {
+      push('error', cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
+  /**
+   * De afspraken van deze wedstrijd: wie passen er, en voor wie komt de libero
+   * erin. Ze staan bij de wedstrijd en niet bij de set, want het is één keer
+   * afspreken en niet elke set opnieuw.
+   */
+  async function saveAgreement(receiverIds: string[], liberoForIds: string[]): Promise<void> {
+    if (!data) return;
+    try {
+      await store.matches.update(data.match.id, { receiverIds, liberoForIds });
+      // Staat de opstelling er nog niet, dan blijft het blad open: de afspraken
+      // zijn de eerste vraag, de zes de tweede.
+      if (data.lineup) setShowLineup(false);
+      push('info', 'Afspraken bewaard.');
+    } catch (cause) {
+      push('error', cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function saveLineup(
     positions: Record<Zone, string | null>,
     liberoId: string | null,
@@ -873,6 +916,34 @@ export function ScoringScreen({
       </header>
 
       <RallyChain actions={actions ?? []} playersById={playersById} onUndoLast={() => void undoLastAction()} />
+
+      {/*
+        Twee afgesproken speelsters staan tegelijk achterin: dan kan de app niet
+        kiezen voor wie de libero erin komt, en gokken zou betekenen dat er
+        iemand in het veld staat die er niet staat. Dus staat de libero er nu
+        naast, en is dit de enige vraag die telt. Het antwoord geldt voor deze
+        rotatie; de volgende ronde is het dezelfde vraag met hetzelfde antwoord.
+      */}
+      {leads && court && court.ambiguous.length > 1 && (
+        <div className="refinebar" role="group" aria-label="Liberowissel">
+          <span className="refinebar__label">Voor wie komt de libero er nu in?</span>
+          <span className="refinebar__group">
+            {court.ambiguous.map((playerId) => {
+              const player = playersById.get(playerId);
+              return (
+                <button
+                  key={playerId}
+                  type="button"
+                  className="button"
+                  onClick={() => void chooseLiberoFor(playerId)}
+                >
+                  {player ? playerLabel(player) : 'onbekend'}
+                </button>
+              );
+            })}
+          </span>
+        </div>
+      )}
 
       {refining && (
         <RefineBar
@@ -1071,8 +1142,13 @@ export function ScoringScreen({
           lineup={data.lineup}
           substitutions={data.substitutions ?? []}
           rotation={rally.rotationUs ?? 1}
+          receiverIds={data.match.receiverIds ?? []}
+          liberoForIds={data.match.liberoForIds ?? []}
           onSaveLineup={(positions, liberoId, liberoForId) =>
             void saveLineup(positions, liberoId, liberoForId)
+          }
+          onSaveAgreement={(receiverIds, liberoForIds) =>
+            void saveAgreement(receiverIds, liberoForIds)
           }
           onSubstitute={(out, into) => void substitute(out, into)}
           onClose={() => setShowLineup(false)}

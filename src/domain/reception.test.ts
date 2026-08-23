@@ -99,3 +99,37 @@ describe('wie een service in een zone aannam', () => {
     expect(receiverForZone(six, 1, options)).toBeNull();
   });
 })
+
+describe('de afspraak: wie passen er', () => {
+  it('wint van de afleiding uit de posities', () => {
+    // Zonder ingevulde posities viel de app terug op de achterlijn, en dan stond
+    // de diagonaal ineens als passer in beeld. Een afspraak hoort te winnen van
+    // een gok.
+    const six: Record<Zone, string | null> = {
+      1: 'diagonaal',
+      2: 'passer-a',
+      3: 'midden',
+      4: 'passer-b',
+      5: 'libero',
+      6: 'spelverdeler',
+    };
+    expect(
+      receiversFor(six, { receiverIds: ['passer-a', 'passer-b'], liberoId: 'libero' }).sort(),
+    ).toStrictEqual(['libero', 'passer-a', 'passer-b']);
+  });
+
+  it('negeert de afspraak als er te weinig van in het veld staan', () => {
+    // Twee passers is de ondergrens; blijft er minder over, dan is de afspraak
+    // hier niet van toepassing en rekent de app het alsnog uit.
+    const six: Record<Zone, string | null> = {
+      1: 'diagonaal',
+      2: 'passer-a',
+      3: 'midden',
+      4: 'invaller',
+      5: 'reserve',
+      6: 'spelverdeler',
+    };
+    const picked = receiversFor(six, { receiverIds: ['niet-in-het-veld'] });
+    expect(picked).toStrictEqual(['reserve', 'spelverdeler', 'diagonaal']);
+  });
+});

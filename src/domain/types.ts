@@ -150,6 +150,23 @@ export interface Match extends BaseRecord {
   reference?: boolean;
   /** Bestandsnaam waar deze wedstrijd uit komt, als hij is ingelezen. */
   source?: string | null;
+  /**
+   * Wie er in deze wedstrijd standaard passen.
+   *
+   * Zonder dit leidt de app het af uit de posities, en zonder ingevulde posities
+   * valt hij terug op de achterlijn — waardoor de diagonaal als passer in beeld
+   * kwam terwijl ze dat niet is. Een afspraak die je één keer maakt hoort ook
+   * één keer opgeschreven te kunnen worden.
+   */
+  receiverIds?: string[] | null;
+  /**
+   * Voor wie de libero er automatisch in komt.
+   *
+   * Meestal de twee middenspeelsters. Staat er van deze lijst precies één
+   * achterin, dan wisselt de app haar zelf in. Staan er twee, dan is het raden
+   * en vraagt hij het — zie `Lineup.liberoChoices`.
+   */
+  liberoForIds?: string[] | null;
 }
 
 export type SetStatus = 'pending' | 'live' | 'finished';
@@ -296,6 +313,16 @@ export interface Lineup extends BaseRecord {
    * dat raden. Dan telt wat hier staat.
    */
   liberoForId?: string | null;
+  /**
+   * Het antwoord op 'voor wie komt ze er nu in', per rotatiestand.
+   *
+   * Nodig zodra er van de afgesproken lijst twee speelsters tegelijk achterin
+   * staan: dan kan de app niet kiezen, en gokken zou betekenen dat er iemand in
+   * het veld staat die er niet staat. Hij vraagt het dan tijdens de set, en het
+   * antwoord geldt voor die rotatie — de volgende ronde is het dezelfde vraag
+   * met hetzelfde antwoord.
+   */
+  liberoChoices?: Record<number, string> | null;
 }
 
 /** Wissel: vanaf de genoemde rally staat de invaller in het veld. */

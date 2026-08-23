@@ -102,6 +102,12 @@ export interface CourtOptions {
   /** Voor wie de libero erin komt; overruled de afleiding hieronder. */
   liberoForId?: string | null;
   /**
+   * De afspraak van deze wedstrijd: voor wie komt de libero er automatisch in.
+   * Meestal de twee middens. Staat er precies één van hen achterin, dan is er
+   * niets te raden.
+   */
+  liberoForIds?: readonly string[] | null;
+  /**
    * Welke posities een speler kan spelen. Meervoud, want dat is bij een
    * amateurploeg de normale situatie: wie én midden én diagonaal speelt, komt
    * hier met allebei terug.
@@ -115,6 +121,12 @@ export interface CourtPositions {
   positions: Record<Zone, string | null>;
   /** De speler die door de libero is vervangen, als dat gebeurd is. */
   replaced: string | null;
+  /**
+   * Speelsters waarvan er meer dan één in aanmerking kwam, en waartussen de app
+   * dus niet kon kiezen. Leeg zolang er niets te vragen valt. De libero staat er
+   * dan níét in: liever niemand in het veld die er niet staat.
+   */
+  ambiguous: readonly string[];
 }
 
 /**
@@ -134,14 +146,14 @@ export interface CourtPositions {
  *     opstelling die klopt met wat je ziet dan een die gokt.
  */
 export function courtPositions(
-  lineup: Pick<Lineup, 'positions' | 'liberoId' | 'liberoForId'>,
+  lineup: Pick<Lineup, 'positions' | 'liberoId' | 'liberoForId' | 'liberoChoices'>,
   rotation: number,
   substitutions: readonly Pick<Substitution, 'playerInId' | 'playerOutId'>[] = [],
   options: CourtOptions = {},
 ): CourtPositions {
   const positions = positionsAt(lineup, rotation, substitutions);
   const liberoId = options.liberoId ?? lineup.liberoId ?? null;
-  if (!liberoId) return { positions, replaced: null };
+  if (!liberoId) return { positions, replaced: null, ambiguous: [] };
 
   // Staat ze er al, dan is ze er al. Dit gebeurde echt: wie de libero met de
   // hand inwisselt voor de ene middenspeelster, kreeg haar er door de afleiding
@@ -149,31 +161,55 @@ export function courtPositions(
   // Eén persoon kan maar op één plek staan; dat is geen voorkeur maar een feit,
   // en de app hoort het nooit anders te laten zien.
   if (ZONES.some((zone) => positions[zone] === liberoId)) {
-    return { positions, replaced: null };
+    return { positions, replaced: null, ambiguous: [] };
   }
 
-  const forId = options.liberoForId ?? lineup.liberoForId ?? null;
-  if (forId) {
+  /** De libero op de plek van deze speelster zetten, als ze achterin staat. */
+  const swapFor = (playerId: string): CourtPositions | null => {
     for (const zone of LIBERO_ZONES) {
-      if (positions[zone] !== forId) continue;
-      return { positions: { ...positions, [zone]: liberoId }, replaced: forId };
+      if (positions[zone] !== playerId) continue;
+      return { positions: { ...positions, [zone]: liberoId }, replaced: playerId, ambiguous: [] };
     }
-    return { positions, replaced: null };
-  }
+    return null;
+  };
 
+  // 1. Wat er tijdens de set is geantwoord toen de app niet kon kiezen.
+  const answered = lineup.liberoChoices?.[rotation] ?? null;
+  if (answered) return swapFor(answered) ?? { positions, replaced: null, ambiguous: [] };
+
+  // 2. Een vaste keuze voor deze set.
+  const forId = options.liberoForId ?? lineup.liberoForId ?? null;
+  if (forId) return swapFor(forId) ?? { positions, replaced: null, ambiguous: [] };
+
+  // 3. De afspraak van deze wedstrijd: wie van deze lijst staat er achterin?
+  const marked = (options.liberoForIds ?? []).filter((playerId) =>
+    LIBERO_ZONES.some((zone) => positions[zone] === playerId),
+  );
+  if (marked.length === 1) return swapFor(marked[0]!) ?? { positions, replaced: null, ambiguous: [] };
+  // Twee tegelijk achterin: niet te zeggen wie eruit gaat. Dan verandert er
+  // niets en staat hier wie de vraag betreft.
+  if (marked.length > 1) return { positions, replaced: null, ambiguous: marked };
+
+  // 4. Geen afspraak: dan de oude regel, de enige middenspeelster achterin.
   const roles = options.rolesOf ?? (options.roleOf ? toRoles(options.roleOf) : null);
-  if (!roles) return { positions, replaced: null };
+  if (!roles) return { positions, replaced: null, ambiguous: [] };
 
   const middles = LIBERO_ZONES.filter((zone) => {
     const playerId = positions[zone];
     return playerId !== null && playerId !== liberoId && roles(playerId).includes('middle');
   });
-  // Twee middens achterin: niet te zeggen wie eruit gaat, dus niets veranderen.
-  if (middles.length !== 1) return { positions, replaced: null };
+  if (middles.length === 0) return { positions, replaced: null, ambiguous: [] };
+  if (middles.length > 1) {
+    return {
+      positions,
+      replaced: null,
+      ambiguous: middles.map((zone) => positions[zone]!),
+    };
+  }
 
   const zone = middles[0]!;
   const playerId = positions[zone]!;
-  return { positions: { ...positions, [zone]: liberoId }, replaced: playerId };
+  return { positions: { ...positions, [zone]: liberoId }, replaced: playerId, ambiguous: [] };
 }
 
 function toRoles(

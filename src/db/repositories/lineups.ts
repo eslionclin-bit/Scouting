@@ -22,6 +22,14 @@ export interface LineupInput {
   liberoForId?: string | null;
 }
 
+export interface LiberoChoiceInput {
+  setId: string;
+  /** Rotatiestand waarvoor het antwoord geldt (1 t/m 6). */
+  rotation: number;
+  playerId: string;
+  team?: TeamSide;
+}
+
 export class LineupRepository {
   constructor(private readonly ctx: WriteContext) {}
 
@@ -53,6 +61,27 @@ export class LineupRepository {
             liberoForId: input.liberoForId ?? null,
           });
 
+      await commit(this.ctx, [{ entity: 'lineups', record }]);
+      return record;
+    });
+  }
+
+  /**
+   * Vastleggen voor wie de libero er in déze rotatie in komt.
+   *
+   * Alleen nodig als de app niet kon kiezen — twee afgesproken speelsters
+   * tegelijk achterin. Het antwoord geldt voor die rotatiestand, en de volgende
+   * ronde is het dezelfde vraag met hetzelfde antwoord.
+   */
+  async setLiberoChoice(input: LiberoChoiceInput): Promise<Lineup> {
+    return this.ctx.lock.run(async () => {
+      const team = input.team ?? 'us';
+      const existing = await this.forSet(input.setId, team);
+      if (!existing) throw new NotFoundError('Opstelling', input.setId);
+
+      const record = reviseRecord(this.ctx, existing, {
+        liberoChoices: { ...(existing.liberoChoices ?? {}), [input.rotation]: input.playerId },
+      });
       await commit(this.ctx, [{ entity: 'lineups', record }]);
       return record;
     });

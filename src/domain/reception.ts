@@ -34,6 +34,15 @@ export interface ReceptionOptions {
   rolesOf?: (playerId: string) => readonly PlayerRole[];
   /** De libero van deze set, als die er is en in het veld staat. */
   liberoId?: string | null;
+  /**
+   * De afspraak van deze wedstrijd: wie er passen.
+   *
+   * Dit gaat vóór alle afleiding hieronder. Die afleiding is een gok, en zonder
+   * ingevulde posities valt hij terug op de achterlijn — waardoor de diagonaal
+   * als passer in beeld kwam terwijl ze dat niet is. Een afspraak die je één
+   * keer maakt, hoort te winnen van een gok.
+   */
+  receiverIds?: readonly string[] | null;
 }
 
 /** Minder dan dit aan passers is geen aannamesysteem maar een gat in de gegevens. */
@@ -46,6 +55,17 @@ export function receiversFor(
   const onCourt = ZONES.map((zone) => positions[zone]).filter(
     (id): id is string => id !== null,
   );
+
+  // Is het afgesproken, dan hoeft er niets afgeleid te worden. De libero telt
+  // altijd mee: daar staat ze voor in het veld.
+  const agreed = options.receiverIds;
+  if (agreed && agreed.length > 0) {
+    const picked = onCourt.filter(
+      (playerId) => playerId === options.liberoId || agreed.includes(playerId),
+    );
+    if (picked.length >= MIN_RECEIVERS) return picked;
+  }
+
   const rolesOf = options.rolesOf;
 
   if (rolesOf) {

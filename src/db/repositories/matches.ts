@@ -16,6 +16,10 @@ export interface MatchInput {
   competition?: string | null;
   status?: MatchStatus;
   notes?: string | null;
+  /** Wie er in deze wedstrijd standaard passen. */
+  receiverIds?: string[] | null;
+  /** Voor wie de libero er automatisch in komt. */
+  liberoForIds?: string[] | null;
   /** Ingelezen referentiewedstrijd in plaats van een eigen wedstrijd. */
   reference?: boolean;
   source?: string | null;
