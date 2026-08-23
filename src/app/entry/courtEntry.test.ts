@@ -76,9 +76,12 @@ describe('veldinvoer', () => {
       });
     });
 
-    it('verwacht na een service de pass van de andere kant', () => {
-      expect(expectedNext(serve, 'us', DEFAULT_SETTINGS)).toStrictEqual({
-        team: 'them',
+    it('verwacht na hun service onze pass', () => {
+      // Onze eigen pass wordt altijd gevraagd: die is van ons, en hij is niet
+      // uit iets anders af te leiden.
+      const theirServe = { team: 'them', type: 'serve', quality: 'good' } as const;
+      expect(expectedNext(theirServe, 'them', DEFAULT_SETTINGS)).toStrictEqual({
+        team: 'us',
         type: 'reception',
       });
     });
@@ -111,14 +114,19 @@ describe('veldinvoer', () => {
       ).toStrictEqual({ team: 'them', type: 'dig' });
     });
 
-    it('vraagt hun pass alleen op het niveau waar die bij hoort', () => {
+    it('vraagt hun pass alleen als je hem zelf wilt invoeren', () => {
+      // Standaard niet: hoe je onze service kwalificeert zegt al wat zij ermee
+      // konden, dus de app leidt hun pass af in plaats van hem te vragen.
       expect(expectedNext(serve, 'us', DEFAULT_SETTINGS)).toStrictEqual({
         team: 'them',
-        type: 'reception',
+        type: 'attack',
       });
       expect(
         expectedNext(serve, 'us', { ...DEFAULT_SETTINGS, opponentDetail: 'kern' }),
       ).toStrictEqual({ team: 'them', type: 'attack' });
+      expect(
+        expectedNext(serve, 'us', { ...DEFAULT_SETTINGS, opponentDetail: 'volledig' }),
+      ).toStrictEqual({ team: 'them', type: 'reception' });
     });
 
     it('valt na een punt terug op de service', () => {

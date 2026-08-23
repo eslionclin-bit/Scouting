@@ -86,15 +86,15 @@ const TOGGLES: readonly Toggle[] = [
 const DETAILS: Record<OpponentDetail, { title: string; hint: string }> = {
   kern: {
     title: 'Alleen wat op ons afkomt',
-    hint: 'Hun service en hun aanval. Hun verdediging staat al in de kwalificatie van onze eigen aanval — die hoeft er niet nog eens apart bij.',
+    hint: 'Hun service en hun aanval, verder niets. Hun verdediging staat al in de kwalificatie van onze eigen aanval — die hoeft er niet nog eens apart bij.',
   },
   pass: {
-    title: 'Ook hun pass',
-    hint: 'Twee tikken per ontvangen rally, en het levert op wie van hen slecht past. Daar serveer je de volgende keer naartoe.',
+    title: 'Hun pass erbij, afgeleid',
+    hint: 'Zonder extra tik: hoe jij onze service kwalificeert zegt al wat zij ermee konden, en waar je naartoe serveerde staat er ook al bij. Zo vult zich vanzelf wie van hen slecht past — en daar serveer je de volgende keer naartoe.',
   },
   volledig: {
-    title: 'Alles van hen',
-    hint: 'Ook hun set-up en verdediging. Voor wie een dossier opbouwt en de tikken ervoor over heeft.',
+    title: 'Alles van hen, zelf ingevoerd',
+    hint: 'Hun pass tik je zelf, plus hun set-up en verdediging. Voor wie een dossier opbouwt en de tikken ervoor over heeft.',
   },
 };
 

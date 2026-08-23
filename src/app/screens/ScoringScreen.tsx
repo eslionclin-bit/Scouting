@@ -25,6 +25,7 @@ import { useQuery, useStore } from '../StoreProvider';
 import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryReducer';
 import { courtPositions, emptyPositions, positionsAt } from '../../domain/rotation';
 import { receiversFor } from '../../domain/reception';
+import { receptionFromServe } from '../../domain/derive';
 import { DEFAULT_SETTINGS } from '../../domain/settings';
 import {
   courtEntryReducer,
@@ -204,16 +205,20 @@ export function ScoringScreen({
    * zeggen wie er bij hen zo aan de opslag komt, zonder dat iemand hun rotatie
    * bijhoudt.
    */
-  const themPositions = useMemo(() => {
+  const themIds = useMemo(() => {
     if (!data?.themLineup) return null;
-    const ids = positionsAt(data.themLineup, data.rally?.rotationThem ?? 1);
+    return positionsAt(data.themLineup, data.rally?.rotationThem ?? 1);
+  }, [data?.themLineup, data?.rally?.rotationThem]);
+
+  const themPositions = useMemo(() => {
+    if (!themIds) return null;
     const numbers = {} as Record<Zone, number | null>;
     for (const zone of ZONES) {
-      const playerId = ids[zone];
+      const playerId = themIds[zone];
       numbers[zone] = playerId ? (playersById.get(playerId)?.number ?? null) : null;
     }
     return numbers;
-  }, [data?.themLineup, data?.rally?.rotationThem, playersById]);
+  }, [themIds, playersById]);
 
   /**
    * Wie er hoort te serveren. Met een opstelling weet de app dat exact: dat is
@@ -324,6 +329,35 @@ export function ScoringScreen({
     set.pointsThem === 0 &&
     skippedLineupFor !== set.id;
 
+  /**
+   * De afgeleide pass van de tegenstander wegschrijven, als die er is.
+   *
+   * Faalt dat, dan blijft de service gewoon staan: dit is een gemak, geen
+   * voorwaarde. Wel zichtbaar melden — stilletjes niets doen zou betekenen dat
+   * er later een gat in de passtabel zit dat niemand kan verklaren.
+   */
+  async function deriveReception(serve: Action): Promise<Action | null> {
+    if (settingsOrDefault.opponentDetail !== 'pass') return null;
+    if (!data?.rally) return null;
+    const zone = serve.zoneTo;
+    const playerId = zone !== null ? (themIds?.[zone] ?? null) : null;
+    const draft = receptionFromServe(serve, {
+      playerId,
+      playerNumber: playerId ? (playersById.get(playerId)?.number ?? null) : null,
+    });
+    if (!draft) return null;
+
+    try {
+      const { action } = await store.actions.append({ rallyId: data.rally.id, ...draft });
+      return action;
+    } catch (cause) {
+      push('warning', `Hun pass kon er niet automatisch bij: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`);
+      return null;
+    }
+  }
+
   async function commitAction(quality: Quality): Promise<void> {
     const draft = useCourt ? toCourtDraft(courtEntry, quality) : toActionDraft(entry, quality);
     if (!draft || !data?.rally) return;
@@ -339,9 +373,16 @@ export function ScoringScreen({
       // Verfijnen kan hierna: tempo, blok, reden, of welke tegenstander het was.
       // Nooit ervoor — het invoeren mag er niet op wachten.
       setRefining(action);
+
+      // Hun pass volgt uit onze service en hoeft dus niet gevraagd te worden.
+      // Zie `domain/derive.ts`: de kwalificatie van onze service gáát al over
+      // wat zij ermee konden, dus er nog eens apart om vragen is dezelfde bal
+      // twee keer beoordelen.
+      const last = (await deriveReception(action)) ?? action;
+
       dispatchCourt({
         kind: 'expect',
-        ...expectedNext(action, data.rally.servingTeam, settingsOrDefault),
+        ...expectedNext(last, data.rally.servingTeam, settingsOrDefault),
       });
 
       // Fout, ace of kill: de rally is volgens het protocol voorbij. Meteen
@@ -777,6 +818,7 @@ export function ScoringScreen({
           ownPlayers={data.ownPlayers}
           opponentPlayers={data.opponentPlayers}
           blockedPlayerId={blockedPlayerId}
+          opponentPositions={themPositions ?? undefined}
           onCommit={(quality) => void commitAction(quality)}
           onExplain={setExplain}
           onAddPlayer={addPlayer}

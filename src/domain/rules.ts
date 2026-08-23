@@ -81,6 +81,8 @@ export interface ActionDraft {
   blockers?: BlockCount | null;
   errorReason?: ErrorReason | null;
   videoTimestampMs?: number | null;
+  /** Door de app afgeleid in plaats van ingevoerd; zie `domain/derive.ts`. */
+  derived?: boolean;
 }
 
 export interface ValidateActionContext {

@@ -137,8 +137,10 @@ export function courtEntryReducer(
  * Bij de tegenstander is dat overslaan geen zuinigheid maar een correctie. Hun
  * verdediging apart beoordelen vraagt twee keer hetzelfde: zeg je van onze
  * aanval dat hij de tegenstander in de problemen bracht, dan ís dat het oordeel
- * over hun verdediging. Wat er van hen overblijft, is wat op ons afkomt — hun
- * service en hun aanval — en, als je het wilt weten, hun receptie.
+ * over hun verdediging. Precies zo met hun pass na onze service — alleen wordt
+ * die niet weggelaten maar afgeleid (`domain/derive.ts`), want daar hangt de
+ * tabel 'wie er slecht past' aan. Wat er te vrágen overblijft is wat op ons
+ * afkomt: hun service en hun aanval.
  */
 export function expectedNext(
   last: Pick<Action, 'team' | 'type' | 'quality'> | undefined,
@@ -164,11 +166,17 @@ export function expectedNext(
   return suggestion;
 }
 
-/** Stelt de app deze actie van de tegenstander voor? */
+/**
+ * Stelt de app deze actie van de tegenstander voor?
+ *
+ * Hun pass staat hier niet meer bij behalve op 'volledig'. Niet omdat hij niet
+ * telt — hij telt juist, want daar staat wie er slecht past — maar omdat hij
+ * niet gevraagd hoeft te worden: hij volgt uit de kwalificatie van onze eigen
+ * service. Zie `domain/derive.ts`.
+ */
 function asks(detail: OpponentDetail, type: ActionType): boolean {
   if (detail === 'volledig') return true;
-  if (type === 'serve' || type === 'attack') return true;
-  return detail === 'pass' && type === 'reception';
+  return type === 'serve' || type === 'attack';
 }
 
 /** Serveerplekken achter de achterlijn, zoals ze in het veld heten. */

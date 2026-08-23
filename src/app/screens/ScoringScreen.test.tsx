@@ -63,18 +63,35 @@ describe('ScoringScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Service' }));
     // Bij een service kies je een plek achter de achterlijn, geen veldzone.
     await user.click(screen.getByRole('button', { name: 'Rechts' }));
+    // Daarna: op wie. Zonder die tik weet de app niet waar er geserveerd werd,
+    // en dan blijft het serveeradvies leeg.
+    await user.click(screen.getByRole('button', { name: 'Positie 5' }));
     await user.click(screen.getByRole('button', { name: /^Goed/ }));
 
     await waitFor(async () => {
       const actions = await store.actions.listByMatch(matchId);
-      expect(actions).toHaveLength(1);
-      expect(actions[0]).toMatchObject({ type: 'serve', quality: 'good', zoneFrom: 1, team: 'us' });
+      // Twee: onze service, en de pass van de tegenstander die daaruit volgt.
+      expect(actions).toHaveLength(2);
+      expect(actions.find((action) => action.type === 'serve')).toMatchObject({
+        quality: 'good',
+        zoneFrom: 1,
+        zoneTo: 5,
+        team: 'us',
+      });
+      expect(actions.find((action) => action.type === 'reception')).toMatchObject({
+        team: 'them',
+        // Onze service zette hen onder druk, dus hun pass was matig. Gespiegeld,
+        // niet apart gevraagd — vandaar het merkteken.
+        quality: 'poor',
+        zoneFrom: 5,
+        derived: true,
+      });
     });
 
-    // De keten laat de actie zien zoals in het schermontwerp: #4 service z1 goed.
+    // De keten laat de actie zien zoals in het schermontwerp: #4 service z1→z5.
     expect(await screen.findByText('#4')).toBeDefined();
     expect(screen.getByText('service')).toBeDefined();
-    expect(screen.getByText('z1')).toBeDefined();
+    expect(screen.getByText('z1→z5')).toBeDefined();
   });
 
   it('rondt de rally af zodra een actie hem beëindigt', async () => {

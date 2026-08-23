@@ -20,7 +20,7 @@ import type {
   Zone,
 } from '../../domain/types';
 
-export type EntryStep = 'player' | 'type' | 'zone' | 'attack' | 'quality';
+export type EntryStep = 'player' | 'type' | 'zone' | 'target' | 'attack' | 'quality';
 
 export interface EntryState {
   team: TeamSide;
@@ -112,11 +112,11 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
         zoneTo: null,
         tempo: null,
         blockers: null,
-        step: needsZoneStep(event.type) ? 'zone' : nextAfterZone(event.type),
+        step: needsZoneStep(event.type) ? 'zone' : nextAfterZone(event.type, state.team),
       };
 
     case 'zoneFrom':
-      return { ...state, zoneFrom: event.zone, step: nextAfterZone(state.type) };
+      return { ...state, zoneFrom: event.zone, step: nextAfterZone(state.type, state.team) };
 
     // Het tempo kiezen laat de stap staan: daarna volgt het blok, en dát tikje
     // brengt je naar de kwalificatie. Zo blijft het bij twee tikken.
@@ -130,12 +130,18 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
       return { ...state, step: 'quality' };
 
     case 'zoneTo':
-      return { ...state, zoneTo: event.zone };
+      // In de doelstap is dit het antwoord op de vraag; daarna is de actie rond.
+      // Elders (de landingszone bij een gewone actie) blijft de stap staan.
+      return {
+        ...state,
+        zoneTo: event.zone,
+        step: state.step === 'target' ? 'quality' : state.step,
+      };
 
     case 'skipZone':
       // Alleen toegestaan waar het protocol de zone niet verplicht stelt.
       if (state.type && requiresZoneFrom(state.type)) return state;
-      return { ...state, step: nextAfterZone(state.type) };
+      return { ...state, step: nextAfterZone(state.type, state.team) };
 
     case 'goTo':
       return { ...state, step: event.step };
@@ -160,9 +166,23 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
   }
 }
 
-/** Waar je heen gaat als de zone klaar is: bij een aanval nog één vraag. */
-function nextAfterZone(type: ActionType | null): EntryStep {
-  return type && needsAttackStep(type) ? 'attack' : 'quality';
+/**
+ * Waar de app deze actie vraagt op wie er geserveerd is.
+ *
+ * Alleen bij onze eigen service. Het is de vraag waar het hele serveeradvies aan
+ * hangt — 'serveer op positie 5' kan de app pas zeggen als hij weet waar er
+ * geserveerd wérd — en het is meteen wat hun pass eraan vastknoopt: wie daar
+ * stond volgt uit hun rotatie, dus dat hoeft niemand er apart bij te tikken.
+ */
+export function needsTargetStep(type: ActionType | null, team: TeamSide): boolean {
+  return type === 'serve' && team === 'us';
+}
+
+/** Waar je heen gaat als de zone klaar is: bij een aanval en een service nog één vraag. */
+function nextAfterZone(type: ActionType | null, team: TeamSide): EntryStep {
+  if (type && needsAttackStep(type)) return 'attack';
+  if (needsTargetStep(type, team)) return 'target';
+  return 'quality';
 }
 
 function stepBack(state: EntryState): EntryState {
@@ -171,10 +191,15 @@ function stepBack(state: EntryState): EntryState {
       if (state.type && needsAttackStep(state.type)) {
         return { ...state, tempo: null, blockers: null, step: 'attack' };
       }
+      if (needsTargetStep(state.type, state.team)) {
+        return { ...state, zoneTo: null, step: 'target' };
+      }
       if (state.type && needsZoneStep(state.type)) {
         return { ...state, zoneFrom: null, zoneTo: null, step: 'zone' };
       }
       return { ...state, type: null, step: 'type' };
+    case 'target':
+      return { ...state, zoneFrom: null, zoneTo: null, step: 'zone' };
     case 'attack':
       return { ...state, zoneFrom: null, zoneTo: null, tempo: null, blockers: null, step: 'zone' };
     case 'zone':

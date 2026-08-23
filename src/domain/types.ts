@@ -256,6 +256,15 @@ export interface Action extends BaseRecord {
   errorReason?: ErrorReason | null;
   /** Alleen relevant bij invoer tijdens video-terugkijken. */
   videoTimestampMs?: number | null;
+  /**
+   * Heeft niemand deze actie ingevoerd, maar heeft de app hem afgeleid?
+   *
+   * Zo is de pass van de tegenstander het spiegelbeeld van onze
+   * servicekwalificatie (zie `derive.ts`). Dat scheelt de invoerder de halve
+   * rally, maar het blijft een gevolgtrekking en geen waarneming — en dat hoort
+   * zichtbaar te zijn overal waar het cijfer opduikt.
+   */
+  derived?: boolean;
 }
 
 /**

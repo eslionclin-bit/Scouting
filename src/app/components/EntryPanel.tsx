@@ -28,9 +28,9 @@ import {
   type TeamSide,
   type Zone,
 } from '../../domain/types';
-import { COURT_GRID, ZONE_LABELS } from '../../domain/zones';
+import { COURT_GRID, OPPONENT_GRID, ZONE_LABELS } from '../../domain/zones';
 import { useLongPress } from '../hooks/useLongPress';
-import type { EntryEvent, EntryState } from '../entry/entryReducer';
+import { needsTargetStep, type EntryEvent, type EntryState } from '../entry/entryReducer';
 
 export interface NewPlayerInput {
   team: TeamSide;
@@ -48,13 +48,19 @@ export interface EntryPanelProps {
    * Na een blok mag dat wél, dus dan staat hier niets.
    */
   blockedPlayerId?: string | null;
+  /**
+   * Hun rugnummers per zone, als hun opstelling bekend is. Alleen om te tonen:
+   * 'positie 5 · #38' leest anders dan 'positie 5', en dat is precies het
+   * verschil tussen een cijfer en een advies.
+   */
+  opponentPositions?: Record<Zone, number | null>;
   onCommit: (quality: Quality) => void;
   onExplain: (quality: Quality) => void;
   onAddPlayer: (input: NewPlayerInput) => Promise<void>;
 }
 
 export function EntryPanel(props: EntryPanelProps): ReactElement {
-  const { state, dispatch } = props;
+  const { state, dispatch, opponentPositions } = props;
   const players = state.team === 'us' ? props.ownPlayers : props.opponentPlayers;
   const chosen = state.playerId ? players.find((player) => player.id === state.playerId) : undefined;
 
@@ -70,6 +76,9 @@ export function EntryPanel(props: EntryPanelProps): ReactElement {
         ) : (
           <ZoneStep state={state} dispatch={dispatch} />
         ))}
+      {state.step === 'target' && (
+        <ServeTargetStep state={state} dispatch={dispatch} opponentPositions={opponentPositions} />
+      )}
       {state.step === 'attack' && <AttackStep state={state} dispatch={dispatch} />}
       {state.step === 'quality' && (
         <QualityStep state={state} onCommit={props.onCommit} onExplain={props.onExplain} />
@@ -83,6 +92,7 @@ function DraftBar({
   state,
   dispatch,
   chosen,
+  opponentPositions,
 }: EntryPanelProps & { chosen: Player | undefined }): ReactElement {
   const who = !state.playerChosen ? null : chosen ? playerLabel(chosen) : 'onbekende speler';
 
@@ -121,6 +131,26 @@ function DraftBar({
           {state.zoneFrom ? `zone ${state.zoneFrom}${state.zoneTo ? ` → ${state.zoneTo}` : ''}` : '—'}
         </span>
       </button>
+
+      {needsTargetStep(state.type, state.team) && (
+        <button
+          type="button"
+          className={`draft__chip ${state.step === 'target' ? 'draft__chip--active' : ''}`}
+          disabled={state.zoneFrom === null}
+          onClick={() => dispatch({ kind: 'goTo', step: 'target' })}
+        >
+          <span className="draft__label">Op wie</span>
+          <span className="draft__value">
+            {state.zoneTo === null
+              ? '—'
+              : `positie ${state.zoneTo}${
+                  opponentPositions?.[state.zoneTo] != null
+                    ? ` · #${opponentPositions[state.zoneTo]}`
+                    : ''
+                }`}
+          </span>
+        </button>
+      )}
 
       {state.type === 'attack' && (
         <button
@@ -585,5 +615,72 @@ function QualityButton({
       <span className="quality__label">{QUALITY_LABELS[quality]}</span>
       {criterion && <span className="quality__criterion">{criterion}</span>}
     </button>
+  );
+}
+
+/**
+ * Op wie er geserveerd is.
+ *
+ * Hun helft, in de volgorde waarin je hem voor je ziet: hun voorlijn aan het
+ * net, en hun zone 4 voor jou rechts. Staat hun opstelling erin, dan staat het
+ * rugnummer in het vak — dan tik je op #38 en niet op 'positie 5'.
+ *
+ * Overslaan mag. Maar het is één tik, en het is de tik waar het serveeradvies
+ * op rust én waar hun pass aan wordt opgehangen: die leidt de app hieruit af in
+ * plaats van er apart om te vragen.
+ */
+function ServeTargetStep({
+  state,
+  dispatch,
+  opponentPositions,
+}: {
+  state: EntryState;
+  dispatch: (event: EntryEvent) => void;
+  opponentPositions?: Record<Zone, number | null>;
+}): ReactElement {
+  return (
+    <StepCard
+      title="Op wie geserveerd?"
+      hint="Hun helft, zoals je hem voor je ziet. Eén tik — hier hangt het serveeradvies aan."
+    >
+      <div className="court court--them" role="group" aria-label="Helft van de tegenstander">
+        {OPPONENT_GRID.map((row, index) => (
+          <div className="court__row" key={index}>
+            {row.map((zone) => {
+              const number = opponentPositions?.[zone] ?? null;
+              return (
+                <button
+                  key={zone}
+                  type="button"
+                  aria-label={
+                    number === null
+                      ? `Positie ${zone}`
+                      : `Positie ${zone}, rugnummer ${number}`
+                  }
+                  className={`court__zone ${state.zoneTo === zone ? 'court__zone--to' : ''}`}
+                  onClick={() => dispatch({ kind: 'zoneTo', zone })}
+                >
+                  {number === null ? zone : `#${number}`}
+                  {number !== null && <span className="court__zonenr">{zone}</span>}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        <div className="court__net" aria-hidden="true">
+          net
+        </div>
+      </div>
+
+      <div className="step__actions">
+        <button
+          type="button"
+          className="button"
+          onClick={() => dispatch({ kind: 'zoneTo', zone: null })}
+        >
+          Weet ik niet
+        </button>
+      </div>
+    </StepCard>
   );
 }

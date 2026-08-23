@@ -11,6 +11,7 @@ import { useMemo, type ReactElement } from 'react';
 import { buildOpponentDossier, MIN_RECEPTIONS_PER_PLAYER, MIN_SAMPLE } from '../../analysis';
 import { loadMatchBundle } from '../../db/bundle';
 import { ACTION_TYPE_LABELS } from '../../domain/protocol';
+import { Squad } from '../components/Squad';
 import { StatTile } from '../components/StatTile';
 import { ZoneHeatmap } from '../components/ZoneHeatmap';
 import { Placeholder } from '../components/Placeholder';
@@ -100,6 +101,19 @@ export function OpponentScreen({ opponentId, onExit, onOpenMatch }: OpponentScre
         />
       </div>
 
+      {/*
+        Hun spelers waren tot nu toe alleen aan te maken door tijdens het
+        invoeren een rugnummer in te tikken. Dat werkt tijdens een rally, maar
+        het is de verkeerde plek om een ploeg voor te bereiden: je zit thuis met
+        een wedstrijdformulier van vorige week en wilt er namen bij zetten. Dit
+        is dezelfde lijst als bij ons team, want het is dezelfde vraag.
+      */}
+      <Squad
+        teamId={opponentId}
+        title="Hun selectie"
+        hint="Rugnummers en, als je ze kent, namen en posities. Je hebt dit niet nodig om in te voeren — een nummer intikken tijdens de rally kan altijd — maar met de namen erbij leest het advies straks als 'serveer op #38' in plaats van 'serveer op positie 5'."
+      />
+
       <section className="card">
         <h2>Belangrijkste patronen</h2>
         {thin ? (
@@ -145,9 +159,10 @@ export function OpponentScreen({ opponentId, onExit, onOpenMatch }: OpponentScre
         <h2>Wie er slecht past</h2>
         {dossier.passers.length === 0 ? (
           <p className="card__hint">
-            Nog te weinig ballen om iets over een speelster te zeggen. Dit vult zich vanzelf: de
-            pass van de tegenstander wordt tijdens het invoeren gevraagd, en waar jullie naartoe
-            serveren komt uit één tik op hun helft.
+            Nog te weinig ballen om iets over een speelster te zeggen. Dit vult zich vanzelf en het
+            kost geen extra invoer: hoe je onze service kwalificeert zegt al wat zij ermee kon, en
+            waar je naartoe serveerde komt uit één tik op hun helft. Wel is hun opstelling nodig,
+            anders weet de app niet wie daar stond.
           </p>
         ) : (
           <>
@@ -155,7 +170,9 @@ export function OpponentScreen({ opponentId, onExit, onOpenMatch }: OpponentScre
               Slechtste passer bovenaan. Haar cijfer zegt hoe zíj het doet; de laatste kolom zegt
               wat het óns oplevert — en dat tweede telt, want een matige passer achter een ploeg die
               er toch uitkomt is geen doelwit. Onder {MIN_RECEPTIONS_PER_PLAYER} passes zwijgt de
-              tabel.
+              tabel. Deze cijfers zijn afgeleid uit onze eigen servicekwalificaties, tenzij je hun
+              pass zelf invoert: het is dus hoe wij haar zagen worstelen, niet een oordeel van een
+              scout aan hun kant.
             </p>
             <div className="tablewrap">
               <table className="stats">

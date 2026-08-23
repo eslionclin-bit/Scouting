@@ -18,6 +18,10 @@ import { useQuery, useStore } from '../StoreProvider';
 
 export interface SquadProps {
   teamId: string;
+  /** Kop boven de lijst; bij de tegenstander heet het anders dan bij ons. */
+  title?: string;
+  /** Regel eronder. Standaard die van de eigen selectie. */
+  hint?: string;
 }
 
 interface Draft {
@@ -41,7 +45,7 @@ function toggle(roles: readonly PlayerRole[], role: PlayerRole): PlayerRole[] {
   return roles.includes(role) ? roles.filter((entry) => entry !== role) : [...roles, role];
 }
 
-export function Squad({ teamId }: SquadProps): ReactElement {
+export function Squad({ teamId, title, hint }: SquadProps): ReactElement {
   const store = useStore();
   const { data: players } = useQuery(
     async (instance) => instance.players.listByTeam(teamId, { includeInactive: true }),
@@ -86,11 +90,10 @@ export function Squad({ teamId }: SquadProps): ReactElement {
 
   return (
     <section className="card">
-      <h2>Selectie</h2>
+      <h2>{title ?? 'Selectie'}</h2>
       <p className="card__hint">
-        Wie erin zit, met haar rugnummer en posities. Kan iemand meer dan één positie, tik ze er dan
-        bij aan — dat beperkt niets aan wat je kunt invoeren, maar het laat zien wie er inzetbaar is
-        als er iemand uitvalt.
+        {hint ??
+          'Wie erin zit, met haar rugnummer en posities. Kan iemand meer dan één positie, tik ze er dan bij aan — dat beperkt niets aan wat je kunt invoeren, maar het laat zien wie er inzetbaar is als er iemand uitvalt.'}
       </p>
 
       <ul className="squad">

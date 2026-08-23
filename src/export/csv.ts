@@ -29,6 +29,10 @@ export const CSV_COLUMNS = [
   'zone_vertrek',
   'zone_landing',
   'kwalificatie',
+  // Of iemand deze actie zag, of dat de app hem heeft afgeleid uit een andere.
+  // Zonder die kolom staat een berekende pass in Excel naast een waargenomen
+  // pass alsof ze even hard zijn, en dat zijn ze niet.
+  'afgeleid',
   'tempo',
   'blok',
   'foutreden',
@@ -65,6 +69,7 @@ export function toMatchCsv(bundle: MatchBundle, delimiter = ';'): string {
             action.zoneFrom ?? '',
             action.zoneTo ?? '',
             QUALITY_LABELS[action.quality],
+            action.derived ? 'ja' : '',
             action.tempo ? ATTACK_TEMPO_LABELS[action.tempo] : '',
             action.blockers ?? '',
             action.errorReason ? ERROR_REASON_LABELS[action.errorReason] : '',

@@ -80,6 +80,7 @@ export class ActionRepository {
       blockers: input.blockers ?? null,
       errorReason: input.errorReason ?? null,
       videoTimestampMs: input.videoTimestampMs ?? null,
+      derived: input.derived ?? false,
     });
 
     await commit(this.ctx, [{ entity: 'actions', record }]);

@@ -190,3 +190,42 @@ describe('entryReducer', () => {
     expect(jumped).toMatchObject({ step: 'player', playerId: 'p1', type: 'serve', zoneFrom: 1 });
   });
 });
+
+describe('op wie er geserveerd is', () => {
+  function afterServeSpot() {
+    let state = initialEntryState('us');
+    state = entryReducer(state, { kind: 'player', playerId: 'p-4' });
+    state = entryReducer(state, { kind: 'type', type: 'serve' });
+    return entryReducer(state, { kind: 'zoneFrom', zone: 1 });
+  }
+
+  it('vraagt na de serveerplek waar de bal aankwam', () => {
+    expect(afterServeSpot().step).toBe('target');
+  });
+
+  it('gaat na die tik door naar de kwalificatie', () => {
+    const state = entryReducer(afterServeSpot(), { kind: 'zoneTo', zone: 5 });
+    expect(state).toMatchObject({ step: 'quality', zoneFrom: 1, zoneTo: 5 });
+  });
+
+  it('laat zich overslaan, want soms zie je het niet', () => {
+    const state = entryReducer(afterServeSpot(), { kind: 'zoneTo', zone: null });
+    expect(state).toMatchObject({ step: 'quality', zoneTo: null });
+  });
+
+  it('vraagt het niet bij hun service', () => {
+    // Waar zij naartoe serveren is onze eigen pass, en die kwalificeren we zelf.
+    let state = initialEntryState('them');
+    state = entryReducer(state, { kind: 'player', playerId: null });
+    state = entryReducer(state, { kind: 'type', type: 'serve' });
+    expect(entryReducer(state, { kind: 'zoneFrom', zone: 1 }).step).toBe('quality');
+  });
+
+  it('gaat met terug netjes van kwalificatie naar doel naar plek', () => {
+    let state = entryReducer(afterServeSpot(), { kind: 'zoneTo', zone: 5 });
+    state = entryReducer(state, { kind: 'back' });
+    expect(state).toMatchObject({ step: 'target', zoneTo: null, zoneFrom: 1 });
+    state = entryReducer(state, { kind: 'back' });
+    expect(state.step).toBe('zone');
+  });
+});

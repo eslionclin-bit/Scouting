@@ -29,6 +29,16 @@ export function RallyChain({ actions, playersById, onUndoLast }: RallyChainProps
               </span>
             )}
             <span className="pill__quality">{QUALITY_LABELS[action.quality].toLowerCase()}</span>
+            {/*
+              Afgeleid, niet gezien: hun pass die uit onze servicekwalificatie
+              volgt. Het staat er klein bij, want wie een cijfer voor zich krijgt
+              hoort te kunnen zien of iemand het waarnam of de app het uitrekende.
+            */}
+            {action.derived && (
+              <span className="pill__derived" title="Afgeleid uit onze service, niet apart ingevoerd">
+                ~
+              </span>
+            )}
           </span>
         </span>
       ))}

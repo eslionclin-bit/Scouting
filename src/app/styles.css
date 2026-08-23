@@ -3020,3 +3020,37 @@ button {
 .placeholder--error .placeholder__card {
   border-color: var(--error);
 }
+
+/* Afgeleid, niet gezien: klein en grijs, want het is geen waarneming. */
+.pill__derived {
+  opacity: 0.55;
+  font-weight: 700;
+  margin-left: 0.15rem;
+}
+
+/*
+  Hun helft: het net staat onderaan in de opmaak omdat hun voorlijn de bovenste
+  rij is. De streep hoort dan aan de andere kant van het label, anders staat de
+  scheidslijn achter het net in plaats van ervoor.
+*/
+.court--them .court__net,
+.court--lineup .court__net {
+  border-bottom: 0;
+  border-top: 2px dashed var(--line);
+  padding-bottom: 0;
+  padding-top: 0.2rem;
+}
+
+/* Het zonenummer klein in de hoek als het rugnummer de hoofdrol heeft. */
+.court__zone {
+  position: relative;
+}
+
+.court__zonenr {
+  position: absolute;
+  top: 0.15rem;
+  left: 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  opacity: 0.5;
+}
