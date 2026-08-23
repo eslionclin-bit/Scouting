@@ -3054,3 +3054,34 @@ button {
   font-weight: 600;
   opacity: 0.5;
 }
+
+/*
+  Een hint die op een veld volgt in plaats van op een kop: de negatieve
+  bovenmarge van .step__hint trok hem anders over het netlabel heen.
+*/
+.court + .step__hint {
+  margin-top: 0.5rem;
+}
+
+/*
+  De rugnummervakjes in de opstelling stonden zonder opmaak, en dan tekent de
+  browser ze wit met zwarte letters — een fel blok in een donkere app. Dezelfde
+  opmaak als de andere invoervelden.
+*/
+.lineupcell--input input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 0.4rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.lineupcell--input input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

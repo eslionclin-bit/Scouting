@@ -2,6 +2,17 @@
 
 import type { Player, PlayerRole } from './types';
 
+/**
+ * Hoogste rugnummer dat de app aanneemt.
+ *
+ * De Nevobo laat 1 t/m 99 toe, maar in de zaal kom je ze gewoon tegen: ploegen
+ * die het geboortejaar of een clubnummer op het shirt zetten, en teams die zelf
+ * shirts laten drukken. Weigeren helpt dan niemand — de invoerder ziet #321 in
+ * het veld staan en moet die kunnen intikken. Drie cijfers is wat er op een
+ * shirt past.
+ */
+export const MAX_PLAYER_NUMBER = 999;
+
 /** Rollen zoals ze in de zaal heten. */
 export const PLAYER_ROLE_LABELS: Record<PlayerRole, string> = {
   setter: 'Spelverdeler',

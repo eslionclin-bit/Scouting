@@ -196,6 +196,21 @@ describe('ScoutingStore', () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it('accepteert rugnummers van drie cijfers', async () => {
+    // Niet elke ploeg houdt zich aan 1 t/m 99: geboortejaren en clubnummers
+    // staan gewoon op shirts. Wie #321 in het veld ziet moet die kunnen intikken.
+    const player = await store.players.create({
+      teamId: fixture.ownTeam.id,
+      number: 321,
+      name: 'Drie cijfers',
+    });
+    expect(player.number).toBe(321);
+
+    await expect(
+      store.players.create({ teamId: fixture.ownTeam.id, number: 1000, name: 'Te lang' }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
   it('koppelt dezelfde tegenstander aan meerdere wedstrijden (opponent-dossier)', async () => {
     const opponent = await store.teams.findOrCreateOpponent('vc tegenpartij');
     expect(opponent.id).toBe(fixture.opponent.id);

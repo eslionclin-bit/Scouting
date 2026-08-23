@@ -1,5 +1,6 @@
 /** Spelers, per team. Rugnummer is uniek binnen een team. */
 
+import { MAX_PLAYER_NUMBER } from '../../domain/players';
 import type { Player, PlayerRole } from '../../domain/types';
 import { buildRecord, commit, reviseRecord, type WriteContext } from '../mutations';
 import { alive, isAlive, NotFoundError, ValidationError } from './base';
@@ -124,9 +125,12 @@ export class PlayerRepository {
   }
 
   private async assertNumberFree(teamId: string, number: number, ignoreId: string | null): Promise<void> {
-    if (!Number.isInteger(number) || number < 0 || number > 99) {
+    if (!Number.isInteger(number) || number < 0 || number > MAX_PLAYER_NUMBER) {
       throw new ValidationError(`Ongeldig rugnummer: ${number}.`, [
-        { code: 'invalid_player_number', message: 'Rugnummer moet tussen 0 en 99 liggen.' },
+        {
+          code: 'invalid_player_number',
+          message: `Rugnummer moet tussen 0 en ${MAX_PLAYER_NUMBER} liggen.`,
+        },
       ]);
     }
     const existing = await this.byNumber(teamId, number);

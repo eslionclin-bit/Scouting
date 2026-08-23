@@ -9,6 +9,7 @@
  */
 
 import type { ErrorReason } from './errors';
+import { MAX_PLAYER_NUMBER } from './players';
 import type {
   Action,
   ActionType,
@@ -146,8 +147,18 @@ export function validateAction(
     });
   }
 
-  if (draft.playerNumber != null && (!Number.isInteger(draft.playerNumber) || draft.playerNumber < 0 || draft.playerNumber > 99)) {
-    issues.push({ severity: 'error', code: 'invalid_player_number', field: 'playerNumber', message: 'Rugnummer moet tussen 0 en 99 liggen.' });
+  if (
+    draft.playerNumber != null &&
+    (!Number.isInteger(draft.playerNumber) ||
+      draft.playerNumber < 0 ||
+      draft.playerNumber > MAX_PLAYER_NUMBER)
+  ) {
+    issues.push({
+      severity: 'error',
+      code: 'invalid_player_number',
+      field: 'playerNumber',
+      message: `Rugnummer moet tussen 0 en ${MAX_PLAYER_NUMBER} liggen.`,
+    });
   }
 
   const last = previousActions.at(-1);

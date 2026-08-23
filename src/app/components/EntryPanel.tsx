@@ -16,7 +16,7 @@ import {
   TEAM_SIDE_LABELS,
   tooltipFor,
 } from '../../domain/protocol';
-import { playerLabel } from '../../domain/players';
+import { MAX_PLAYER_NUMBER, playerLabel } from '../../domain/players';
 import { requiresZoneFrom } from '../../domain/rules';
 import {
   ACTION_TYPES,
@@ -310,8 +310,8 @@ function AddPlayerDialog({
 
   async function save(): Promise<void> {
     const parsed = Number(number);
-    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 99) {
-      setError('Vul een rugnummer tussen 0 en 99 in.');
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > MAX_PLAYER_NUMBER) {
+      setError(`Vul een rugnummer tussen 0 en ${MAX_PLAYER_NUMBER} in.`);
       return;
     }
     setBusy(true);

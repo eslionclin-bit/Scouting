@@ -16,6 +16,7 @@
  */
 
 import { useState, type ReactElement } from 'react';
+import { MAX_PLAYER_NUMBER } from '../../domain/players';
 import { rotatePositions } from '../../domain/rotation';
 import type { Zone } from '../../domain/types';
 import { ZONES } from '../../domain/types';
@@ -75,7 +76,7 @@ export function OpponentLineupSheet({
                     type="number"
                     inputMode="numeric"
                     min={0}
-                    max={99}
+                    max={MAX_PLAYER_NUMBER}
                     aria-label={`Rugnummer ${ZONE_LABELS[zone]}`}
                     value={draft[zone] ?? ''}
                     onChange={(event) => set(zone, event.target.value)}
