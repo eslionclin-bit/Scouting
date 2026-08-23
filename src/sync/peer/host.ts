@@ -58,7 +58,18 @@ export class PeerHost {
     this.channels.add(channel);
     this.ensureStoreSubscription();
 
-    const offMessage = channel.onMessage((message) => void this.handle(channel, message));
+    // Bewust met een vangnet. `handle` praat met de opslag, en die kan dicht
+    // zijn tegen de tijd dat een verzoek binnenkomt — het scherm werd net
+    // gesloten, of de wedstrijd verlaten. Zonder deze catch blijft er een losse
+    // afwijzing achter, en die trekt in een test de hele run onderuit en in de
+    // browser de rest van de afhandeling.
+    //
+    // Herstellen valt er niets: de invoerder schrijft gewoon lokaal door, en de
+    // meelezer haalt het bij de volgende koppeling opnieuw op. Dus laten we dit
+    // apparaat los in plaats van te doen alsof het nog bediend wordt.
+    const offMessage = channel.onMessage((message) => {
+      void this.handle(channel, message).catch(() => detach());
+    });
     const offClose = channel.onClose(() => detach());
 
     const detach = (): void => {

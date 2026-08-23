@@ -48,7 +48,14 @@ export class PeerClient implements SyncTransport {
     private readonly channel: PeerChannel,
     private readonly options: PeerClientOptions = {},
   ) {
-    this.offMessage = channel.onMessage((message) => void this.handle(message));
+    // Zie de host: `handle` praat met de opslag en die kan dicht zijn tegen de
+    // tijd dat er iets binnenkomt. Een losse afwijzing helpt dan niemand; de
+    // openstaande verzoeken horen een fout te krijgen die ze kunnen tonen.
+    this.offMessage = channel.onMessage((message) => {
+      void this.handle(message).catch((cause: unknown) => {
+        this.failAll(cause instanceof Error ? cause : new Error(String(cause)));
+      });
+    });
     this.offClose = channel.onClose(() => this.failAll(new Error('Verbinding verbroken.')));
   }
 
