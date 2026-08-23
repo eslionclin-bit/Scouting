@@ -81,6 +81,17 @@ jobs:
           if [ "${#TOKEN}" -ne "${#TOKEN_C}" ]; then
             echo "::warning::In CLOUDFLARE_API_TOKEN zat witruimte ($(( ${#TOKEN} - ${#TOKEN_C} )) tekens). Een token bevat die nooit, dus er is waarschijnlijk tekst omheen meegekopieerd; kopieer alleen het token zelf."
           fi
+          # Een account-token (cfat_) kan de rechten die wrangler nodig heeft niet
+          # dragen — bekend probleem, en de fout die je ervoor terugkrijgt is
+          # 'Invalid access token', wat naar van alles kan wijzen. Het moet een
+          # gebruikerstoken zijn, aangemaakt onder My Profile.
+          case "$TOKEN_C" in
+            cfat_*)
+              echo "::error::CLOUDFLARE_API_TOKEN is een account-token (begint met cfat_). Wrangler heeft een gebruikerstoken nodig: maak er een aan onder My Profile → API Tokens, met de sjabloon 'Edit Cloudflare Workers'."
+              exit 1
+              ;;
+          esac
+
           if [ -n "$TOKEN_C" ] && printf '%s' "$TOKEN_C" | grep -q '[^A-Za-z0-9._-]'; then
             echo "::warning::CLOUDFLARE_API_TOKEN bevat tekens die niet in een token voorkomen. Kopieer alleen het token, zonder de tekst eromheen en zonder het woord Bearer."
           fi
@@ -130,15 +141,6 @@ jobs:
         if: steps.check.outputs.ready == 'true'
         working-directory: server/cloud
         run: sed -i "s|vul-hier-de-id-in-die-wrangler-afdrukt|$CF_D1|" wrangler.toml
-
-      - name: Tabel klaarzetten
-        if: steps.check.outputs.ready == 'true'
-        working-directory: server/cloud
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
-        # Alle statements zijn 'if not exists', dus dit mag elke keer draaien.
-        run: npx --yes wrangler@4 d1 execute volley-scouting --remote --file schema.sql --yes
 
       # Het adres van de worker staat in de uitvoer hieronder; dat is de
       # waarde voor het secret SYNC_URL waarmee de app hem gaat gebruiken.

@@ -26,6 +26,49 @@
 /** Korter dan dit is te raden, en dan is de hele opzet waardeloos. */
 const MIN_CODE_LENGTH = 16;
 
+/**
+ * De tabel, hier en niet in een los installatiestapje.
+ *
+ * Eerst stond dit in schema.sql en moest je het met de hand of met een extra
+ * uitrolstap uitvoeren. Dat leverde twee problemen op die geen van beide met
+ * volleybal te maken hebben: het uitrol-token had er meer rechten voor nodig,
+ * en je wist nooit zeker óf het gelukt was — een ontbrekende tabel merk je pas
+ * als de eerste invoerder niet kan synchroniseren.
+ *
+ * Nu zorgt de worker er zelf voor, één keer per instantie. Alles is
+ * 'if not exists', dus het is een no-op zodra de tabel er staat.
+ */
+const SCHEMA = [
+  `create table if not exists changes (
+     seq integer primary key autoincrement,
+     team text not null,
+     entity text not null,
+     record_id text not null,
+     rev text not null,
+     match_id text,
+     payload text not null,
+     updated_at text not null
+   )`,
+  'create unique index if not exists changes_record on changes (team, entity, record_id)',
+  'create index if not exists changes_by_team_seq on changes (team, seq)',
+  'create index if not exists changes_by_match on changes (team, match_id, seq)',
+];
+
+/** Zodra dit staat, is de tabel er en hoeven we niet meer te kijken. */
+let schemaReady = null;
+
+function ensureSchema(env) {
+  schemaReady ??= env.DB.batch(SCHEMA.map((statement) => env.DB.prepare(statement))).catch(
+    (error) => {
+      // Mislukt het, dan moet de volgende aanroep het opnieuw proberen; anders
+      // blijft deze instantie hangen op een fout die misschien tijdelijk was.
+      schemaReady = null;
+      throw error;
+    },
+  );
+  return schemaReady;
+}
+
 /** Zoveel wijzigingen gaan er per keer terug. */
 const MAX_BATCH = 500;
 
@@ -45,6 +88,7 @@ export default {
 
     const url = new URL(request.url);
     try {
+      await ensureSchema(env);
       if (url.pathname === '/sync/push') return await push(request, env, origin);
       if (url.pathname === '/sync/pull') return await pull(request, env, origin);
       return json({ error: 'Onbekend adres.' }, 404, origin);
