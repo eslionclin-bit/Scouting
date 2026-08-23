@@ -69,12 +69,20 @@ jobs:
           printf '  %-24s %s tekens (%s na opschonen)\n' \
             CLOUDFLARE_D1_ID "${#D1}" "${#D1_C}"
 
-          # Een API-token van Cloudflare is 40 tekens. Klopt dat niet, dan is er
-          # iets anders gekopieerd — de tekst eromheen, of het curl-voorbeeld dat
-          # eronder staat. Dat levert verderop 'Invalid format for Authorization
-          # header' op, en aan die melding heb je niets.
-          if [ -n "$TOKEN_C" ] && [ "${#TOKEN_C}" -ne 40 ]; then
-            echo "::warning::CLOUDFLARE_API_TOKEN is ${#TOKEN_C} tekens; een API-token van Cloudflare is er 40. Waarschijnlijk is er tekst omheen meegekopieerd."
+          # Een token bevat nooit witruimte, en bestaat alleen uit letters,
+          # cijfers, streepjes, underscores en punten. Zit er iets anders in, dan
+          # is er tekst omheen meegekopieerd — de zin erboven, of het
+          # curl-voorbeeld dat eronder staat. Verderop levert dat 'Invalid format
+          # for Authorization header' op, en aan die melding heb je niets.
+          #
+          # Bewust niet op lengte controleren: die verschilt per soort token
+          # (oudere zijn 40 tekens, nieuwere hebben een voorvoegsel als 'cfat_'
+          # en een controlegetal) en zal blijven veranderen.
+          if [ "${#TOKEN}" -ne "${#TOKEN_C}" ]; then
+            echo "::warning::In CLOUDFLARE_API_TOKEN zat witruimte ($(( ${#TOKEN} - ${#TOKEN_C} )) tekens). Een token bevat die nooit, dus er is waarschijnlijk tekst omheen meegekopieerd; kopieer alleen het token zelf."
+          fi
+          if [ -n "$TOKEN_C" ] && printf '%s' "$TOKEN_C" | grep -q '[^A-Za-z0-9._-]'; then
+            echo "::warning::CLOUDFLARE_API_TOKEN bevat tekens die niet in een token voorkomen. Kopieer alleen het token, zonder de tekst eromheen en zonder het woord Bearer."
           fi
 
           missing=""
