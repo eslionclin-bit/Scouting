@@ -107,8 +107,22 @@ export class ActionRepository {
     return alive(await this.ctx.db.getAllFromIndex('actions', 'by_set', setId));
   }
 
+  /**
+   * Alle acties van een wedstrijd, gegroepeerd per rally en daarbinnen op
+   * volgorde.
+   *
+   * De opslag geeft ze terug op sleutelvolgorde, en die sleutels zijn UUID's —
+   * dus zonder deze sortering komen twee acties uit dezelfde rally in een
+   * willekeurige volgorde terug. Dat is een val: de lijst zíet er chronologisch
+   * uit en is het niet. Let op: de rally's onderling staan niet op tijd, want
+   * daar is een rally-id geen maat voor; wie dat nodig heeft leest ze per rally
+   * of per set.
+   */
   async listByMatch(matchId: string): Promise<Action[]> {
-    return alive(await this.ctx.db.getAllFromIndex('actions', 'by_match', matchId));
+    const records = alive(await this.ctx.db.getAllFromIndex('actions', 'by_match', matchId));
+    return records.sort((a, b) =>
+      a.rallyId === b.rallyId ? bySequence(a, b) : a.rallyId < b.rallyId ? -1 : 1,
+    );
   }
 
   async listByPlayer(playerId: string): Promise<Action[]> {
