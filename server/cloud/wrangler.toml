@@ -1,4 +1,9 @@
-name = "volley-scouting-sync"
+# Bewust niet 'volley-scouting-sync'. Op die naam stond iets anders — de app
+# zelf, via een build die in het Cloudflare-dashboard aan de repo was gekoppeld.
+# Twee dingen die naar dezelfde naam uitrollen, winnen om beurten, en van
+# buitenaf zie je alleen dat het soms niet werkt. Een eigen naam maakt dat
+# onmogelijk.
+name = "volley-sync"
 main = "worker.js"
 compatibility_date = "2026-01-01"
 

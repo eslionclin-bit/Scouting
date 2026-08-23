@@ -185,6 +185,20 @@ Onder Instellingen staat daarom **Alles opnieuw versturen**. Dubbel kan het niet
 worden: elke wijziging draagt haar eigen revisie, en wat er al staat blijft zoals
 het is.
 
+## Waarom de server een eigen naam heeft
+
+Hij heet `volley-sync` en niet `volley-scouting-sync`, en dat is geen smaak.
+
+Op die tweede naam bleek de app zelf te staan: er was in het Cloudflare-dashboard
+een build aan de repository gekoppeld, en die zette de app op dezelfde worker.
+Twee dingen die naar dezelfde naam uitrollen winnen om beurten, en van buitenaf
+zie je daar niets van — je ziet alleen dat de app soms 'Failed to fetch' zegt,
+wat naar van alles kan wijzen. Dat kostte een dag.
+
+Staat er ooit weer iets vreemds: open het adres van de server in een browser. Daar
+hoort 'De sync-server draait' te staan. Zie je iets anders, dan is die naam
+gekaapt.
+
 ## Hoe lang het duurt
 
 Een ronde stuurt alles wat klaarstaat, in batches van honderd achter elkaar, en
