@@ -138,7 +138,9 @@ export function CourtEntry({
           {aiming
             ? state.type === 'attack'
               ? ' · tik waar ze heen slaat'
-              : ' · tik waar je naartoe serveert'
+              : state.type === 'freeball'
+                ? ' · tik waar de vrije bal landt'
+                : ' · tik waar je naartoe serveert'
             : selection?.team === 'them'
               ? ' · gekozen'
               : ''}
@@ -155,7 +157,10 @@ export function CourtEntry({
               // eigen plek — spelverdeler rechts, libero linksachter — en zou
               // het nummer in het vak een leugen zijn. Bij onze aanval dus geen
               // nummers, alleen de zone waar de bal landde.
-              const showNumbers = settings.showOpponentNumbers && state.type !== 'attack';
+              const showNumbers =
+                settings.showOpponentNumbers &&
+                state.type !== 'attack' &&
+                state.type !== 'freeball';
               const number = showNumbers ? (opponentPositions?.[zone] ?? null) : null;
               return (
                 <button
@@ -169,7 +174,7 @@ export function CourtEntry({
                   ].join(' ')}
                   aria-label={
                     aiming
-                      ? `${state.type === 'attack' ? 'Slaan naar' : 'Serveren op'} ${
+                      ? `${state.type === 'serve' ? 'Serveren op' : 'Bal naar'} ${
                           ZONE_LABELS[zone]
                         }${number !== null ? `, nummer ${number}` : ''}`
                       : `Tegenstander ${ZONE_LABELS[zone]}${number !== null ? `, nummer ${number}` : ''}`

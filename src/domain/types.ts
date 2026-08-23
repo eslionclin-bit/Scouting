@@ -26,6 +26,7 @@ export type ActionType =
   | 'reception' // pass (receptie)
   | 'set' // set-up (toets)
   | 'attack' // aanval
+  | 'freeball' // vrije bal: er wordt overheen gespeeld in plaats van aangevallen
   | 'block' // blok
   | 'dig'; // verdediging
 
@@ -34,6 +35,7 @@ export const ACTION_TYPES: readonly ActionType[] = [
   'reception',
   'set',
   'attack',
+  'freeball',
   'block',
   'dig',
 ] as const;

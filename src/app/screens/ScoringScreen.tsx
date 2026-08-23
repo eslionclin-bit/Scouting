@@ -26,10 +26,11 @@ import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryRe
 import { courtPositions, emptyPositions, positionsAt } from '../../domain/rotation';
 import { receiverForZone, receiversFor } from '../../domain/reception';
 import { FRONT_ZONES } from '../../domain/zones';
-import { receptionFromServe } from '../../domain/derive';
+import { receptionFromServe, serveFromReception } from '../../domain/derive';
 import { DEFAULT_SETTINGS } from '../../domain/settings';
 import {
   courtEntryReducer,
+  expectAtServe,
   expectedNext,
   initialCourtState,
   toCourtDraft,
@@ -38,7 +39,15 @@ import { matchStatus, rulesOf, setOutcome } from '../../domain/scoring';
 import { isTerminalAction } from '../../domain/rules';
 import { TEAM_SIDE_LABELS } from '../../domain/protocol';
 import { canPlay, primaryRoleOf, rolesOf } from '../../domain/players';
-import { ZONES, type Action, type Player, type Quality, type TeamSide, type Zone } from '../../domain/types';
+import {
+  ZONES,
+  type Action,
+  type ActionType,
+  type Player,
+  type Quality,
+  type TeamSide,
+  type Zone,
+} from '../../domain/types';
 
 export interface ScoringScreenProps {
   matchId: string;
@@ -90,7 +99,11 @@ export function ScoringScreen({
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
 
   const { data: settings } = useQuery(async (instance) => instance.getSettings(), []);
-
+  // Boven de vroege returns, want de effecten hieronder gebruiken hem: een const
+  // die pas ná een return staat, bestaat niet als die return genomen wordt.
+  const settingsOrDefault = settings ?? DEFAULT_SETTINGS;
+  // Boven de vroege returns, want de effecten hieronder gebruiken hem: een const
+  // die pas ná een `return` staat bestaat niet als die return genomen wordt.
   const { data, error } = useQuery(
     async (instance) => {
       const match = await instance.matches.require(matchId);
@@ -271,7 +284,7 @@ export function ScoringScreen({
     // zij aan de opslag zijn.
     if (open.servingTeam !== 'us') {
       prefilledRallyRef.current = open.id;
-      dispatchCourt({ kind: 'expect', team: 'them', type: 'serve' });
+      dispatchCourt({ kind: 'expect', ...expectAtServe('them', settingsOrDefault) });
       return;
     }
     if (!expectedServerId) return;
@@ -333,7 +346,6 @@ export function ScoringScreen({
    * smal scherm ook: zes vakken plus knoppen passen niet op een telefoon.
    */
   const useCourt = court !== null && wideEnough;
-  const settingsOrDefault = settings ?? DEFAULT_SETTINGS;
 
   const needsServeChoice = set.startingServe === null;
 
@@ -412,6 +424,45 @@ export function ScoringScreen({
   }
 
   /**
+   * Hun service wegschrijven vóór onze pass, als die eruit volgt.
+   *
+   * Volgorde telt: een rally begint met een service, dus die moet er eerder in
+   * staan dan de pass. Vandaar dat dit gebeurt vóór de actie die de invoerder
+   * net aantikte, en niet erna zoals bij hun pass.
+   */
+  async function deriveServe(draft: {
+    team: TeamSide;
+    type: ActionType;
+    quality: Quality;
+  }): Promise<void> {
+    if (settingsOrDefault.opponentDetail === 'volledig') return;
+    if (!data?.rally || data.rally.servingTeam !== 'them') return;
+    // Alleen als eerste bal van de rally: staat er al iets, dan is de service
+    // allang gespeeld (of ingevoerd).
+    if ((data.actions?.length ?? 0) > 0) return;
+
+    // Wie er bij hen serveert staat vast: dat is hun zone 1. Daar mag niemand
+    // voor gewisseld worden, dus dit is geen gok.
+    const playerId = themIds?.[1] ?? null;
+    const derived = serveFromReception(draft, {
+      playerId,
+      playerNumber: playerId ? (playersById.get(playerId)?.number ?? null) : null,
+    });
+    if (!derived) return;
+
+    try {
+      await store.actions.append({ rallyId: data.rally.id, ...derived });
+    } catch (cause) {
+      push(
+        'warning',
+        `Hun service kon er niet automatisch bij: ${
+          cause instanceof Error ? cause.message : String(cause)
+        }`,
+      );
+    }
+  }
+
+  /**
    * De afgeleide pass van de tegenstander wegschrijven, als die er is.
    *
    * Faalt dat, dan blijft de service gewoon staan: dit is een gemak, geen
@@ -445,6 +496,10 @@ export function ScoringScreen({
     if (!draft || !data?.rally) return;
 
     try {
+      // Serveren zij, dan tik jij onze pass in en volgt hun service daaruit.
+      // Hij moet er wel vóór staan: een rally begint met een service.
+      await deriveServe(draft);
+
       const { action, warnings } = await store.actions.append(
         { rallyId: data.rally.id, ...draft },
         { court },
@@ -482,8 +537,9 @@ export function ScoringScreen({
       } else if (isTerminalAction(action)) {
         const { rally: completed } = await store.rallies.complete(data.rally.id);
         const next = await store.rallies.start({ setId: data.set!.id });
-        dispatch({ kind: 'rallyStarted', servingTeam: next.servingTeam });
-        dispatchCourt({ kind: 'expect', team: next.servingTeam, type: 'serve' });
+        const expect = expectAtServe(next.servingTeam, settingsOrDefault);
+        dispatch({ kind: 'rallyStarted', servingTeam: next.servingTeam, expect });
+        dispatchCourt({ kind: 'expect', ...expect });
         push('info', `Punt ${completed.wonBy === 'us' ? 'voor ons' : 'voor de tegenstander'}.`);
       }
     } catch (cause) {
@@ -496,8 +552,9 @@ export function ScoringScreen({
     try {
       await store.rallies.complete(data.rally.id, side);
       const next = await store.rallies.start({ setId: data.set.id });
-      dispatch({ kind: 'rallyStarted', servingTeam: next.servingTeam });
-      dispatchCourt({ kind: 'expect', team: next.servingTeam, type: 'serve' });
+      const expect = expectAtServe(next.servingTeam, settingsOrDefault);
+      dispatch({ kind: 'rallyStarted', servingTeam: next.servingTeam, expect });
+      dispatchCourt({ kind: 'expect', ...expect });
     } catch (cause) {
       push('error', cause instanceof Error ? cause.message : String(cause));
     }
@@ -578,8 +635,12 @@ export function ScoringScreen({
     if (!data?.set) return;
     try {
       await store.sets.setStartingServe(data.set.id, side);
-      dispatch({ kind: 'rallyStarted', servingTeam: side });
-      dispatchCourt({ kind: 'expect', team: side, type: 'serve' });
+      // De eerste rally staat al open en ging uit van onszelf; die hoort mee te
+      // verschuiven, anders telt de rotatie de hele set vanaf de verkeerde kant.
+      await store.rallies.syncStartingServe(data.set.id, side);
+      const expect = expectAtServe(side, settingsOrDefault);
+      dispatch({ kind: 'rallyStarted', servingTeam: side, expect });
+      dispatchCourt({ kind: 'expect', ...expect });
     } catch (cause) {
       push('error', cause instanceof Error ? cause.message : String(cause));
     }

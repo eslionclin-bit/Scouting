@@ -69,7 +69,10 @@ export function initialCourtState(
  * is de vraag die overblijft als een aanval matig was.
  */
 export function targetsOpponent(state: CourtEntryState): boolean {
-  return (state.type === 'serve' || state.type === 'attack') && state.expectedTeam === 'us';
+  return (
+    (state.type === 'serve' || state.type === 'attack' || state.type === 'freeball') &&
+    state.expectedTeam === 'us'
+  );
 }
 
 /**
@@ -84,6 +87,7 @@ const OTHER_SIDE: Record<ActionType, ActionType> = {
   reception: 'attack',
   set: 'attack',
   attack: 'dig',
+  freeball: 'dig',
   block: 'attack',
   dig: 'attack',
 };
@@ -178,7 +182,32 @@ export function expectedNext(
  */
 function asks(detail: OpponentDetail, type: ActionType): boolean {
   if (detail === 'volledig') return true;
-  return type === 'serve' || type === 'attack';
+  // Alles wat van hun kant naar ons toe komt: hun service, hun aanval, en de
+  // vrije bal die ze teruggeven. De rest gebeurt op hun helft en zegt ons niets
+  // wat we niet al uit onze eigen kwalificatie halen.
+  return type === 'serve' || type === 'attack' || type === 'freeball';
+}
+
+/**
+ * Waar de invoer aan het begin van een rally op staat.
+ *
+ * Serveren wij, dan is dat onze service. Serveren zij, dan is het níet hun
+ * service maar onze pass: wie er bij hen moet serveren staat al vast (dat is
+ * hun zone 1, en daar mag niemand voor gewisseld worden), en hoe de service was
+ * zegt onze passkwalificatie al. De app leidt hun service daaruit af in plaats
+ * van er apart om te vragen — zie `domain/derive.ts`.
+ *
+ * Wie hun kant helemaal zelf wil invoeren zet dat om onder 'Van de
+ * tegenstander'; dan blijft hun service gewoon de eerste vraag.
+ */
+export function expectAtServe(
+  servingTeam: TeamSide,
+  settings: Pick<AppSettings, 'opponentDetail'>,
+): { team: TeamSide; type: ActionType } {
+  if (servingTeam === 'us') return { team: 'us', type: 'serve' };
+  return settings.opponentDetail === 'volledig'
+    ? { team: 'them', type: 'serve' }
+    : { team: 'us', type: 'reception' };
 }
 
 /** Serveerplekken achter de achterlijn, zoals ze in het veld heten. */

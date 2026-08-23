@@ -50,9 +50,12 @@ export function tempoFromZone(zone: Zone | null): AttackTempo | null {
 /**
  * Hoe deze achteraanval in de hal heet.
  *
- * Alleen de pipe heeft overal dezelfde naam. De andere twee heten per club iets
- * anders, dus staat er de zone bij in plaats van een naam die ergens niet klopt.
+ * Vanaf 6 is het een pipe, vanaf 1 een 10. Vanaf 5 wordt in principe niet
+ * aangevallen; gebeurt het toch, dan staat er de zone bij in plaats van een
+ * naam die niemand gebruikt.
  */
 export function backAttackLabel(zone: Zone): string {
-  return zone === 6 ? 'pipe' : `achteraanval vanaf ${zone}`;
+  if (zone === 6) return 'pipe';
+  if (zone === 1) return 'de 10';
+  return `achteraanval vanaf ${zone}`;
 }

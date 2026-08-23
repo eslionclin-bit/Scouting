@@ -27,6 +27,8 @@ export const ERROR_REASON_LABELS: Record<ErrorReason, string> = {
 const BY_TYPE: Record<ActionType, readonly ErrorReason[]> = {
   serve: ['net', 'out', 'other'],
   attack: ['out', 'net', 'blocked', 'other'],
+  // Een vrije bal wordt niet geblokt: hij komt te zacht en te hoog aan.
+  freeball: ['net', 'out', 'other'],
   block: ['net', 'out', 'other'],
   reception: ['unplayable', 'handling', 'other'],
   dig: ['unplayable', 'handling', 'other'],

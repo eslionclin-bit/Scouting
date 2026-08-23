@@ -27,6 +27,7 @@ import { requiresZoneFrom } from '../../domain/rules';
 import {
   ACTION_TYPES,
   ATTACK_TEMPOS,
+  type ActionType,
   BLOCK_COUNTS,
   QUALITIES,
   type Player,
@@ -36,7 +37,12 @@ import {
 } from '../../domain/types';
 import { COURT_GRID, OPPONENT_GRID, ZONE_LABELS } from '../../domain/zones';
 import { useLongPress } from '../hooks/useLongPress';
-import { needsTargetStep, type EntryEvent, type EntryState } from '../entry/entryReducer';
+import {
+  needsTargetStep,
+  needsZoneStep,
+  type EntryEvent,
+  type EntryState,
+} from '../entry/entryReducer';
 
 export interface NewPlayerInput {
   team: TeamSide;
@@ -134,17 +140,23 @@ function DraftBar({
         <span className="draft__value">{state.type ? ACTION_TYPE_LABELS[state.type] : '—'}</span>
       </button>
 
-      <button
-        type="button"
-        className={`draft__chip ${state.step === 'zone' ? 'draft__chip--active' : ''}`}
-        disabled={!state.type}
-        onClick={() => dispatch({ kind: 'goTo', step: 'zone' })}
-      >
-        <span className="draft__label">Waar</span>
-        <span className="draft__value">
-          {state.zoneFrom ? `zone ${state.zoneFrom}${state.zoneTo ? ` → ${state.zoneTo}` : ''}` : '—'}
-        </span>
-      </button>
+      {/* Bij een pass en een vrije bal is er geen vertrekzone-stap, dus zou dit
+          knopje naar een vraag leiden die niet gesteld wordt. */}
+      {(state.type === null || needsZoneStep(state.type)) && (
+        <button
+          type="button"
+          className={`draft__chip ${state.step === 'zone' ? 'draft__chip--active' : ''}`}
+          disabled={!state.type}
+          onClick={() => dispatch({ kind: 'goTo', step: 'zone' })}
+        >
+          <span className="draft__label">Waar</span>
+          <span className="draft__value">
+            {state.zoneFrom
+              ? `zone ${state.zoneFrom}${state.zoneTo ? ` → ${state.zoneTo}` : ''}`
+              : '—'}
+          </span>
+        </button>
+      )}
 
       {needsTargetStep(state.type, state.team) && (
         <button
@@ -153,7 +165,7 @@ function DraftBar({
           disabled={state.zoneFrom === null}
           onClick={() => dispatch({ kind: 'goTo', step: 'target' })}
         >
-          <span className="draft__label">{state.type === 'attack' ? 'Waarheen' : 'Op wie'}</span>
+          <span className="draft__label">{state.type === 'serve' ? 'Op wie' : 'Waarheen'}</span>
           <span className="draft__value">
             {state.zoneTo === null
               ? '—'
@@ -647,6 +659,19 @@ function QualityButton({
   );
 }
 
+const TARGET_TITLES: Partial<Record<ActionType, string>> = {
+  serve: 'Op wie geserveerd?',
+  attack: 'Waar sloeg ze hem heen?',
+  freeball: 'Waar legde ze hem neer?',
+};
+
+const TARGET_HINTS: Partial<Record<ActionType, string>> = {
+  serve: 'Hun helft, zoals je hem voor je ziet. Eén tik — hier hangt het serveeradvies aan.',
+  attack:
+    'Hun helft, zoals je hem voor je ziet. Dit is wat je bij een matige aanval overhoudt: waar hij landde.',
+  freeball: 'Hun helft, zoals je hem voor je ziet. Diep is lastig, kort is een cadeau.',
+};
+
 /**
  * Waar de bal op hun helft terechtkwam.
  *
@@ -671,12 +696,8 @@ function ServeTargetStep({
 }): ReactElement {
   return (
     <StepCard
-      title={state.type === 'attack' ? 'Waar sloeg ze hem heen?' : 'Op wie geserveerd?'}
-      hint={
-        state.type === 'attack'
-          ? 'Hun helft, zoals je hem voor je ziet. Dit is wat je bij een matige aanval overhoudt: waar hij landde.'
-          : 'Hun helft, zoals je hem voor je ziet. Eén tik — hier hangt het serveeradvies aan.'
-      }
+      title={TARGET_TITLES[state.type ?? 'serve'] ?? 'Waar kwam hij aan?'}
+      hint={TARGET_HINTS[state.type ?? 'serve'] ?? 'Hun helft, zoals je hem voor je ziet.'}
     >
       <div className="court court--them" role="group" aria-label="Helft van de tegenstander">
         {OPPONENT_GRID.map((row, index) => (

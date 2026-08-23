@@ -54,8 +54,17 @@ export type EntryEvent =
   | { kind: 'reset'; team?: TeamSide }
   /** Na het opslaan van een actie: klaarzetten voor de volgende in de keten. */
   | { kind: 'committed'; last: Pick<Action, 'team' | 'type' | 'quality'> }
-  /** Nieuwe rally: de winnaar van de vorige serveert, dus die staat klaar. */
-  | { kind: 'rallyStarted'; servingTeam: TeamSide };
+  /**
+   * Nieuwe rally: de winnaar van de vorige serveert, dus die staat klaar.
+   *
+   * `expect` overruled dat. Serveren zij, dan is niet hun service de vraag maar
+   * onze pass — zie `courtEntry.expectAtServe`.
+   */
+  | {
+      kind: 'rallyStarted';
+      servingTeam: TeamSide;
+      expect?: { team: TeamSide; type: ActionType };
+    };
 
 export function initialEntryState(team: TeamSide = 'us', suggestion: ActionType | null = null): EntryState {
   return {
@@ -84,7 +93,9 @@ export function isReadyToCommit(state: EntryState): state is EntryState & { type
  * die stap slaan we daar over.
  */
 export function needsZoneStep(type: ActionType): boolean {
-  return type !== 'reception';
+  // Bij een pass en een vrije bal niet: waar die vandaan kwam zegt niets, en
+  // bij de vrije bal is juist waar hij landde het hele punt.
+  return type !== 'reception' && type !== 'freeball';
 }
 
 /**
@@ -174,7 +185,9 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
     }
 
     case 'rallyStarted':
-      return initialEntryState(event.servingTeam, 'serve');
+      return event.expect
+        ? initialEntryState(event.expect.team, event.expect.type)
+        : initialEntryState(event.servingTeam, 'serve');
 
     default:
       return state;
@@ -194,7 +207,7 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
  * blok in slaat heeft geen slechte dag maar een gewoonte.
  */
 export function needsTargetStep(type: ActionType | null, team: TeamSide): boolean {
-  return (type === 'serve' || type === 'attack') && team === 'us';
+  return (type === 'serve' || type === 'attack' || type === 'freeball') && team === 'us';
 }
 
 /**

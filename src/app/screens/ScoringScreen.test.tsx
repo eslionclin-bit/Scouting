@@ -574,3 +574,49 @@ describe('ScoringScreen: opstelling vóór het eerste punt', () => {
     expect(screen.queryByText('Zet eerst de opstelling neer')).toBeNull();
   });
 });
+
+describe('als de tegenstander serveert', () => {
+  it('vraagt onze pass en leidt hun service daaruit af', async () => {
+    const user = userEvent.setup();
+    const store = await openTestStore();
+    const fixture = await seedMatch(store);
+    // De tegenstander begint met serveren in deze set.
+    await store.sets.setStartingServe(fixture.set.id, 'them');
+
+    render(
+      <StoreProvider store={store}>
+        <ScoringScreen
+          matchId={fixture.match.id}
+          session={idleSession}
+          role="scorer"
+          onExit={() => {}}
+          onOpenDashboard={() => {}}
+        />
+      </StoreProvider>,
+    );
+    await screen.findByText(/Nog geen acties in deze rally/);
+    const later = screen.queryByRole('button', { name: /Weet ik nog niet/ });
+    if (later) await user.click(later);
+
+    // Niet hun service maar onze pass: wie er bij hen moet serveren staat al
+    // vast, en hoe de service was zegt onze passkwalificatie.
+    await user.click(screen.getByRole('button', { name: '#4 Sanne' }));
+    await user.click(screen.getByRole('button', { name: 'Pass' }));
+    await user.click(screen.getByRole('button', { name: /^Matig/ }));
+
+    await waitFor(async () => {
+      const actions = await store.actions.listByMatch(fixture.match.id);
+      expect(actions).toHaveLength(2);
+      // De service staat vóór de pass: een rally begint nu eenmaal met een service.
+      expect(actions[0]).toMatchObject({
+        team: 'them',
+        type: 'serve',
+        quality: 'good',
+        derived: true,
+      });
+      expect(actions[1]).toMatchObject({ team: 'us', type: 'reception', quality: 'poor' });
+    });
+
+    store.close();
+  });
+});

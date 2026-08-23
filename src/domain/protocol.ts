@@ -26,6 +26,7 @@ export const ACTION_TYPE_LABELS: Record<ActionType, string> = {
   reception: 'Pass',
   set: 'Set-up',
   attack: 'Aanval',
+  freeball: 'Vrije bal',
   block: 'Blok',
   dig: 'Verdediging',
 };
@@ -184,6 +185,39 @@ export const PROTOCOL_CRITERIA: Record<ActionType, ActionCriteria> = {
       example: 'Aanval blijft in het blok hangen aan de eigen kant.',
     },
   },
+  /**
+   * De vrije bal staat los van de aanval, en dat is het hele punt.
+   *
+   * Er wordt overheen gespeeld in plaats van aangevallen: een noodoplossing, of
+   * een bal die niet aan te vallen viel. Dat is geen aanvalspoging, dus hij
+   * hoort niet in het aanvalsrendement. Wie tien keer per set een vrije bal
+   * moet geven speelt slecht — maar niet slecht áán, en dat verschil is precies
+   * wat je uit de cijfers wilt kunnen halen.
+   *
+   * De kwalificatie gaat dus over wat je de tegenstander ermee aandoet, net als
+   * bij de service. Een vrije bal levert nooit rechtstreeks een punt op; daarom
+   * is 'perfect' hier het beste haalbare gevolg en geen ace.
+   */
+  freeball: {
+    perfect: {
+      criterion:
+        'Diep en lastig weggelegd: de tegenstander komt er niet toe een normale aanval op te zetten.',
+      example: 'Hoge bal diep in de hoek, zij moeten hem zelf ook weer vrij teruggeven.',
+    },
+    good: {
+      criterion: 'Netjes over en onder controle: de tegenstander bouwt op, maar zonder voordeel.',
+      example: 'Bal met twee handen rustig over het net gelegd.',
+    },
+    poor: {
+      criterion: 'Kort of makkelijk: de tegenstander kan er meteen een volle aanval uit opzetten.',
+      example: 'Bal komt zacht op drie meter aan.',
+    },
+    error: {
+      criterion: 'Bal gaat het net in of uit, of er wordt een overtreding gemaakt.',
+      example: 'Vrije bal net over de lijn.',
+    },
+  },
+
   block: {
     perfect: {
       criterion: 'Direct punt: bal valt na het block in het veld van de tegenstander.',

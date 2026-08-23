@@ -71,9 +71,7 @@ const SKILLS: Record<string, ActionType> = {
   A: 'attack',
   B: 'block',
   D: 'dig',
-  // Een vrije bal terugspelen is bij ons geen apart type; het dichtstbijzijnde
-  // is verdediging, want dat is wat het in het spel doet.
-  F: 'dig',
+  F: 'freeball',
 };
 
 /**
@@ -95,6 +93,9 @@ const QUALITIES: Record<ActionType, Record<string, Quality>> = {
   // Aanval: '/' is geblokt, en dat is een punt tegen — bij ons dus fout, net
   // als een bal buiten.
   attack: { '#': 'perfect', '+': 'good', '!': 'poor', '-': 'poor', '/': 'error', '=': 'error' },
+  // Vrije bal: DataVolley kent hem als 'F'. Dezelfde schaal als de service,
+  // want het gaat om hetzelfde: hoeveel last de tegenstander ervan heeft.
+  freeball: { '#': 'perfect', '+': 'good', '!': 'poor', '-': 'poor', '/': 'poor', '=': 'error' },
   // Blok: '/' is een netfout of doorgeschoten bal, '=' een fout.
   block: { '#': 'perfect', '+': 'good', '!': 'poor', '-': 'poor', '/': 'error', '=': 'error' },
   // Verdediging: '/' betekent dat de bal direct terugkomt over het net.

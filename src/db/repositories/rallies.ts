@@ -79,6 +79,32 @@ export class RallyRepository {
   }
 
   /**
+   * De beginservice van een set alsnog goed zetten in de rally die al openstaat.
+   *
+   * De eerste rally wordt aangemaakt zodra het scherm opengaat, en op dat moment
+   * weet de app nog niet wie er begint — dan gaat hij uit van onszelf. Kiest de
+   * invoerder daarna 'tegenstander', dan bleef die eerste rally op 'wij' staan,
+   * en daarmee klopte de hele set niet meer: de rotatie telt door vanaf wie er
+   * serveerde.
+   *
+   * Alleen zolang er nog niets gespeeld is. Halverwege een set is dit geen
+   * correctie meer maar een herschrijving.
+   */
+  async syncStartingServe(setId: string, startingServe: TeamSide): Promise<void> {
+    return this.ctx.lock.run(async () => {
+      const rallies = await this.listBySet(setId);
+      if (rallies.length !== 1) return;
+      const first = rallies[0]!;
+      if (first.wonBy !== null || first.servingTeam === startingServe) return;
+      const actions = alive(await this.ctx.db.getAllFromIndex('actions', 'by_rally', first.id));
+      if (actions.length > 0) return;
+
+      const record = reviseRecord(this.ctx, first, { servingTeam: startingServe });
+      await commit(this.ctx, [{ entity: 'rallies', record }]);
+    });
+  }
+
+  /**
    * Een punt dat niet is ingevoerd alsnog meetellen. Het levert een rally op
    * zonder acties, herkenbaar als 'niet ingevoerd', zodat stand én rotatie weer
    * kloppen met wat er op het scorebord staat.

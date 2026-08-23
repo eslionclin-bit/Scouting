@@ -121,7 +121,10 @@ export function validateAction(
     issues.push({ severity: 'error', code: 'unknown_quality', field: 'quality', message: `Onbekende kwalificatie: ${String(draft.quality)}.` });
   }
 
-  if (requiresZoneFrom(draft.type) && draft.zoneFrom == null) {
+  // Een afgeleide actie is er niet omdat iemand hem zag, maar omdat hij uit een
+  // andere volgt. Dan is de vertrekzone er niet, en die eisen zou betekenen dat
+  // de app hem verzint. Zie `domain/derive.ts`.
+  if (requiresZoneFrom(draft.type) && draft.zoneFrom == null && !draft.derived) {
     issues.push({
       severity: 'error',
       code: 'zone_from_required',
@@ -311,6 +314,9 @@ export function suggestNextAction(
     case 'reception':
     case 'dig':
       return { team: last.team, type: 'set' };
+    // Een vrije bal gaat over het net; wat er dan komt is wat zij ermee doen.
+    case 'freeball':
+      return { team: other(last.team), type: 'dig' };
     case 'set':
       return { team: last.team, type: 'attack' };
     case 'attack':

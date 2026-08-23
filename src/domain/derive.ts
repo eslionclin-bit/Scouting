@@ -77,3 +77,59 @@ export function receptionFromServe(
     derived: true,
   };
 }
+
+/**
+ * Hun service, afgeleid uit onze pass.
+ *
+ * Het spiegelbeeld van hierboven, en om dezelfde reden: wie er bij hen moet
+ * serveren staat vast — dat is wie er in hun rotatie in zone 1 staat, en daar
+ * mag niemand voor gewisseld worden — en hoe de service was, zegt onze
+ * passkwalificatie al. Twee keer vragen is twee keer hetzelfde vragen.
+ *
+ * Eén ding blijft bewust ongelijk. Passen wij fout, dan is dat een ace tegen
+ * ons, maar er kan maar één actie zijn die de rally beëindigt. Dat is onze
+ * passfout, want die hangt aan een speelster van ons — en dat is de kant die we
+ * willen kunnen zien. Hun service krijgt dan 'goed': maximale druk, geen punt.
+ * Hun aces zijn nog steeds te tellen; ze heten hier alleen 'onze passfouten op
+ * hun service'.
+ */
+const MIRRORED_SERVE: Record<Quality, Quality> = {
+  perfect: 'poor',
+  good: 'poor',
+  poor: 'good',
+  error: 'good',
+};
+
+export interface DerivedServe {
+  team: 'them';
+  type: 'serve';
+  quality: Quality;
+  playerId: string | null;
+  playerNumber: number | null;
+  /** Waar zij vandaan serveerden weten we niet, en verzinnen doet de app niet. */
+  zoneFrom: null;
+  zoneTo: null;
+  derived: true;
+}
+
+export interface ServerAt {
+  playerId: string | null;
+  playerNumber: number | null;
+}
+
+export function serveFromReception(
+  reception: Pick<Action, 'team' | 'type' | 'quality'>,
+  server: ServerAt = { playerId: null, playerNumber: null },
+): DerivedServe | null {
+  if (reception.team !== 'us' || reception.type !== 'reception') return null;
+  return {
+    team: 'them',
+    type: 'serve',
+    quality: MIRRORED_SERVE[reception.quality],
+    playerId: server.playerId,
+    playerNumber: server.playerNumber,
+    zoneFrom: null,
+    zoneTo: null,
+    derived: true,
+  };
+}
