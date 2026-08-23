@@ -183,6 +183,43 @@ button {
   align-self: center;
 }
 
+/* De selectie: één regel per speelster, met haar knoppen ernaast. */
+.squad {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.squad__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line, #1e293b);
+  border-radius: var(--radius);
+}
+
+/* Wie gestopt is blijft staan, maar valt niet meer op: haar cijfers horen bij
+   de wedstrijden waarin ze speelde, en die zijn niet minder waar geworden. */
+.squad__item--gone {
+  opacity: 0.55;
+}
+
+.squad__who {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.squad__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 .matchlist__confirm {
   align-self: center;
   font-size: 0.85rem;

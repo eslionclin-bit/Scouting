@@ -132,6 +132,16 @@ niet meer — en die staat onder elk cijfer per rotatie. Daarom vraagt hij erom
 zolang de set nog leeg is, met 'weet ik nog niet' ernaast: soms staat de ploeg er
 gewoon nog niet.
 
+## De selectie beheren
+
+Onder **Ons team** staat bovenaan de selectie: wie erin zit, met rugnummer en
+posities. Daar voeg je iemand toe, pas je een rugnummer of naam aan, en haal je
+iemand uit de selectie.
+
+Uit de selectie is geen verwijderen. Haar cijfers blijven staan — die horen bij
+de wedstrijden waarin ze speelde, en die zijn niet minder waar geworden. Ze komt
+alleen niet meer in de keuzelijsten voor.
+
 ## Posities en de libero
 
 Een speelster krijgt één positie waar ze normaal staat, en daarnaast desgewenst

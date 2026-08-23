@@ -22,6 +22,7 @@ import { MetricTable } from '../components/MetricTable';
 import { PassValue } from '../components/PassValue';
 import { useReference } from '../hooks/useReference';
 import { Placeholder } from '../components/Placeholder';
+import { Squad } from '../components/Squad';
 import { StatTile } from '../components/StatTile';
 import { useQuery } from '../StoreProvider';
 
@@ -122,6 +123,13 @@ export function TeamScreen({ onExit, onOpenMatch, onOpenPlayer }: TeamScreenProp
           hint={`${profile.byType.reception.total} passes`}
         />
       </div>
+
+      {/*
+        De selectie staat bovenaan, vóór de cijfers. Wie hier komt om iemand toe
+        te voegen, hoort niet eerst langs zeven blokken statistiek te scrollen —
+        en bij een nieuw team zijn die blokken toch leeg.
+      */}
+      <Squad teamId={data.ownTeam.id} />
 
       <section className="card">
         <h2>Ons niveau</h2>
