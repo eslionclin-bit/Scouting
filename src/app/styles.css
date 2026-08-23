@@ -393,6 +393,13 @@ button {
   margin: -0.15rem 0 0.35rem;
 }
 
+/* Waar ze normaal staat: klein achter de naam van de positie, want het is een
+   nuance en geen tweede keuze. */
+.chip__main {
+  opacity: 0.7;
+  font-weight: 400;
+}
+
 .roster__extra .chip {
   font-size: 0.75rem;
   padding: 0.2rem 0.5rem;

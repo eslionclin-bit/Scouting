@@ -12,7 +12,7 @@
  */
 
 import { useState, type ReactElement } from 'react';
-import { describeRoles, primaryRoleOf, rolesOf, PLAYER_ROLES, PLAYER_ROLE_LABELS } from '../../domain/players';
+import { describeRoles, rolesOf, PLAYER_ROLES, PLAYER_ROLE_LABELS } from '../../domain/players';
 import type { Player, PlayerRole } from '../../domain/types';
 import { useQuery, useStore } from '../StoreProvider';
 
@@ -23,11 +23,23 @@ export interface SquadProps {
 interface Draft {
   number: string;
   name: string;
-  role: PlayerRole | '';
-  extra: PlayerRole[];
+  /**
+   * Alle posities die ze kan spelen, in de volgorde waarin ze zijn aangetikt.
+   *
+   * Er stond eerst een keuzelijst voor 'de' positie én knopjes voor de rest.
+   * Twee plekken om hetzelfde te zeggen, en dan is het niet duidelijk welke
+   * telt. Nu is er één rij knoppen: de eerste die je aantikt is de positie waar
+   * ze normaal staat, de rest kan ze er ook bij.
+   */
+  roles: PlayerRole[];
 }
 
-const EMPTY: Draft = { number: '', name: '', role: '', extra: [] };
+const EMPTY: Draft = { number: '', name: '', roles: [] };
+
+/** Aantikken zet hem erbij of haalt hem eraf; de volgorde blijft. */
+function toggle(roles: readonly PlayerRole[], role: PlayerRole): PlayerRole[] {
+  return roles.includes(role) ? roles.filter((entry) => entry !== role) : [...roles, role];
+}
 
 export function Squad({ teamId }: SquadProps): ReactElement {
   const store = useStore();
@@ -63,8 +75,10 @@ export function Squad({ teamId }: SquadProps): ReactElement {
         teamId,
         number,
         name: draft.name.trim(),
-        role: draft.role || null,
-        roles: draft.extra,
+        // De eerste is waar ze normaal staat; de opslag zet hem sowieso in de
+        // lijst, dus die twee kunnen niet uit elkaar lopen.
+        role: draft.roles[0] ?? null,
+        roles: draft.roles,
       });
       setDraft(EMPTY);
     });
@@ -153,32 +167,11 @@ export function Squad({ teamId }: SquadProps): ReactElement {
           placeholder="Naam"
           aria-label="Naam nieuwe speelster"
         />
-        <select
-          className="roster__role"
-          value={draft.role}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, role: event.target.value as PlayerRole | '' }))
-          }
-          aria-label="Positie nieuwe speelster"
-        >
-          <option value="">Positie</option>
-          {PLAYER_ROLES.map((role) => (
-            <option key={role} value={role}>
-              {PLAYER_ROLE_LABELS[role]}
-            </option>
-          ))}
-        </select>
         <RoleChips
-          label="Kan ook, nieuwe speelster"
-          exclude={draft.role}
-          picked={draft.extra}
+          label="Posities nieuwe speelster"
+          picked={draft.roles}
           onToggle={(role) =>
-            setDraft((current) => ({
-              ...current,
-              extra: current.extra.includes(role)
-                ? current.extra.filter((entry) => entry !== role)
-                : [...current.extra, role],
-            }))
+            setDraft((current) => ({ ...current, roles: toggle(current.roles, role) }))
           }
         />
       </div>
@@ -199,17 +192,20 @@ export function Squad({ teamId }: SquadProps): ReactElement {
 interface PlayerFormProps {
   player: Player;
   busy: boolean;
-  onSave: (patch: { number: number; name: string; role: PlayerRole | null; roles: PlayerRole[] }) => void;
+  onSave: (patch: {
+    number: number;
+    name: string;
+    role: PlayerRole | null;
+    roles: PlayerRole[];
+  }) => void;
   onCancel: () => void;
 }
 
 function PlayerForm({ player, busy, onSave, onCancel }: PlayerFormProps): ReactElement {
-  const main = primaryRoleOf(player);
   const [draft, setDraft] = useState<Draft>({
     number: String(player.number),
     name: player.name,
-    role: main ?? '',
-    extra: rolesOf(player).filter((role) => role !== main),
+    roles: [...rolesOf(player)],
   });
 
   const number = Number.parseInt(draft.number, 10);
@@ -230,32 +226,11 @@ function PlayerForm({ player, busy, onSave, onCancel }: PlayerFormProps): ReactE
           onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
           aria-label={`Naam van ${player.name || `#${player.number}`}`}
         />
-        <select
-          className="roster__role"
-          value={draft.role}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, role: event.target.value as PlayerRole | '' }))
-          }
-          aria-label={`Positie van ${player.name || `#${player.number}`}`}
-        >
-          <option value="">Positie</option>
-          {PLAYER_ROLES.map((role) => (
-            <option key={role} value={role}>
-              {PLAYER_ROLE_LABELS[role]}
-            </option>
-          ))}
-        </select>
         <RoleChips
-          label={`Kan ook, ${player.name || `#${player.number}`}`}
-          exclude={draft.role}
-          picked={draft.extra}
+          label={`Posities van ${player.name || `#${player.number}`}`}
+          picked={draft.roles}
           onToggle={(role) =>
-            setDraft((current) => ({
-              ...current,
-              extra: current.extra.includes(role)
-                ? current.extra.filter((entry) => entry !== role)
-                : [...current.extra, role],
-            }))
+            setDraft((current) => ({ ...current, roles: toggle(current.roles, role) }))
           }
         />
       </div>
@@ -268,8 +243,8 @@ function PlayerForm({ player, busy, onSave, onCancel }: PlayerFormProps): ReactE
             onSave({
               number,
               name: draft.name.trim(),
-              role: draft.role || null,
-              roles: draft.extra,
+              role: draft.roles[0] ?? null,
+              roles: draft.roles,
             })
           }
         >
@@ -283,31 +258,38 @@ function PlayerForm({ player, busy, onSave, onCancel }: PlayerFormProps): ReactE
   );
 }
 
+/**
+ * Eén rij knoppen voor alle posities.
+ *
+ * De eerste die je aantikt krijgt een merkteken: dat is waar ze normaal staat.
+ * Dat onderscheid komt uit de volgorde en niet uit een tweede invoerveld —
+ * anders staat er twee keer hetzelfde en weet je niet welke telt.
+ */
 function RoleChips({
   label,
-  exclude,
   picked,
   onToggle,
 }: {
   label: string;
-  exclude: PlayerRole | '';
   picked: readonly PlayerRole[];
   onToggle: (role: PlayerRole) => void;
 }): ReactElement {
   return (
     <div className="roster__extra" role="group" aria-label={label}>
-      {PLAYER_ROLES.filter((role) => role !== exclude).map((role) => {
-        const on = picked.includes(role);
+      {PLAYER_ROLES.map((role) => {
+        const at = picked.indexOf(role);
+        const on = at >= 0;
         return (
           <button
             key={role}
             type="button"
             className={`chip ${on ? 'chip--active' : ''}`}
             aria-pressed={on}
-            aria-label={`${PLAYER_ROLE_LABELS[role]} erbij, ${label}`}
+            aria-label={`${PLAYER_ROLE_LABELS[role]}, ${label}`}
             onClick={() => onToggle(role)}
           >
             {PLAYER_ROLE_LABELS[role]}
+            {at === 0 && <span className="chip__main"> · normaal</span>}
           </button>
         );
       })}

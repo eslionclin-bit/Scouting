@@ -144,8 +144,9 @@ alleen niet meer in de keuzelijsten voor.
 
 ## Posities en de libero
 
-Een speelster krijgt één positie waar ze normaal staat, en daarnaast desgewenst
-alles wat ze verder kan. Dat beperkt niets — je kunt elke actie aan elke
+Je tikt aan wat een speelster kan spelen — één rij knoppen, geen keuzelijst
+ernaast. De eerste die je aantikt is waar ze normaal staat; dat staat er klein
+achter. Dat beperkt niets — je kunt elke actie aan elke
 speelster hangen — maar het maakt twee dingen mogelijk: zien wie er inzetbaar is
 als er iemand uitvalt, en begrijpen waarom iemands cijfers per positie
 verschillen.
