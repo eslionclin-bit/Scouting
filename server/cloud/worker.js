@@ -82,11 +82,45 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors(origin) });
     }
+    const url = new URL(request.url);
+
+    // Eén pagina die een mens kan lezen, en niets anders doet.
+    //
+    // Hij bestaat omdat 'uitgerold' en 'bereikbaar' niet hetzelfde zijn, en dat
+    // verschil viel van buitenaf niet te zien: elk antwoord van deze server was
+    // JSON met een foutmelding, wat er in een browser uitziet als iets dat
+    // stukging. Nu is er één adres dat in gewone taal zegt dat hij draait —
+    // genoeg om een netwerkprobleem van een serverprobleem te scheiden zonder
+    // iets te installeren.
+    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/status')) {
+      let database = 'niet gecontroleerd';
+      try {
+        await ensureSchema(env);
+        const row = await env.DB.prepare('select count(*) as n from changes').first();
+        database = `in orde — ${Number(row?.n ?? 0)} wijzigingen opgeslagen`;
+      } catch (error) {
+        database = `probleem: ${error instanceof Error ? error.message : String(error)}`;
+      }
+
+      return new Response(
+        `<!doctype html><meta charset="utf-8">
+         <title>Sync-server</title>
+         <style>body{font:16px/1.5 system-ui;margin:2rem;max-width:34rem}
+         h1{font-size:1.3rem}code{background:#eee;padding:.1rem .3rem;border-radius:.2rem}</style>
+         <h1>De sync-server draait.</h1>
+         <p>Zie je deze zin, dan is de server bereikbaar vanaf dit apparaat en dit
+            netwerk. Werkt de app dan nog steeds niet, dan zit het probleem niet
+            hier.</p>
+         <p>Database: ${database}</p>
+         <p>Tijd op de server: ${new Date().toISOString()}</p>`,
+        { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', ...cors(origin) } },
+      );
+    }
+
     if (request.method !== 'POST') {
       return json({ error: 'Alleen POST.' }, 405, origin);
     }
 
-    const url = new URL(request.url);
     try {
       await ensureSchema(env);
       if (url.pathname === '/sync/push') return await push(request, env, origin);
