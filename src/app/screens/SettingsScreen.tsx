@@ -9,6 +9,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import type { CloudSync } from '../hooks/useCloudSync';
 import {
+  cloudUrl,
   couplingLink,
   generateTeamCode,
   normalizeTeamCode,
@@ -341,6 +342,26 @@ export function SettingsScreen({
                   ) : (
                     <p className="settings__hint">Laatste melding: {cloud.state.lastError}</p>
                   ))}
+
+                {/*
+                  Welk adres de app gebruikt. Zonder dit is 'Failed to fetch'
+                  niet te onderscheiden van een adres dat verkeerd is ingesteld,
+                  van een browser die het verzoek tegenhoudt, en van een server
+                  die er niet is. Het adres is niet geheim — het staat in de
+                  gebouwde app — en met dit ene regeltje kun je het zelf openen
+                  en zien wat er gebeurt.
+                */}
+                {/^Failed to fetch|NetworkError|Load failed/i.test(cloud.state.lastError ?? '') && (
+                  <p className="settings__hint">
+                    De app kwam niet bij de server. Open dit adres eens in een tabblad — hoort{' '}
+                    <code>{'{"error":"Alleen POST."}'}</code> te tonen:{' '}
+                    <a href={cloudUrl()} target="_blank" rel="noreferrer">
+                      {cloudUrl()}
+                    </a>
+                    . Gebeurt daar niets, dan houdt je browser het tegen (bij Brave: schildje in de
+                    adresbalk, Shields uit voor deze site) of klopt het adres niet.
+                  </p>
+                )}
 
                 {/*
                   Het enige geval dat de server niet zelf kan zien: een typefout
