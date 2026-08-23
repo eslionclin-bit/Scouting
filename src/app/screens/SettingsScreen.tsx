@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { useCloudSync } from '../hooks/useCloudSync';
+import type { CloudSync } from '../hooks/useCloudSync';
 import {
   couplingLink,
   generateTeamCode,
@@ -20,6 +20,19 @@ import { useQuery, useStore } from '../StoreProvider';
 export interface SettingsScreenProps {
   onExit: () => void;
   onOpenReference: () => void;
+  /**
+   * De koppeling wordt buiten dit scherm bijgehouden.
+   *
+   * Ze hoorde hier eerst thuis, en dat was fout: de sync liep dan alleen zolang
+   * je naar de instellingen keek. Zodra je terug was in de wedstrijdenlijst
+   * stopte hij, en dan lijkt het alsof er niets wordt overgezet — terecht, want
+   * dat gebeurde ook niet.
+   */
+  cloud: CloudSync;
+  teamCode: string | null;
+  onSetTeamCode: (code: string | null) => Promise<void>;
+  /** Alles wat op dit apparaat staat opnieuw naar de ploeg sturen. */
+  onResend: () => Promise<number>;
 }
 
 /** Alleen de ja/nee-instellingen; de tegenstander heeft drie standen. */
@@ -76,27 +89,19 @@ const DETAILS: Record<OpponentDetail, { title: string; hint: string }> = {
   },
 };
 
-export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps): ReactElement {
+export function SettingsScreen({
+  onExit,
+  onOpenReference,
+  cloud,
+  teamCode,
+  onSetTeamCode,
+  onResend,
+}: SettingsScreenProps): ReactElement {
   const store = useStore();
   const { data } = useQuery(async (instance) => instance.getSettings(), []);
   const [busy, setBusy] = useState(false);
-
-  // De ploegcode staat in de meta van dit apparaat; hij reist niet mee.
-  const [teamCode, setTeamCode] = useState<string | null>(null);
-  const [codeDraft, setCodeDraft] = useState('');
-  const cloud = useCloudSync(teamCode);
-
-  useEffect(() => {
-    let cancelled = false;
-    void store.getTeamCode().then((code) => {
-      if (cancelled) return;
-      setTeamCode(code);
-      setCodeDraft(code ?? '');
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [store]);
+  const [codeDraft, setCodeDraft] = useState(teamCode ?? '');
+  const [resent, setResent] = useState<string | null>(null);
 
   /**
    * De koppeling doorgeven.
@@ -136,9 +141,23 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
   async function saveCode(code: string | null): Promise<void> {
     setBusy(true);
     try {
-      await store.setTeamCode(code);
-      setTeamCode(code);
+      await onSetTeamCode(code);
       setCodeDraft(code ?? '');
+      setResent(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resend(): Promise<void> {
+    setBusy(true);
+    try {
+      const queued = await onResend();
+      setResent(
+        queued === 0
+          ? 'Er stond niets klaar om te versturen.'
+          : `${queued} wijziging${queued === 1 ? '' : 'en'} klaargezet. Ze lopen mee zodra er verbinding is.`,
+      );
     } finally {
       setBusy(false);
     }
@@ -317,6 +336,18 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
                 <p className="card__hint">
                   Ploegcode, voor als je hem ergens wilt bewaren: <code>{teamCode}</code>
                 </p>
+
+                <h3 className="sheet__subtitle">Ziet het andere apparaat niet alles?</h3>
+                <p className="card__hint">
+                  Wat al een keer verstuurd is, staat niet meer klaar — de app houdt een wachtrij
+                  bij, geen kopie. Koppel je later aan een andere ploeg, of ging er ooit iets mis,
+                  dan zet dit alles wat op dit apparaat staat opnieuw klaar. Dubbel kan het niet:
+                  wat er al is, blijft zoals het is.
+                </p>
+                <button type="button" className="button" disabled={busy} onClick={() => void resend()}>
+                  Alles opnieuw versturen
+                </button>
+                {resent && <p className="card__hint">{resent}</p>}
                 <button
                   type="button"
                   className="button button--ghost"

@@ -18,6 +18,8 @@ import { TeamScreen } from './screens/TeamScreen';
 import { CoachScreen } from './screens/CoachScreen';
 import { useStore } from './StoreProvider';
 import { takeCouplingCode } from '../sync/cloudConfig';
+import { enqueueAll } from '../sync/outbox';
+import { useCloudSync } from './hooks/useCloudSync';
 
 type View =
   | { name: 'home' }
@@ -94,6 +96,25 @@ export function App(): ReactElement {
    */
   const [coupled, setCoupled] = useState(false);
 
+  /**
+   * De online koppeling loopt hier, niet in het instellingenscherm.
+   *
+   * Ze stond daar eerst, en dat was fout: de sync liep dan alleen zolang je
+   * naar de instellingen keek. Zodra je terug was in de wedstrijdenlijst — dus
+   * eigenlijk altijd — stopte hij, en werd er niets overgezet. Hier draait hij
+   * zolang de app open is.
+   */
+  const [teamCode, setTeamCode] = useState<string | null>(null);
+  const cloud = useCloudSync(teamCode);
+
+  const setCode = useCallback(
+    async (code: string | null): Promise<void> => {
+      await store.setTeamCode(code);
+      setTeamCode(code);
+    },
+    [store],
+  );
+
   // Een tablet die tijdens de wedstrijd op slot gaat of de app afsluit, komt
   // terug in de wedstrijd waar hij mee bezig was.
   useEffect(() => {
@@ -102,10 +123,12 @@ export function App(): ReactElement {
       // Eerst de link: staat daar een ploegcode in, dan hoort dit apparaat er
       // vanaf nu bij, nog voor er een scherm getekend wordt.
       const fromLink = takeCouplingCode();
-      if (fromLink) {
-        await store.setTeamCode(fromLink);
-        if (!cancelled) setCoupled(true);
-      }
+      if (fromLink) await store.setTeamCode(fromLink);
+
+      const code = await store.getTeamCode();
+      if (cancelled) return;
+      setTeamCode(code);
+      if (fromLink) setCoupled(true);
 
       const matchId = await store.getActiveMatchId();
       if (cancelled) {
@@ -188,7 +211,14 @@ export function App(): ReactElement {
       return <ReferenceScreen onExit={back} />;
     case 'settings':
       return (
-        <SettingsScreen onExit={back} onOpenReference={() => go({ name: 'reference' })} />
+        <SettingsScreen
+          onExit={back}
+          onOpenReference={() => go({ name: 'reference' })}
+          cloud={cloud}
+          teamCode={teamCode}
+          onSetTeamCode={setCode}
+          onResend={() => enqueueAll(store.db)}
+        />
       );
     case 'team':
       return (

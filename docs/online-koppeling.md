@@ -166,6 +166,17 @@ de tegenstander in zit. Op het eerste
 apparaat laat je de app een code maken en schrijf je hem op; op de andere vul je
 dezelfde in.
 
+## Ziet het andere apparaat niet alles?
+
+De app houdt een **wachtrij** bij, geen kopie: zodra een wijziging is
+aangekomen, gaat de regel eruit. Dat is precies goed voor de normale gang van
+zaken, maar het betekent dat wat er al eens verstuurd is, niet vanzelf nog een
+keer meegaat — bijvoorbeeld naar een ploeg waaraan je later pas koppelde.
+
+Onder Instellingen staat daarom **Alles opnieuw versturen**. Dubbel kan het niet
+worden: elke wijziging draagt haar eigen revisie, en wat er al staat blijft zoals
+het is.
+
 ## Wat je ervan merkt
 
 Niets, als het goed is. Onder Instellingen staat wanneer er voor het laatst is
