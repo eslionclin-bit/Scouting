@@ -375,3 +375,35 @@ describe('ScoutingStore', () => {
     expect(await store.getActiveMatchId()).toBe(fixture.match.id);
   });
 });
+
+describe('een wedstrijd verwijderen', () => {
+  it('laat niets achter — ook geen opstellingen en wissels', async () => {
+    const store = await openTestStore();
+    try {
+      const fixture = await seedMatch(store);
+      const [sanne, noor, fem] = fixture.players;
+      await store.lineups.set({
+        setId: fixture.set.id,
+        positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
+      });
+      const rally = await store.rallies.start({ setId: fixture.set.id });
+      await store.substitutions.add({
+        rallyId: rally.id,
+        playerOutId: sanne!.id,
+        playerInId: fem!.id,
+      });
+
+      await store.matches.remove(fixture.match.id);
+
+      expect(await store.matches.get(fixture.match.id)).toBeUndefined();
+      expect(await store.sets.listByMatch(fixture.match.id)).toStrictEqual([]);
+      expect(await store.actions.listByMatch(fixture.match.id)).toStrictEqual([]);
+      // Deze twee bleven eerst staan: onzichtbaar, maar ze reisden wel mee naar
+      // elk gekoppeld apparaat.
+      expect(await store.lineups.listByMatch(fixture.match.id)).toStrictEqual([]);
+      expect(await store.substitutions.listBySet(fixture.set.id)).toStrictEqual([]);
+    } finally {
+      store.close();
+    }
+  });
+});

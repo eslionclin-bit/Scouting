@@ -13,7 +13,8 @@
 import type { MatchBundle } from '../db/bundle';
 import type { Player } from '../domain/types';
 import { ZONE_LABELS } from '../domain/zones';
-import { filterActions, toActionRows } from './rows';
+import { MIN_SERVES_PER_TARGET, serveTargets } from './chains';
+import { filterActions, toActionRows, type ActionRow } from './rows';
 import { statsByPlayer, statsByType, zoneTally, type PlayerStats, type TypeStats, type ZoneTally } from './stats';
 
 /** Minimum aantal waarnemingen voordat we een patroon durven te noemen. */
@@ -43,6 +44,32 @@ export interface DossierAdvice {
   because: string;
 }
 
+/**
+ * Eén speelster van de tegenstander, bekeken vanaf de serveerlijn.
+ *
+ * Dit is het cijfer waar een dossier om begon: niet 'zij zijn sterk in de
+ * receptie', maar wie van hen de bal niet schoon aanneemt. Daar serveer je
+ * naartoe.
+ *
+ * Twee bronnen, die elkaar aanvullen. Haar passes zeggen hoe zij het doet; onze
+ * services op haar zeggen wat het óns oplevert — en dat tweede is wat telt,
+ * want een matige passer achter een ploeg die er toch uitkomt, is geen doelwit.
+ */
+export interface OpponentPasser {
+  number: number;
+  name: string;
+  receptions: number;
+  /** Perfect of goed: de bal is schoon bij de spelverdeler gekomen. */
+  positive: number;
+  errors: number;
+  positivePct: number | null;
+  /** Hoe vaak wij bewust op haar serveerden (doelzone ingevuld). */
+  servedAt: number;
+  /** Daarvan gewonnen rally's. */
+  wonAfterServe: number;
+  wonPct: number | null;
+}
+
 export interface OpponentDossier {
   opponentId: string;
   opponentName: string;
@@ -56,6 +83,8 @@ export interface OpponentDossier {
   attackZones: ZoneTally;
   serveZones: ZoneTally;
   players: PlayerStats[];
+  /** Wie van hen slecht past, slechtste eerst. */
+  passers: OpponentPasser[];
   findings: DossierFinding[];
   advice: DossierAdvice[];
 }
@@ -84,6 +113,7 @@ export function buildOpponentDossier(
   const attackZones = zoneTally(filterActions(rows, { type: 'attack' }));
   const serveZones = zoneTally(filterActions(rows, { type: 'serve' }));
   const players = statsByPlayer(rows, opponentPlayers);
+  const passers = passersOf(relevant, rows, opponentPlayers);
   const findings = collectFindings({ byType, attackZones, serveZones, players });
 
   return {
@@ -99,6 +129,7 @@ export function buildOpponentDossier(
     attackZones,
     serveZones,
     players,
+    passers,
     findings,
     advice: adviceFor(findings),
   };
@@ -285,4 +316,77 @@ function dominantZone(tally: ZoneTally): { zone: 1 | 2 | 3 | 4 | 5 | 6; share: n
 
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
+}
+
+/** Onder dit aantal passes zeggen we niets over een speelster. */
+export const MIN_RECEPTIONS_PER_PLAYER = 8;
+
+/**
+ * De passers van de tegenstander, slechtste eerst.
+ *
+ * Alleen speelsters met genoeg ballen komen in de lijst: een oordeel over drie
+ * passes is geen oordeel maar een toevalstreffer, en op zo'n cijfer een
+ * serveerplan bouwen is erger dan niets weten.
+ *
+ * Wie er bij een pass aan de bal was, komt uit de invoer — de verfijnbalk vraagt
+ * dat na de tik. Waar wij naartoe serveerden komt uit de doelzone, en wie daar
+ * stond leidt de app af uit hun opstelling en rotatie. Ontbreekt een van beide,
+ * dan blijft die kolom leeg in plaats van geraden.
+ */
+function passersOf(
+  bundles: readonly MatchBundle[],
+  rows: readonly ActionRow[],
+  players: readonly Player[],
+): OpponentPasser[] {
+  const byNumber = new Map<number, OpponentPasser>();
+  const nameOf = new Map<number, string>();
+  for (const player of players) nameOf.set(player.number, player.name);
+
+  const row = (number: number): OpponentPasser => {
+    const existing = byNumber.get(number);
+    if (existing) return existing;
+    const fresh: OpponentPasser = {
+      number,
+      name: nameOf.get(number) ?? '',
+      receptions: 0,
+      positive: 0,
+      errors: 0,
+      positivePct: null,
+      servedAt: 0,
+      wonAfterServe: 0,
+      wonPct: null,
+    };
+    byNumber.set(number, fresh);
+    return fresh;
+  };
+
+  for (const entry of rows) {
+    const { action } = entry;
+    if (action.type !== 'reception' || action.playerNumber === null) continue;
+    const passer = row(action.playerNumber);
+    passer.receptions++;
+    if (action.quality === 'perfect' || action.quality === 'good') passer.positive++;
+    if (action.quality === 'error') passer.errors++;
+  }
+
+  for (const target of serveTargets(bundles).byPlayer) {
+    if (target.number === null) continue;
+    const passer = row(target.number);
+    passer.servedAt += target.serves;
+    passer.wonAfterServe += target.won;
+  }
+
+  return [...byNumber.values()]
+    .map((passer) => ({
+      ...passer,
+      positivePct: passer.receptions > 0 ? passer.positive / passer.receptions : null,
+      wonPct: passer.servedAt > 0 ? passer.wonAfterServe / passer.servedAt : null,
+    }))
+    .filter(
+      (passer) =>
+        passer.receptions >= MIN_RECEPTIONS_PER_PLAYER ||
+        passer.servedAt >= MIN_SERVES_PER_TARGET,
+    )
+    // Slechtste passer bovenaan; wie geen passcijfer heeft, onderaan.
+    .sort((a, b) => (a.positivePct ?? 2) - (b.positivePct ?? 2));
 }

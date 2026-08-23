@@ -183,6 +183,12 @@ button {
   align-self: center;
 }
 
+.matchlist__confirm {
+  align-self: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .home__coupled {
   display: flex;
   flex-wrap: wrap;

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadMatchBundle, type MatchBundle } from '../db/bundle';
 import type { ScoutingStore } from '../db/store';
-import { openTestStore } from '../test/factory';
+import { openTestStore, seedMatch, type TestMatchFixture } from '../test/factory';
 import { buildOpponentDossier, MIN_SAMPLE } from './opponent';
-import type { Team, Zone } from '../domain/types';
+import type { Quality, Team, TeamSide, Zone } from '../domain/types';
 
 describe('opponent-dossier', () => {
   let store: ScoutingStore;
@@ -170,5 +170,66 @@ describe('opponent-dossier', () => {
 
     const dossier = buildOpponentDossier([ours, otherBundle], opponent.id, opponent.name);
     expect(dossier.matches).toHaveLength(1);
+  });
+});
+
+describe('wie van de tegenstander slecht past', () => {
+  let store: ScoutingStore;
+  let fixture: TestMatchFixture;
+
+  beforeEach(async () => {
+    store = await openTestStore();
+    fixture = await seedMatch(store);
+  });
+
+  afterEach(() => store.close());
+
+  /** Eén ontvangen rally van hen: onze service, hun pass, en een uitslag. */
+  async function theirReception(number: number, pass: Quality, wonBy: TeamSide): Promise<void> {
+    const rally = await store.rallies.start({ setId: fixture.set.id, servingTeam: 'us' });
+    await store.actions.append({
+      rallyId: rally.id,
+      team: 'us',
+      type: 'serve',
+      quality: 'good',
+      playerId: fixture.players[0]!.id,
+      zoneFrom: 1,
+    });
+    await store.actions.append({
+      rallyId: rally.id,
+      team: 'them',
+      type: 'reception',
+      quality: pass,
+      playerNumber: number,
+    });
+    await store.rallies.complete(rally.id, wonBy);
+  }
+
+  it('zet de slechtste passer bovenaan, met haar aantallen erbij', async () => {
+    // #38 neemt slecht aan, #3 goed. Allebei ruim boven het minimum.
+    for (let i = 0; i < 6; i++) await theirReception(38, 'poor', 'us');
+    for (let i = 0; i < 3; i++) await theirReception(38, 'error', 'us');
+    for (let i = 0; i < 9; i++) await theirReception(3, 'perfect', 'them');
+
+    const bundle = await loadMatchBundle(store, fixture.match.id);
+    const dossier = buildOpponentDossier([bundle], fixture.opponent.id, 'VC Tegenpartij');
+
+    expect(dossier.passers.map((passer) => passer.number)).toStrictEqual([38, 3]);
+
+    const zwak = dossier.passers[0]!;
+    expect(zwak).toMatchObject({ receptions: 9, positive: 0, errors: 3 });
+    expect(zwak.positivePct).toBe(0);
+    expect(dossier.passers[1]?.positivePct).toBe(1);
+  });
+
+  it('zwijgt over een speelster met te weinig ballen', async () => {
+    // Drie passes is geen oordeel maar een toevalstreffer, en daar hoort geen
+    // serveerplan op gebouwd te worden.
+    for (let i = 0; i < 3; i++) await theirReception(11, 'error', 'us');
+
+    const bundle = await loadMatchBundle(store, fixture.match.id);
+    const dossier = buildOpponentDossier([bundle], fixture.opponent.id, 'VC Tegenpartij');
+
+    expect(dossier.passers).toStrictEqual([]);
   });
 });

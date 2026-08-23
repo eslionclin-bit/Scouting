@@ -45,6 +45,14 @@ export function HomeScreen({
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState<string | null>(null);
   const [readResult, setReadResult] = useState<FileImportSummary[]>([]);
+  /**
+   * Welke wedstrijd om bevestiging vraagt.
+   *
+   * Weggooien kan niet ongedaan worden gemaakt, dus het gebeurt nooit met één
+   * tik. Geen aparte melding erover: de vraag verschijnt op de plek van de knop,
+   * zodat je ziet wélke wedstrijd je weggooit.
+   */
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const { data } = useQuery(async (instance) => {
     const matches = await instance.matches.list();
@@ -103,6 +111,11 @@ export function HomeScreen({
     } finally {
       setReading(false);
     }
+  }
+
+  async function remove(matchId: string): Promise<void> {
+    setConfirmDelete(null);
+    await store.matches.remove(matchId);
   }
 
   return (
@@ -227,6 +240,34 @@ export function HomeScreen({
               <button type="button" className="button button--ghost" onClick={() => void download(match.id, 'csv')}>
                 CSV
               </button>
+              {confirmDelete === match.id ? (
+                <>
+                  <span className="matchlist__confirm">Weggooien? Dit kan niet terug.</span>
+                  <button
+                    type="button"
+                    className="button button--danger"
+                    onClick={() => void remove(match.id)}
+                  >
+                    Ja, verwijderen
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    onClick={() => setConfirmDelete(null)}
+                  >
+                    Nee
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  aria-label={`Wedstrijd tegen ${opponent} verwijderen`}
+                  onClick={() => setConfirmDelete(match.id)}
+                >
+                  Verwijderen
+                </button>
+              )}
             </div>
           </li>
         ))}

@@ -8,7 +8,7 @@
  */
 
 import { useMemo, type ReactElement } from 'react';
-import { buildOpponentDossier, MIN_SAMPLE } from '../../analysis';
+import { buildOpponentDossier, MIN_RECEPTIONS_PER_PLAYER, MIN_SAMPLE } from '../../analysis';
 import { loadMatchBundle } from '../../db/bundle';
 import { ACTION_TYPE_LABELS } from '../../domain/protocol';
 import { StatTile } from '../components/StatTile';
@@ -140,6 +140,61 @@ export function OpponentScreen({ opponentId, onExit, onOpenMatch }: OpponentScre
           </ul>
         </section>
       )}
+
+      <section className="card">
+        <h2>Wie er slecht past</h2>
+        {dossier.passers.length === 0 ? (
+          <p className="card__hint">
+            Nog te weinig ballen om iets over een speelster te zeggen. Dit vult zich vanzelf: de
+            pass van de tegenstander wordt tijdens het invoeren gevraagd, en waar jullie naartoe
+            serveren komt uit één tik op hun helft.
+          </p>
+        ) : (
+          <>
+            <p className="card__hint">
+              Slechtste passer bovenaan. Haar cijfer zegt hoe zíj het doet; de laatste kolom zegt
+              wat het óns oplevert — en dat tweede telt, want een matige passer achter een ploeg die
+              er toch uitkomt is geen doelwit. Onder {MIN_RECEPTIONS_PER_PLAYER} passes zwijgt de
+              tabel.
+            </p>
+            <div className="tablewrap">
+              <table className="stats">
+                <thead>
+                  <tr>
+                    <th scope="col">Speelster</th>
+                    <th scope="col">Passes</th>
+                    <th scope="col">Schoon</th>
+                    <th scope="col">Fout</th>
+                    <th scope="col">Wij serveerden op haar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dossier.passers.map((passer) => (
+                    <tr key={passer.number}>
+                      <th scope="row">
+                        #{passer.number}
+                        {passer.name ? ` ${passer.name}` : ''}
+                      </th>
+                      <td>{passer.receptions || '—'}</td>
+                      <td>
+                        {passer.positivePct === null
+                          ? '—'
+                          : `${Math.round(passer.positivePct * 100)}%`}
+                      </td>
+                      <td>{passer.receptions > 0 ? passer.errors : '—'}</td>
+                      <td>
+                        {passer.servedAt === 0
+                          ? '—'
+                          : `${passer.servedAt}× · ${Math.round((passer.wonPct ?? 0) * 100)}% gewonnen`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
 
       <section className="card">
         <h2>Zones</h2>

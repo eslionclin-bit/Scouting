@@ -96,11 +96,26 @@ export class MatchRepository {
     const deletedAt = this.ctx.now().toISOString();
     const ops: WriteOp[] = [];
 
-    const [sets, rallies, actions] = await Promise.all([
+    const [sets, rallies, actions, lineups, substitutions] = await Promise.all([
       this.ctx.db.getAllFromIndex('sets', 'by_match', id),
       this.ctx.db.getAllFromIndex('rallies', 'by_match', id),
       this.ctx.db.getAllFromIndex('actions', 'by_match', id),
+      this.ctx.db.getAllFromIndex('lineups', 'by_match', id),
+      this.ctx.db.getAllFromIndex('substitutions', 'by_match', id),
     ]);
+
+    // Opstellingen en wissels bleven eerst staan. Onzichtbaar, want ze hangen
+    // aan sets die er niet meer zijn — maar ze reizen wel mee naar elk ander
+    // apparaat, en een wedstrijd die je weggooit hoort helemaal weg te zijn.
+    for (const substitution of alive(substitutions)) {
+      ops.push({
+        entity: 'substitutions',
+        record: reviseRecord(this.ctx, substitution, { deletedAt }),
+      });
+    }
+    for (const lineup of alive(lineups)) {
+      ops.push({ entity: 'lineups', record: reviseRecord(this.ctx, lineup, { deletedAt }) });
+    }
 
     for (const action of alive(actions)) {
       ops.push({ entity: 'actions', record: reviseRecord(this.ctx, action, { deletedAt }) });
