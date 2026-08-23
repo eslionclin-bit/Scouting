@@ -61,3 +61,27 @@ export function receiversFor(
 
   return BACK_ZONES.map((zone) => positions[zone]).filter((id): id is string => id !== null);
 }
+
+/**
+ * Wie een service in deze zone waarschijnlijk aannam — of niemand.
+ *
+ * Twee dingen heten 'positie' en ze lopen uiteen zodra de bal geraakt is. Bij de
+ * service staat iedereen in zijn rotatievak; dat is de regel, en daarom klopt
+ * 'we serveren op positie 5, daar staat #38' gewoon. Maar daarna lopen ze naar
+ * hun eigen plek — spelverdeler rechts, passer-lopers links, libero linksachter
+ * — en dan zegt het rotatievak niets meer over wie de bal aanneemt.
+ *
+ * Vandaar deze voorwaarde: een naam alleen als degene die daar stond ook echt
+ * meepast. Bij een korte service op de voorlijn staat daar vaak de spelverdeler
+ * of de diagonaal, en die neemt hem niet aan. Dan blijft het leeg, en dat is
+ * eerlijker dan een naam die verzonnen is.
+ */
+export function receiverForZone(
+  positions: Record<Zone, string | null>,
+  zone: Zone,
+  options: ReceptionOptions = {},
+): string | null {
+  const occupant = positions[zone];
+  if (!occupant) return null;
+  return receiversFor(positions, options).includes(occupant) ? occupant : null;
+}

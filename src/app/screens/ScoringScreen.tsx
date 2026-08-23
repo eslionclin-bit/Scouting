@@ -24,7 +24,7 @@ import { useToasts } from '../hooks/useToasts';
 import { useQuery, useStore } from '../StoreProvider';
 import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryReducer';
 import { courtPositions, emptyPositions, positionsAt } from '../../domain/rotation';
-import { receiversFor } from '../../domain/reception';
+import { receiverForZone, receiversFor } from '../../domain/reception';
 import { receptionFromServe } from '../../domain/derive';
 import { DEFAULT_SETTINGS } from '../../domain/settings';
 import {
@@ -330,6 +330,52 @@ export function ScoringScreen({
     skippedLineupFor !== set.id;
 
   /**
+   * Welke namen de verfijnbalk aanbiedt.
+   *
+   * Bij een pass van de tegenstander zijn dat hun passers, vooraan: een balk met
+   * de hele ploeg erin is bij een bal die je net zag vallen geen keuze maar een
+   * zoekopdracht. De rest blijft eronder staan, want de app kan zich vergissen
+   * in wie er passt.
+   */
+  function refinePlayers(action: Action): readonly Player[] {
+    if (action.team === 'us') return data?.ownPlayers ?? [];
+    const all = data?.opponentPlayers ?? [];
+    if (action.type !== 'reception' || !themIds) return all;
+    const receivers = new Set(
+      receiversFor(themIds, {
+        rolesOf: (playerId) => rolesOf(playersById.get(playerId) ?? { role: null, roles: null }),
+      }),
+    );
+    if (receivers.size === 0) return all;
+    return [...all].sort(
+      (a, b) => Number(receivers.has(b.id)) - Number(receivers.has(a.id)),
+    );
+  }
+
+  /**
+   * Wie van hen een bal in deze zone waarschijnlijk aannam.
+   *
+   * Let op het verschil tussen twee dingen die allebei 'positie' heten. Bij de
+   * service staat iedereen in zijn rotatiepositie — dat is de regel, en daarom
+   * klopt 'we serveren op positie 5, daar staat #38' gewoon. Maar zodra de bal
+   * geraakt is lopen ze naar hun eigen plek: spelverdeler rechts, passer-lopers
+   * links, libero linksachter. Wie de bal dán aanneemt is niet meer af te lezen
+   * aan het rotatievak.
+   *
+   * Daarom wordt er alleen een naam aan gehangen als degene die daar stond ook
+   * echt een passer is. Bij een korte service op hun voorlijn staat daar vaak
+   * hun spelverdeler of diagonaal, en die neemt hem niet aan — dan blijft de
+   * pass bij de zone en vraagt de verfijnbalk wie het was. Liever een open vraag
+   * dan een naam die verzonnen is.
+   */
+  function receiverAt(zone: Zone): string | null {
+    if (!themIds) return null;
+    return receiverForZone(themIds, zone, {
+      rolesOf: (playerId) => rolesOf(playersById.get(playerId) ?? { role: null, roles: null }),
+    });
+  }
+
+  /**
    * De afgeleide pass van de tegenstander wegschrijven, als die er is.
    *
    * Faalt dat, dan blijft de service gewoon staan: dit is een gemak, geen
@@ -340,7 +386,7 @@ export function ScoringScreen({
     if (settingsOrDefault.opponentDetail !== 'pass') return null;
     if (!data?.rally) return null;
     const zone = serve.zoneTo;
-    const playerId = zone !== null ? (themIds?.[zone] ?? null) : null;
+    const playerId = zone !== null ? receiverAt(zone) : null;
     const draft = receptionFromServe(serve, {
       playerId,
       playerNumber: playerId ? (playersById.get(playerId)?.number ?? null) : null,
@@ -378,7 +424,13 @@ export function ScoringScreen({
       // Zie `domain/derive.ts`: de kwalificatie van onze service gáát al over
       // wat zij ermee konden, dus er nog eens apart om vragen is dezelfde bal
       // twee keer beoordelen.
-      const last = (await deriveReception(action)) ?? action;
+      const derived = await deriveReception(action);
+      const last = derived ?? action;
+
+      // De verfijnbalk hoort bij de actie met de open vraag. Is de pass afgeleid
+      // zonder dat de app wist wie hem nam, dan is dat die vraag — en niet de
+      // service, die is compleet.
+      if (derived && derived.playerId === null) setRefining(derived);
 
       dispatchCourt({
         kind: 'expect',
@@ -700,7 +752,7 @@ export function ScoringScreen({
       {refining && (
         <RefineBar
           action={refining}
-          players={refining.team === 'us' ? data.ownPlayers : data.opponentPlayers}
+          players={refinePlayers(refining)}
           askAttack={useCourt}
           onRefine={(patch: RefinePatch) => {
             void store.actions.revise(refining.id, patch);

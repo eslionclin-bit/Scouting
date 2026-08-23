@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { receiversFor } from './reception';
+import { receiverForZone, receiversFor } from './reception';
 import type { PlayerRole, Zone } from './types';
 
 const positions: Record<Zone, string | null> = {
@@ -58,3 +58,44 @@ describe('wie er passt', () => {
     ]);
   });
 });
+
+describe('wie een service in een zone aannam', () => {
+  const six: Record<Zone, string | null> = {
+    1: 'p1',
+    2: 'p2',
+    3: 'p3',
+    4: 'p4',
+    5: 'p5',
+    6: 'p6',
+  };
+
+  it('hangt er een naam aan als daar een passer stond', () => {
+    // Zonder ingevulde posities valt de app terug op de achterlijn, en dat is
+    // waar in elk systeem gepast wordt.
+    expect(receiverForZone(six, 5)).toBe('p5');
+    expect(receiverForZone(six, 6)).toBe('p6');
+  });
+
+  it('laat hem leeg bij een korte service op de voorlijn', () => {
+    // Daar staat hun spelverdeler of diagonaal, en die neemt hem niet aan. De
+    // bal komt van een achterspeler die ernaartoe loopt, en wie dat was kan de
+    // app niet weten.
+    expect(receiverForZone(six, 2)).toBeNull();
+    expect(receiverForZone(six, 3)).toBeNull();
+  });
+
+  it('telt de passer-loper vooraan wel mee als de posities bekend zijn', () => {
+    const roles: Record<string, PlayerRole[]> = {
+      p4: ['outside'],
+      p5: ['outside'],
+      p6: ['libero'],
+      p2: ['setter'],
+      p3: ['middle'],
+      p1: ['opposite'],
+    };
+    const options = { rolesOf: (id: string) => roles[id] ?? [] };
+    expect(receiverForZone(six, 4, options)).toBe('p4');
+    expect(receiverForZone(six, 2, options)).toBeNull();
+    expect(receiverForZone(six, 1, options)).toBeNull();
+  });
+})
