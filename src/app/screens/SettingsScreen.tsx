@@ -114,6 +114,15 @@ export function SettingsScreen({
   const [codeDraft, setCodeDraft] = useState(teamCode ?? '');
   const [resent, setResent] = useState<string | null>(null);
   const [urlDraft, setUrlDraft] = useState(syncUrl ?? '');
+  /**
+   * Het adres wijzigen terwijl er al één staat.
+   *
+   * Eerst wiste 'ander adres' het opgeslagen adres, waarna het ingebakken adres
+   * er meteen voor in de plaats kwam — en dan lijkt de knop stuk, want er
+   * verandert niets zichtbaars. Een adres dat je moet kunnen wijzigen, moet je
+   * kunnen wijzigen; niet eerst weggooien en hopen.
+   */
+  const [editingServer, setEditingServer] = useState(false);
 
   /**
    * De koppeling doorgeven.
@@ -389,22 +398,65 @@ export function SettingsScreen({
                   gebouwde app — en met dit ene regeltje kun je het zelf openen
                   en zien wat er gebeurt.
                 */}
-                <p className="settings__hint">
-                  Server:{' '}
-                  <a href={syncUrl ?? ''} target="_blank" rel="noreferrer">
-                    {syncUrl}
-                  </a>{' '}
-                  — open dit adres eens in een tabblad; er hoort{' '}
-                  <code>{'{"error":"Alleen POST."}'}</code> te staan.{' '}
-                  <button
-                    type="button"
-                    className="button button--ghost"
-                    disabled={busy}
-                    onClick={() => void onSetSyncUrl(null)}
-                  >
-                    Ander adres
-                  </button>
-                </p>
+                {editingServer ? (
+                  <>
+                    <label className="field">
+                      <span>Adres van de sync-server</span>
+                      <input
+                        type="url"
+                        inputMode="url"
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        value={urlDraft}
+                        onChange={(event) => setUrlDraft(event.target.value)}
+                        placeholder="https://…workers.dev"
+                      />
+                    </label>
+                    <div className="step__actions">
+                      <button
+                        type="button"
+                        className="button button--primary"
+                        disabled={busy || !/^https?:\/\/\S+$/.test(urlDraft.trim())}
+                        onClick={() => {
+                          void onSetSyncUrl(urlDraft.trim());
+                          setEditingServer(false);
+                        }}
+                      >
+                        Adres bewaren
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--ghost"
+                        onClick={() => {
+                          setUrlDraft(syncUrl ?? '');
+                          setEditingServer(false);
+                        }}
+                      >
+                        Annuleren
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="settings__hint">
+                    Server:{' '}
+                    <a href={syncUrl ?? ''} target="_blank" rel="noreferrer">
+                      {syncUrl}
+                    </a>{' '}
+                    — open dit adres eens in een tabblad; daar hoort te staan dat de sync-server
+                    draait.{' '}
+                    <button
+                      type="button"
+                      className="button button--ghost"
+                      onClick={() => {
+                        setUrlDraft(syncUrl ?? '');
+                        setEditingServer(true);
+                      }}
+                    >
+                      Ander adres
+                    </button>
+                  </p>
+                )}
 
                 {/*
                   Het enige geval dat de server niet zelf kan zien: een typefout
