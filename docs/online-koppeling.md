@@ -158,9 +158,27 @@ Niets, als het goed is. Onder Instellingen staat wanneer er voor het laatst is
 bijgewerkt en hoeveel er nog klaarstaat. Zonder verbinding loopt dat aantal op en
 gaat het invoeren gewoon door; zodra er weer bereik is, loopt het leeg.
 
-De koppeling in de zaal (twee apparaten rechtstreeks, zonder internet) blijft
-bestaan en blijft sneller: die is voor live meelezen tijdens de wedstrijd. De
-online koppeling is voor bijwerken tussen apparaten die niet tegelijk aan staan.
+## Twee soorten koppelen, twee soorten codes
+
+Dit is het onderdeel waar de meeste verwarring zit, dus het staat er los bij:
+
+| | Waarvoor | Waar | Hoe de code eruitziet |
+|---|---|---|---|
+| **Zaalcode** | Twee apparaten naast elkaar; de meelezer ziet elke bal meteen. Geen internet nodig. | Startscherm → *Meelezen in de zaal* | Begint met `VS1`, en is lang |
+| **Ploegcode** | Wedstrijden laten meelopen tussen apparaten die niet tegelijk aan staan. | Instellingen → *Online koppeling* | Vier woorden en vier cijfers |
+
+Ze zijn niet uitwisselbaar. Plak je een ploegcode in het zaalvenster, dan zegt
+het scherm waar hij wél hoort — dat gebeurde, en 'ongeldig' was daar geen
+bruikbaar antwoord op.
+
+## Van code wisselen
+
+Verander je de ploegcode, dan zet het apparaat alles wat het lokaal heeft
+opnieuw in de wachtrij. Dat moet, want de outbox is een wachtrij en geen kopie:
+zodra een wijziging is aangekomen gaat de regel eruit. Zonder dat opnieuw
+klaarzetten zou een telefoon die per ongeluk aan een verkeerde code hing zijn
+wedstrijden nooit meer op de goede plek krijgen — ze staan dan bij een ploeg die
+niemand kent, en niets zou ze alsnog opsturen.
 
 ## Wat het kost
 

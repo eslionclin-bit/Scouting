@@ -9,7 +9,8 @@
 import type { ScoutingDb } from '../db/database';
 import type { OutboxEntry } from '../db/schema';
 import { compareRev } from '../domain/clock';
-import type { BaseRecord } from '../domain/types';
+import { ENTITY_NAMES, type BaseRecord } from '../domain/types';
+import { matchScopeOf } from '../domain/scope';
 import type { ChangeEnvelope } from './types';
 
 export interface PeekOptions {
@@ -103,4 +104,52 @@ export async function compactOutbox(db: ScoutingDb): Promise<number> {
   await Promise.all(superseded.map((seq) => tx.store.delete(seq)));
   await tx.done;
   return superseded.length;
+}
+
+/**
+ * Alles opnieuw in de outbox zetten.
+ *
+ * Nodig wanneer je van ploeg wisselt — een nieuwe of gecorrigeerde ploegcode.
+ * De outbox is namelijk geen kopie van de data maar een wachtrij: zodra een
+ * wijziging is aangekomen, gaat de regel eruit. Koppel je daarna aan een andere
+ * ploeg, dan staat daar niets van wat dit apparaat al eens verstuurd had, en
+ * niets zou dat ooit alsnog opsturen.
+ *
+ * Dat is precies het geval van een telefoon die per ongeluk aan de verkeerde
+ * code hing: zijn wedstrijden zijn weg naar een ploeg die niemand kent, en na
+ * het herstellen van de code zouden ze nergens meer opduiken. Vandaar dat het
+ * wisselen van code hier langskomt.
+ *
+ * Tombstones gaan mee: een verwijderde actie hoort ook op het andere apparaat
+ * verwijderd te zijn.
+ */
+export async function enqueueAll(db: ScoutingDb): Promise<number> {
+  const createdAt = new Date().toISOString();
+  let queued = 0;
+
+  for (const entity of ENTITY_NAMES) {
+    const records = (await db.getAll(entity)) as BaseRecord[];
+    if (records.length === 0) continue;
+
+    // Per entiteit een transactie: één transactie over alles zou bij een lange
+    // geschiedenis te lang openstaan, en de invoer mag er niet op wachten.
+    const tx = db.transaction('outbox', 'readwrite');
+    for (const record of records) {
+      const entry: OutboxEntry = {
+        entity,
+        recordId: record.id,
+        rev: record.rev,
+        matchId: matchScopeOf(entity, record),
+        payload: record,
+        createdAt,
+        attempts: 0,
+        lastError: null,
+      };
+      void tx.store.add(entry);
+      queued++;
+    }
+    await tx.done;
+  }
+
+  return queued;
 }

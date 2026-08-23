@@ -310,6 +310,18 @@ export type EntityName =
   | 'lineups'
   | 'substitutions';
 
+/** Dezelfde namen als lijst, voor als je ze allemaal langs moet. */
+export const ENTITY_NAMES: readonly EntityName[] = [
+  'teams',
+  'players',
+  'matches',
+  'sets',
+  'rallies',
+  'actions',
+  'lineups',
+  'substitutions',
+] as const;
+
 export interface EntityMap {
   teams: Team;
   players: Player;

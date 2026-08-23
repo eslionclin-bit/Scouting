@@ -11,6 +11,7 @@ import { getDeviceId } from '../domain/ids';
 import { withDefaults, type AppSettings } from '../domain/settings';
 import type { DeviceRole } from '../domain/types';
 import { applyRemoteChanges, type MergeResult } from '../sync/merge';
+import { enqueueAll } from '../sync/outbox';
 import type { ChangeEnvelope } from '../sync/types';
 import { openScoutingDb, type ScoutingDb, type OpenOptions } from './database';
 import { Mutex } from './mutex';
@@ -159,10 +160,23 @@ export class ScoutingStore {
   }
 
   async setTeamCode(code: string | null): Promise<void> {
-    await this.setMeta(META_KEYS.teamCode, code === null || code.length === 0 ? null : code);
+    const next = code === null || code.length === 0 ? null : code;
+    const previous = await this.getTeamCode();
+    if (previous === next) return;
+
+    await this.setMeta(META_KEYS.teamCode, next);
     // De cursor hoort bij de vorige koppeling: laat je hem staan, dan mist het
     // apparaat alles wat er vóór het koppelen al op de server stond.
     await this.setMeta(META_KEYS.syncCursor, null);
+
+    // En alles wat dit apparaat al eens verstuurd heeft, moet opnieuw mee: de
+    // outbox is een wachtrij, geen kopie, dus bij de nieuwe ploeg staat daar
+    // niets van. Zonder dit zou een telefoon die per ongeluk aan de verkeerde
+    // code hing zijn wedstrijden nooit meer op de goede plek krijgen.
+    if (next !== null) {
+      const queued = await enqueueAll(this.ctx.db);
+      if (queued > 0) this.emit();
+    }
   }
 
   async getActiveMatchId(): Promise<string | null> {

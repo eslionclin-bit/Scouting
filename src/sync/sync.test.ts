@@ -3,7 +3,7 @@ import { ScoutingStore } from '../db/store';
 import { openTestStore, seedMatch, type TestMatchFixture } from '../test/factory';
 import { SyncEngine } from './engine';
 import { LoopbackHub } from './loopback';
-import { compactOutbox, pendingCount } from './outbox';
+import { ackOutbox, compactOutbox, peekOutbox, pendingCount } from './outbox';
 
 /**
  * Twee apparaten in dezelfde sporthal: de invoerder op de tribune (A) en de
@@ -232,5 +232,50 @@ describe('stoppen', () => {
     // Of hij nog net klaar was of niet doet er niet toe; hij mag alleen niet
     // met een onbehandelde fout eindigen.
     expect(['idle', 'error', 'offline', 'syncing']).toContain(state.status);
+  });
+});
+
+describe('van ploeg wisselen', () => {
+  it('zet alles opnieuw in de wachtrij, zodat het bij de nieuwe ploeg aankomt', async () => {
+    const store = await openTestStore();
+    try {
+      await seedMatch(store);
+
+      // Alles is verstuurd en bevestigd: de outbox is leeg. Dat is de normale
+      // toestand van een apparaat dat al een tijdje gekoppeld is.
+      const sent = await peekOutbox(store.db, { limit: 1000 });
+      await ackOutbox(
+        store.db,
+        sent.map((entry) => entry.seq).filter((seq): seq is number => seq != null),
+      );
+      expect(await pendingCount(store.db)).toBe(0);
+
+      // Nu blijkt de code verkeerd te zijn geweest. Zonder opnieuw in de
+      // wachtrij zetten zouden deze wedstrijden nooit bij de goede ploeg
+      // aankomen: de outbox is een wachtrij, geen kopie.
+      await store.setTeamCode('wilg-molen-waard-wilg-1343');
+
+      expect(await pendingCount(store.db)).toBeGreaterThan(0);
+      const queued = await peekOutbox(store.db, { limit: 1000 });
+      expect(queued.map((entry) => entry.entity)).toContain('matches');
+      expect(queued.map((entry) => entry.entity)).toContain('players');
+    } finally {
+      store.close();
+    }
+  });
+
+  it('doet niets als dezelfde code opnieuw wordt ingevuld', async () => {
+    const store = await openTestStore();
+    try {
+      await seedMatch(store);
+      await store.setTeamCode('wilg-molen-waard-wilg-1343');
+      const after = await pendingCount(store.db);
+
+      await store.setTeamCode('wilg-molen-waard-wilg-1343');
+
+      expect(await pendingCount(store.db)).toBe(after);
+    } finally {
+      store.close();
+    }
   });
 });

@@ -3,7 +3,7 @@
  *
  * Een browser kan geen server zijn, dus twee tablets vinden elkaar niet vanzelf.
  * Wat wél kan: een rechtstreekse WebRTC-verbinding, waarbij de twee apparaten
- * eenmalig een koppelcode uitwisselen. Er komt geen server aan te pas — ook geen
+ * eenmalig een zaalcode uitwisselen. Er komt geen server aan te pas — ook geen
  * STUN-server, want die zou internet vereisen en op een lokaal netwerk niets
  * toevoegen. De kandidaten die overblijven zijn de adressen in het eigen
  * netwerk, precies wat de sporthal-hotspot uit de projectbrief oplevert.
@@ -185,18 +185,18 @@ export function encode(description: RTCSessionDescription | RTCSessionDescriptio
 
 export function decode(code: string): RTCSessionDescriptionInit {
   const trimmed = code.trim();
-  if (!trimmed.startsWith(CODE_PREFIX)) throw new Error('Dit is geen geldige koppelcode.');
+  if (!trimmed.startsWith(CODE_PREFIX)) throw new Error('Dit is geen geldige zaalcode. Die begint met VS1.');
   try {
     const parsed = JSON.parse(fromBase64(trimmed.slice(CODE_PREFIX.length))) as {
       type?: string;
       sdp?: string;
     };
     if (parsed.type !== 'offer' && parsed.type !== 'answer') {
-      throw new Error('Onbekend type koppelcode.');
+      throw new Error('Onbekend type zaalcode.');
     }
     return { type: parsed.type, sdp: parsed.sdp };
   } catch {
-    throw new Error('De koppelcode is onvolledig of beschadigd.');
+    throw new Error('De zaalcode is onvolledig of beschadigd.');
   }
 }
 

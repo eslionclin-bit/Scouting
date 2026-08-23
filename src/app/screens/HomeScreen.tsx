@@ -117,7 +117,7 @@ export function HomeScreen({
             className={`button ${session.status === 'connected' ? 'button--live' : ''}`}
             onClick={() => setShowPairing(true)}
           >
-            {session.status === 'connected' ? 'Verbonden' : 'Koppelen met ander apparaat'}
+            {session.status === 'connected' ? 'Verbonden' : 'Meelezen in de zaal'}
           </button>
           <button type="button" className="button" onClick={onOpenTeam}>
             Ons team
