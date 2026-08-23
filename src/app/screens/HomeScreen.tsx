@@ -125,7 +125,7 @@ export function HomeScreen({
           <h1>Volleybal scouting</h1>
           <p className="home__sub">
             Alles wordt op dit apparaat opgeslagen. Zonder verbinding werkt de app gewoon door. Tik
-            een wedstrijd aan en kies wat je op dit apparaat doet: invoeren, aanvullen of meelezen.
+            een wedstrijd aan en kies wat je op dit apparaat doet: invoeren, aanvullen, of de coachinformatie erbij houden.
           </p>
         </div>
         <div className="home__actions">

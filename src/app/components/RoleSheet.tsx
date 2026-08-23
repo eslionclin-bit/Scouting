@@ -28,8 +28,11 @@ const ROLES: { role: DeviceRole; title: string; description: string }[] = [
   },
   {
     role: 'viewer',
-    title: 'Ik lees mee',
-    description: 'Je ziet live wat er wordt ingevoerd, plus de cijfers. Je voert zelf niets in.',
+    // Heette 'ik lees mee'. Dat beschrijft wat het apparaat doet, niet waar je
+    // het voor gebruikt — en meelezen is niet waarom je erbij zit.
+    title: 'Coachinformatie',
+    description:
+      'Wat er nu opvalt, waar je naartoe moet serveren, en wat je in de time-out zegt. Je voert zelf niets in.',
   },
 ];
 

@@ -600,12 +600,18 @@ export function ScoringScreen({
               {session.peers > 0 ? `Gekoppeld (${session.peers})` : 'Koppelen'}
             </button>
           )}
+          {/*
+            Allebei de opstellingen staan vooraan. Die van hen stond eerst achter
+            de ⋯-knop, en dat is de verkeerde plek: zonder hun zes weet de app
+            niet wie waar staat, en dan blijft het serveeradvies leeg zonder dat
+            iemand doorheeft waarom.
+          */}
           {leads && (
             <button type="button" className="button button--ghost" onClick={() => setShowLineup(true)}>
-              Opstelling
+              Onze opstelling
             </button>
           )}
-          {leads && showMore && (
+          {leads && (
             <button
               type="button"
               className="button button--ghost"

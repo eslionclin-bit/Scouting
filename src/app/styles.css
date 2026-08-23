@@ -183,6 +183,84 @@ button {
   align-self: center;
 }
 
+/* Voor schermlezers, niet voor het oog: de volledige zonenaam achter een vak
+   dat alleen een cijfer toont. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Waar serveren: hun helft, zoals je hem vanaf de bank ziet. */
+.servemap__court {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.servemap__side,
+.servemap__net {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.servemap__net {
+  margin: 0.35rem 0 0;
+  text-align: center;
+  border-top: 2px dashed var(--line);
+  padding-top: 0.3rem;
+}
+
+.servecell {
+  position: relative;
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 0.5rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.servecell--goed {
+  border-color: var(--good);
+  background: rgba(126, 217, 87, 0.12);
+}
+
+.servecell--slecht {
+  border-color: var(--bad, #ef4444);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.servecell__zone {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.servecell__number {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.servecell__value {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.servecell__hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 /* De selectie: één regel per speelster, met haar knoppen ernaast. */
 .squad {
   list-style: none;

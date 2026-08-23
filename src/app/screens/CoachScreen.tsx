@@ -19,11 +19,15 @@ import {
   type CoachCue,
   type MetricComparison,
 } from '../../analysis';
+import { serveTargets } from '../../analysis';
 import { loadMatchBundle } from '../../db/bundle';
 import { ACTION_TYPE_LABELS, QUALITY_LABELS } from '../../domain/protocol';
 import { PairingSheet } from '../components/PairingSheet';
 import type { PeerSession } from '../hooks/usePeerSession';
 import { Placeholder } from '../components/Placeholder';
+import { ServeMap } from '../components/ServeMap';
+import { positionsAt } from '../../domain/rotation';
+import { ZONES, type Zone } from '../../domain/types';
 import { useQuery, useStore } from '../StoreProvider';
 
 /** Stand op het moment van de laatste time-out, om het effect ervan te zien. */
@@ -87,6 +91,37 @@ export function CoachScreen({
         : null,
     [data],
   );
+
+  /**
+   * Waar we naartoe moeten serveren, over deze wedstrijd én eerdere tegen
+   * dezelfde ploeg. Een zwakke passer blijft doorgaans een zwakke passer, dus
+   * die geschiedenis mag meetellen — en juist bij een tweede ontmoeting is dat
+   * het voorwerk waard.
+   */
+  const serve = useMemo(
+    () => (data ? serveTargets([data.bundle, ...data.opponentHistory]) : null),
+    [data],
+  );
+
+  /** Hun zes, als rugnummer per zone, in de rotatie van de lopende set. */
+  const theirNumbers = useMemo(() => {
+    if (!data) return undefined;
+    const sets = data.bundle.sets;
+    const current = sets.filter((set) => set.set.status === 'live').at(-1) ?? sets.at(-1);
+    const lineup = current?.opponentLineup;
+    if (!lineup) return undefined;
+
+    const rotation = current?.rallies.at(-1)?.rally.rotationThem ?? 1;
+    const ids = positionsAt(lineup, rotation);
+    const numberOf = new Map(data.bundle.players.map((player) => [player.id, player.number]));
+
+    const numbers = {} as Record<Zone, number | null>;
+    for (const zone of ZONES) {
+      const playerId = ids[zone];
+      numbers[zone] = playerId ? (numberOf.get(playerId) ?? null) : null;
+    }
+    return numbers;
+  }, [data]);
 
   const recent = useMemo(() => {
     if (!data) return [];
@@ -244,6 +279,13 @@ export function CoachScreen({
         />
         <Figure label="Eigen fouten" value={String(briefing.errorsUs)} hint="deze set" />
       </section>
+
+      {serve && serve.total > 0 && (
+        <section className="card">
+          <h2>Waar serveren</h2>
+          <ServeMap targets={serve} numbers={theirNumbers} />
+        </section>
+      )}
 
       <section className="card">
         <h2>Sideout per rotatie</h2>
