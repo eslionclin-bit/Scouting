@@ -159,3 +159,40 @@ describe('libero bij speelsters die meerdere posities spelen', () => {
     expect(court.replaced).toBeNull();
   });
 });
+
+describe('de libero kan niet twee keer in het veld staan', () => {
+  it('valt niet nog een keer in als ze er met een wissel al in staat', () => {
+    // Dit gebeurde echt: de invoerder wisselde de libero met de hand in voor de
+    // ene middenspeelster, en de afleiding hieronder zette haar ook nog voor de
+    // andere in — dezelfde speelster in zone 5 én zone 6.
+    const lineup = {
+      positions: {
+        1: 'diagonaal',
+        2: 'passer-a',
+        3: 'midden-a',
+        4: 'passer-b',
+        5: 'midden-b',
+        6: 'spelverdeler',
+      } as Record<Zone, string | null>,
+      liberoId: 'libero',
+      liberoForId: null,
+    };
+    const roles: Record<string, PlayerRole[]> = {
+      'midden-a': ['middle'],
+      'midden-b': ['middle'],
+      libero: ['libero'],
+    };
+
+    const { positions, replaced } = courtPositions(
+      lineup,
+      1,
+      [{ playerOutId: 'spelverdeler', playerInId: 'libero' }],
+      { rolesOf: (id) => roles[id] ?? [] },
+    );
+
+    const onCourt = playersOnCourt(positions);
+    expect(new Set(onCourt).size).toBe(onCourt.length);
+    expect(onCourt.filter((id) => id === 'libero')).toHaveLength(1);
+    expect(replaced).toBeNull();
+  });
+});

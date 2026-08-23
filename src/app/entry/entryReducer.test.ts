@@ -232,3 +232,25 @@ describe('op wie er geserveerd is', () => {
     expect(state.step).toBe('zone');
   });
 });
+
+describe('een aanval vanuit het achterveld', () => {
+  function attackFrom(zone: 1 | 2 | 3 | 4 | 5 | 6) {
+    let state = initialEntryState('us');
+    state = entryReducer(state, { kind: 'player', playerId: 'p-9' });
+    state = entryReducer(state, { kind: 'type', type: 'attack' });
+    return entryReducer(state, { kind: 'zoneFrom', zone });
+  }
+
+  it('zet het tempo zelf op achter', () => {
+    // Stond ze achterin, dan ís het een achteraanval. Welke — pipe vanaf 6, of
+    // vanaf 1 of 5 — volgt uit de zone, dus daar is geen extra vraag voor nodig.
+    expect(attackFrom(6).tempo).toBe('back');
+    expect(attackFrom(1).tempo).toBe('back');
+    expect(attackFrom(5).tempo).toBe('back');
+  });
+
+  it('laat het tempo bij een aanval aan het net wel open', () => {
+    expect(attackFrom(4).tempo).toBeNull();
+    expect(attackFrom(3).tempo).toBeNull();
+  });
+});

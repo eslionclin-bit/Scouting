@@ -397,6 +397,13 @@ describe('een wedstrijd verwijderen', () => {
     try {
       const fixture = await seedMatch(store);
       const [sanne, noor, fem] = fixture.players;
+      // Een invalster die nog niet in het veld staat: iemand die er al in staat
+      // erbij wisselen kan niet, en de opslag houdt dat tegen.
+      const bank = await store.players.create({
+        teamId: fixture.ownTeam.id,
+        number: 14,
+        name: 'Invalster',
+      });
       await store.lineups.set({
         setId: fixture.set.id,
         positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
@@ -405,7 +412,7 @@ describe('een wedstrijd verwijderen', () => {
       await store.substitutions.add({
         rallyId: rally.id,
         playerOutId: sanne!.id,
-        playerInId: fem!.id,
+        playerInId: bank.id,
       });
 
       await store.matches.remove(fixture.match.id);
@@ -417,6 +424,69 @@ describe('een wedstrijd verwijderen', () => {
       // elk gekoppeld apparaat.
       expect(await store.lineups.listByMatch(fixture.match.id)).toStrictEqual([]);
       expect(await store.substitutions.listBySet(fixture.set.id)).toStrictEqual([]);
+    } finally {
+      store.close();
+    }
+  });
+});
+
+describe('wisselen', () => {
+  it('kan niet twee keer dezelfde speelster in het veld zetten', async () => {
+    const store = await openTestStore();
+    try {
+      const fixture = await seedMatch(store);
+      const [sanne, noor, fem] = fixture.players;
+      await store.lineups.set({
+        setId: fixture.set.id,
+        positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
+      });
+      const rally = await store.rallies.start({ setId: fixture.set.id });
+
+      await expect(
+        store.substitutions.add({
+          rallyId: rally.id,
+          playerOutId: sanne!.id,
+          playerInId: fem!.id,
+        }),
+      ).rejects.toThrow(/al in het veld/);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('kan niet midden in een rally', async () => {
+    // Wisselen mag alleen als de bal dood is. Anders zou de wissel gelden voor
+    // ballen die de invalster niet gespeeld heeft.
+    const store = await openTestStore();
+    try {
+      const fixture = await seedMatch(store);
+      const [sanne, noor, fem] = fixture.players;
+      const bank = await store.players.create({
+        teamId: fixture.ownTeam.id,
+        number: 14,
+        name: 'Invalster',
+      });
+      await store.lineups.set({
+        setId: fixture.set.id,
+        positions: { 1: fem!.id, 2: noor!.id, 3: sanne!.id, 4: null, 5: null, 6: null },
+      });
+      const rally = await store.rallies.start({ setId: fixture.set.id });
+      await store.actions.append({
+        rallyId: rally.id,
+        team: 'us',
+        type: 'serve',
+        quality: 'good',
+        playerId: fem!.id,
+        zoneFrom: 1,
+      });
+
+      await expect(
+        store.substitutions.add({
+          rallyId: rally.id,
+          playerOutId: sanne!.id,
+          playerInId: bank.id,
+        }),
+      ).rejects.toThrow(/tussen de rally/);
     } finally {
       store.close();
     }

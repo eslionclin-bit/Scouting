@@ -143,6 +143,15 @@ export function courtPositions(
   const liberoId = options.liberoId ?? lineup.liberoId ?? null;
   if (!liberoId) return { positions, replaced: null };
 
+  // Staat ze er al, dan is ze er al. Dit gebeurde echt: wie de libero met de
+  // hand inwisselt voor de ene middenspeelster, kreeg haar er door de afleiding
+  // hieronder een tweede keer bij — dezelfde speelster in zone 5 én zone 6.
+  // Eén persoon kan maar op één plek staan; dat is geen voorkeur maar een feit,
+  // en de app hoort het nooit anders te laten zien.
+  if (ZONES.some((zone) => positions[zone] === liberoId)) {
+    return { positions, replaced: null };
+  }
+
   const forId = options.liberoForId ?? lineup.liberoForId ?? null;
   if (forId) {
     for (const zone of LIBERO_ZONES) {

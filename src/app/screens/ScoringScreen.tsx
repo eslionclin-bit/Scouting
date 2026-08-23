@@ -243,6 +243,22 @@ export function ScoringScreen({
     return candidate;
   }, [data?.rally, data?.lineup, data?.substitutions, data?.setActions, data?.ownPlayers]);
 
+  /**
+   * Vanaf welke plek er de vorige keer geserveerd werd.
+   *
+   * Niemand verplaatst zich tussen twee services van dezelfde serie, en ook
+   * daarna serveert bijna iedereen elke keer vanaf haar eigen plek. Elke rally
+   * opnieuw 'midden' voorzetten betekent dus dat je het elke rally opnieuw moet
+   * wegtikken. De laatste plek is een betere gok — en hij staat bovenin, dus
+   * hij is met één tik anders.
+   */
+  const lastServeSpot = useMemo(() => {
+    const serves = (data?.setActions ?? []).filter(
+      (action) => action.team === 'us' && action.type === 'serve' && action.zoneFrom !== null,
+    );
+    return serves.at(-1)?.zoneFrom ?? null;
+  }, [data?.setActions]);
+
   // Bij een eigen service staat de server al vast; die hoef je niet te kiezen.
   // Corrigeren kan altijd door bovenin op 'Wie' te tikken.
   useEffect(() => {
@@ -262,8 +278,16 @@ export function ScoringScreen({
 
     prefilledRallyRef.current = open.id;
     dispatch({ kind: 'player', playerId: expectedServerId });
+    // Weten we van de vorige service waar ze vandaan kwam, dan staat die stap
+    // ook al ingevuld en begint de invoer bij 'op wie'. Zo niet, dan vraagt de
+    // app hem gewoon — bij de eerste service van een set weet niemand het.
+    if (lastServeSpot !== null) {
+      dispatch({ kind: 'type', type: 'serve' });
+      dispatch({ kind: 'zoneFrom', zone: lastServeSpot });
+    }
     // In de veldinvoer staat de server meteen geselecteerd: dan is een ace één
-    // tik. De plek achter de lijn staat op 'midden' tot je een andere kiest.
+    // tik. De plek achter de lijn staat op de vorige, of op 'midden' als er nog
+    // geen vorige is.
     dispatchCourt({
       kind: 'expect',
       team: 'us',
@@ -272,10 +296,10 @@ export function ScoringScreen({
         team: 'us',
         playerId: expectedServerId,
         playerNumber: null,
-        zone: 6,
+        zone: lastServeSpot ?? 6,
       },
     });
-  }, [data?.rally, data?.actions, expectedServerId]);
+  }, [data?.rally, data?.actions, expectedServerId, lastServeSpot]);
 
   if (error) return <ErrorState message={error.message} onExit={onExit} />;
   if (!data) return <div className="boot">Wedstrijd laden…</div>;

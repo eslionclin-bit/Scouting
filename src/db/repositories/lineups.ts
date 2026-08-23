@@ -6,9 +6,9 @@
  * geldt vanaf de rally waarin hij wordt ingevoerd.
  */
 
-import { emptyPositions, positionsAt } from '../../domain/rotation';
+import { emptyPositions, playersOnCourt, positionsAt } from '../../domain/rotation';
 import { MAX_SUBSTITUTIONS_PER_SET } from '../../domain/scoring';
-import type { Lineup, Substitution, TeamSide, Zone } from '../../domain/types';
+import type { Lineup, Rally, Substitution, TeamSide, Zone } from '../../domain/types';
 import { buildRecord, commit, reviseRecord, type WriteContext } from '../mutations';
 import { alive, isAlive, NotFoundError, ValidationError } from './base';
 
@@ -109,9 +109,44 @@ export class SubstitutionRepository {
         ]);
       }
 
+      // Wisselen mag alleen als de bal dood is. Staat er al iets in deze rally,
+      // dan is hij bezig, en dan hoort de wissel bij de volgende — anders zou
+      // hij met terugwerkende kracht gelden voor ballen die de invalster niet
+      // gespeeld heeft.
+      const played = alive(await this.ctx.db.getAllFromIndex('actions', 'by_rally', rally.id));
+      if (rally.wonBy === null && played.length > 0) {
+        throw new ValidationError('Wisselen kan alleen tussen de rally\u2019s door.', [
+          {
+            code: 'rally_in_progress',
+            message: 'Deze rally is bezig. Rond hem af en wissel dan.',
+          },
+        ]);
+      }
+
+      const team = input.team ?? 'us';
+
+      // Iemand kan niet twee keer in het veld staan. Dit ging mis bij de libero:
+      // wie haar met de hand inwisselt voor de ene middenspeelster, terwijl de
+      // app haar ook al voor de andere invalt, ziet dezelfde speelster in twee
+      // vakken. De vraag hoort niet 'wat doen we daarmee' te zijn maar 'dat kan
+      // niet' — dus wordt hij hier tegengehouden.
+      const onCourt = await this.positionsFor(rally, team);
+      if (onCourt.includes(input.playerInId)) {
+        throw new ValidationError('Die speelster staat al in het veld.', [
+          {
+            code: 'already_on_court',
+            message: 'Iemand kan niet twee keer tegelijk in het veld staan.',
+          },
+        ]);
+      }
+      if (onCourt.length > 0 && !onCourt.includes(input.playerOutId)) {
+        throw new ValidationError('Die speelster staat niet in het veld.', [
+          { code: 'not_on_court', message: 'Kies iemand die er nu in staat om te wisselen.' },
+        ]);
+      }
+
       // Zes wissels per set is de regel; de app laat het er niet stilletjes
       // zeven worden.
-      const team = input.team ?? 'us';
       const used = (await this.listBySet(rally.setId)).filter(
         (substitution) => substitution.team === team,
       ).length;
@@ -133,6 +168,18 @@ export class SubstitutionRepository {
       await commit(this.ctx, [{ entity: 'substitutions', record }]);
       return record;
     });
+  }
+
+  /** Wie er bij deze rally in het veld staan; leeg als er geen opstelling is. */
+  private async positionsFor(rally: Rally, team: TeamSide): Promise<string[]> {
+    const lineups = alive(await this.ctx.db.getAllFromIndex('lineups', 'by_set', rally.setId));
+    const lineup = lineups.find((entry) => entry.team === team);
+    if (!lineup) return [];
+    const substitutions = (await this.listBySet(rally.setId)).filter(
+      (substitution) => substitution.team === team,
+    );
+    const rotation = (team === 'us' ? rally.rotationUs : rally.rotationThem) ?? 1;
+    return playersOnCourt(positionsAt(lineup, rotation, substitutions));
   }
 
   async listBySet(setId: string): Promise<Substitution[]> {

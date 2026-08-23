@@ -9,6 +9,7 @@
  * testen zijn zonder een scherm te renderen.
  */
 
+import { tempoFromZone } from '../../domain/attack';
 import { requiresZoneFrom, suggestNextAction } from '../../domain/rules';
 import type {
   Action,
@@ -116,7 +117,15 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
       };
 
     case 'zoneFrom':
-      return { ...state, zoneFrom: event.zone, step: nextAfterZone(state.type, state.team) };
+      return {
+        ...state,
+        zoneFrom: event.zone,
+        // Stond ze achterin, dan is het een achteraanval. Dat hoeft de invoerder
+        // niet nog eens in te tikken; welke het was (pipe, of vanaf 1 of 5)
+        // volgt al uit deze zone.
+        tempo: (state.type === 'attack' ? tempoFromZone(event.zone) : null) ?? state.tempo,
+        step: nextAfterZone(state.type, state.team),
+      };
 
     // Het tempo kiezen laat de stap staan: daarna volgt het blok, en dát tikje
     // brengt je naar de kwalificatie. Zo blijft het bij twee tikken.

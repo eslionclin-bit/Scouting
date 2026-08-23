@@ -9,7 +9,13 @@
  */
 
 import { useState, type ReactElement } from 'react';
-import { ATTACK_TEMPO_HINTS, ATTACK_TEMPO_LABELS, BLOCK_LABELS } from '../../domain/attack';
+import {
+  ATTACK_TEMPO_HINTS,
+  ATTACK_TEMPO_LABELS,
+  BLOCK_LABELS,
+  backAttackLabel,
+  tempoFromZone,
+} from '../../domain/attack';
 import {
   ACTION_TYPE_LABELS,
   QUALITY_LABELS,
@@ -528,26 +534,41 @@ function AttackStep({
   state: EntryState;
   dispatch: (event: EntryEvent) => void;
 }): ReactElement {
+  // Stond ze achterin, dan is het tempo al bekend: het ís een achteraanval, en
+  // welke volgt uit de zone. Dan blijft alleen het blok over.
+  const fixed = state.type === 'attack' ? tempoFromZone(state.zoneFrom) : null;
+
   return (
     <StepCard
       title="Hoe ging de aanval?"
-      hint="Tempo, en hoeveel blok ertegenover stond. Overslaan mag."
+      hint={
+        fixed
+          ? 'Alleen het blok nog: het tempo staat al vast.'
+          : 'Tempo, en hoeveel blok ertegenover stond. Overslaan mag.'
+      }
     >
-      <div className="grid grid--tempo" role="group" aria-label="Tempo">
-        {ATTACK_TEMPOS.map((tempo) => (
-          <button
-            key={tempo}
-            type="button"
-            className={`tile tile--type ${state.tempo === tempo ? 'tile--selected' : ''}`}
-            aria-label={ATTACK_TEMPO_LABELS[tempo]}
-            aria-pressed={state.tempo === tempo}
-            onClick={() => dispatch({ kind: 'tempo', tempo })}
-          >
-            <span className="tile__name">{ATTACK_TEMPO_LABELS[tempo]}</span>
-            <span className="tile__hint">{ATTACK_TEMPO_HINTS[tempo]}</span>
-          </button>
-        ))}
-      </div>
+      {fixed ? (
+        <p className="step__hint">
+          {state.zoneFrom !== null ? backAttackLabel(state.zoneFrom) : 'achteraanval'} — dat volgt
+          uit de zone, dus dat hoef je er niet bij te tikken.
+        </p>
+      ) : (
+        <div className="grid grid--tempo" role="group" aria-label="Tempo">
+          {ATTACK_TEMPOS.map((tempo) => (
+            <button
+              key={tempo}
+              type="button"
+              className={`tile tile--type ${state.tempo === tempo ? 'tile--selected' : ''}`}
+              aria-label={ATTACK_TEMPO_LABELS[tempo]}
+              aria-pressed={state.tempo === tempo}
+              onClick={() => dispatch({ kind: 'tempo', tempo })}
+            >
+              <span className="tile__name">{ATTACK_TEMPO_LABELS[tempo]}</span>
+              <span className="tile__hint">{ATTACK_TEMPO_HINTS[tempo]}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid--block" role="group" aria-label="Blok">
         {BLOCK_COUNTS.map((blockers) => (
