@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { criterionFor, PROTOCOL_CRITERIA, tooltipFor } from './protocol';
-import { hasBlockingIssue, rallyOutcomeFor, validateAction, type ActionDraft } from './rules';
+import {
+  hasBlockingIssue,
+  rallyOutcomeFor,
+  suggestNextAction,
+  validateAction,
+  type ActionDraft,
+} from './rules';
 import { ACTION_TYPES, QUALITIES } from './types';
 
 describe('validateAction', () => {
@@ -145,5 +151,21 @@ describe('controles met de opstelling erbij', () => {
   it('zwijgt zolang er geen opstelling is ingevuld', () => {
     expect(validateAction(draft({ playerId: 'bank' }), { court: null })).toStrictEqual([]);
     expect(validateAction(draft({ playerId: 'bank' }), {})).toStrictEqual([]);
+  });
+});
+
+describe('na een vrije bal', () => {
+  it('verwacht een pass en geen verdediging', () => {
+    // Een verdediging is een bal die je uit een aanval moet zien te houden; een
+    // vrije bal komt zacht en hoog aan en wordt gewoon aangenomen. Ze door
+    // elkaar tellen maakt allebei de cijfers onbruikbaar.
+    expect(suggestNextAction({ team: 'them', type: 'freeball', quality: 'good' })).toStrictEqual({
+      team: 'us',
+      type: 'reception',
+    });
+    expect(suggestNextAction({ team: 'us', type: 'freeball', quality: 'poor' })).toStrictEqual({
+      team: 'them',
+      type: 'reception',
+    });
   });
 });

@@ -314,9 +314,12 @@ export function suggestNextAction(
     case 'reception':
     case 'dig':
       return { team: last.team, type: 'set' };
-    // Een vrije bal gaat over het net; wat er dan komt is wat zij ermee doen.
+    // Een vrije bal gaat over het net en wordt aangenomen, niet verdedigd. Dat
+    // is geen woordenspel: een verdediging is een bal die je uit een aanval
+    // moet zien te houden, en een vrije bal komt juist zacht en hoog aan. Ze
+    // door elkaar tellen maakt allebei de cijfers onbruikbaar.
     case 'freeball':
-      return { team: other(last.team), type: 'dig' };
+      return { team: other(last.team), type: 'reception' };
     case 'set':
       return { team: last.team, type: 'attack' };
     case 'attack':

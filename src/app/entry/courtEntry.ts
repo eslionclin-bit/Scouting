@@ -87,7 +87,8 @@ const OTHER_SIDE: Record<ActionType, ActionType> = {
   reception: 'attack',
   set: 'attack',
   attack: 'dig',
-  freeball: 'dig',
+  // Een vrije bal wordt aangenomen, niet verdedigd.
+  freeball: 'reception',
   block: 'attack',
   dig: 'attack',
 };
