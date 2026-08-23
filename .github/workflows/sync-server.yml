@@ -69,6 +69,14 @@ jobs:
           printf '  %-24s %s tekens (%s na opschonen)\n' \
             CLOUDFLARE_D1_ID "${#D1}" "${#D1_C}"
 
+          # Een API-token van Cloudflare is 40 tekens. Klopt dat niet, dan is er
+          # iets anders gekopieerd — de tekst eromheen, of het curl-voorbeeld dat
+          # eronder staat. Dat levert verderop 'Invalid format for Authorization
+          # header' op, en aan die melding heb je niets.
+          if [ -n "$TOKEN_C" ] && [ "${#TOKEN_C}" -ne 40 ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN is ${#TOKEN_C} tekens; een API-token van Cloudflare is er 40. Waarschijnlijk is er tekst omheen meegekopieerd."
+          fi
+
           missing=""
           [ -n "$TOKEN_C" ]   || missing="$missing CLOUDFLARE_API_TOKEN"
           [ -n "$ACCOUNT_C" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
