@@ -130,12 +130,18 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
       return { ...state, step: 'quality' };
 
     case 'zoneTo':
-      // In de doelstap is dit het antwoord op de vraag; daarna is de actie rond.
-      // Elders (de landingszone bij een gewone actie) blijft de stap staan.
+      // In de doelstap is dit het antwoord op de vraag; daarna volgt bij een
+      // aanval nog het tempo en het blok. Elders (de landingszone bij een
+      // gewone actie) blijft de stap staan.
       return {
         ...state,
         zoneTo: event.zone,
-        step: state.step === 'target' ? 'quality' : state.step,
+        step:
+          state.step === 'target'
+            ? state.type && needsAttackStep(state.type)
+              ? 'attack'
+              : 'quality'
+            : state.step,
       };
 
     case 'skipZone':
@@ -167,21 +173,30 @@ export function entryReducer(state: EntryState, event: EntryEvent): EntryState {
 }
 
 /**
- * Waar de app deze actie vraagt op wie er geserveerd is.
+ * Vraagt de app bij deze actie waar de bal op hun helft terechtkwam?
  *
- * Alleen bij onze eigen service. Het is de vraag waar het hele serveeradvies aan
- * hangt — 'serveer op positie 5' kan de app pas zeggen als hij weet waar er
- * geserveerd wérd — en het is meteen wat hun pass eraan vastknoopt: wie daar
- * stond volgt uit hun rotatie, dus dat hoeft niemand er apart bij te tikken.
+ * Bij onze eigen service en bij onze eigen aanval. Bij de service hangt het hele
+ * serveeradvies eraan — 'serveer op positie 5' kan de app pas zeggen als hij
+ * weet waar er geserveerd wérd — en hun pass wordt eraan vastgeknoopt.
+ *
+ * Bij de aanval is het de vraag die overblijft zodra je 'matig' aantikt: dat
+ * zegt dat er niets uitkwam, maar niet waarheen ze sloeg. En juist dat is wat je
+ * wilt weten, want een aanvalster die er drie keer achter elkaar in hetzelfde
+ * blok in slaat heeft geen slechte dag maar een gewoonte.
  */
 export function needsTargetStep(type: ActionType | null, team: TeamSide): boolean {
-  return type === 'serve' && team === 'us';
+  return (type === 'serve' || type === 'attack') && team === 'us';
 }
 
-/** Waar je heen gaat als de zone klaar is: bij een aanval en een service nog één vraag. */
+/**
+ * Waar je heen gaat als de vertrekzone klaar is.
+ *
+ * Bij onze aanval eerst waarheen, dan tempo en blok: dat is de volgorde waarin
+ * je het ziet gebeuren, en de richting is het stuk dat je meteen kwijt bent.
+ */
 function nextAfterZone(type: ActionType | null, team: TeamSide): EntryStep {
-  if (type && needsAttackStep(type)) return 'attack';
   if (needsTargetStep(type, team)) return 'target';
+  if (type && needsAttackStep(type)) return 'attack';
   return 'quality';
 }
 
@@ -201,6 +216,9 @@ function stepBack(state: EntryState): EntryState {
     case 'target':
       return { ...state, zoneFrom: null, zoneTo: null, step: 'zone' };
     case 'attack':
+      if (needsTargetStep(state.type, state.team)) {
+        return { ...state, zoneTo: null, tempo: null, blockers: null, step: 'target' };
+      }
       return { ...state, zoneFrom: null, zoneTo: null, tempo: null, blockers: null, step: 'zone' };
     case 'zone':
       return { ...state, type: null, zoneFrom: null, zoneTo: null, step: 'type' };

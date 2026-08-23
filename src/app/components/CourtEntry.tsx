@@ -136,7 +136,9 @@ export function CourtEntry({
         <p className="courtentry__side courtentry__side--them">
           Tegenstander
           {aiming
-            ? ' · tik waar je naartoe serveert'
+            ? state.type === 'attack'
+              ? ' · tik waar ze heen slaat'
+              : ' · tik waar je naartoe serveert'
             : selection?.team === 'them'
               ? ' · gekozen'
               : ''}
@@ -148,8 +150,13 @@ export function CourtEntry({
               const picked = aiming
                 ? state.target === zone
                 : selection?.team === 'them' && selection.zone === zone;
-              const number =
-                settings.showOpponentNumbers ? (opponentPositions?.[zone] ?? null) : null;
+              // Hun rugnummers kloppen alleen zolang ze in hun rotatievak staan,
+              // en dat is tot de service geraakt is. Daarna lopen ze naar hun
+              // eigen plek — spelverdeler rechts, libero linksachter — en zou
+              // het nummer in het vak een leugen zijn. Bij onze aanval dus geen
+              // nummers, alleen de zone waar de bal landde.
+              const showNumbers = settings.showOpponentNumbers && state.type !== 'attack';
+              const number = showNumbers ? (opponentPositions?.[zone] ?? null) : null;
               return (
                 <button
                   key={`them-${zone}`}
@@ -162,7 +169,9 @@ export function CourtEntry({
                   ].join(' ')}
                   aria-label={
                     aiming
-                      ? `Serveren op ${ZONE_LABELS[zone]}${number !== null ? `, nummer ${number}` : ''}`
+                      ? `${state.type === 'attack' ? 'Slaan naar' : 'Serveren op'} ${
+                          ZONE_LABELS[zone]
+                        }${number !== null ? `, nummer ${number}` : ''}`
                       : `Tegenstander ${ZONE_LABELS[zone]}${number !== null ? `, nummer ${number}` : ''}`
                   }
                   aria-pressed={picked}
@@ -254,7 +263,7 @@ export function CourtEntry({
               {state.target === null
                 ? 'naar: nog niet aangetikt'
                 : `naar ${shortZone(state.target)}${
-                    opponentPositions?.[state.target] != null
+                    state.type === 'serve' && opponentPositions?.[state.target] != null
                       ? ` · #${opponentPositions[state.target]}`
                       : ''
                   }`}

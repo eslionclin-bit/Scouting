@@ -21,11 +21,14 @@ describe('entryReducer', () => {
     expect(afterType.step).toBe('zone');
     expect(isReadyToCommit(afterType)).toBe(false);
 
-    // Bij een aanval komt er één vraag bij: tempo en blok.
+    // Bij onze aanval komen er twee vragen bij: waarheen, en tempo plus blok.
     const afterZone = entryReducer(afterType, { kind: 'zoneFrom', zone: 4 });
-    expect(afterZone.step).toBe('attack');
+    expect(afterZone.step).toBe('target');
 
-    const afterTempo = entryReducer(afterZone, { kind: 'tempo', tempo: 'quick' });
+    const afterTarget = entryReducer(afterZone, { kind: 'zoneTo', zone: 5 });
+    expect(afterTarget.step).toBe('attack');
+
+    const afterTempo = entryReducer(afterTarget, { kind: 'tempo', tempo: 'quick' });
     expect(afterTempo.step).toBe('attack');
 
     const afterBlock = entryReducer(afterTempo, { kind: 'blockers', blockers: 2 });
@@ -36,7 +39,7 @@ describe('entryReducer', () => {
       quality: 'perfect',
       playerId: 'p1',
       zoneFrom: 4,
-      zoneTo: null,
+      zoneTo: 5,
       tempo: 'quick',
       blockers: 2,
     });

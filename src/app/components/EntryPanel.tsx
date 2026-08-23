@@ -77,7 +77,15 @@ export function EntryPanel(props: EntryPanelProps): ReactElement {
           <ZoneStep state={state} dispatch={dispatch} />
         ))}
       {state.step === 'target' && (
-        <ServeTargetStep state={state} dispatch={dispatch} opponentPositions={opponentPositions} />
+        <ServeTargetStep
+          state={state}
+          dispatch={dispatch}
+          // Alleen bij de service: dán staan ze nog in hun rotatievak en klopt
+          // 'positie 5, daar staat #38'. Bij een aanval zijn ze allang naar hun
+          // eigen plek gelopen, en dan zou het rugnummer in het vak een leugen
+          // zijn — hoe behulpzaam het er ook uitziet.
+          opponentPositions={state.type === 'serve' ? opponentPositions : undefined}
+        />
       )}
       {state.step === 'attack' && <AttackStep state={state} dispatch={dispatch} />}
       {state.step === 'quality' && (
@@ -139,12 +147,12 @@ function DraftBar({
           disabled={state.zoneFrom === null}
           onClick={() => dispatch({ kind: 'goTo', step: 'target' })}
         >
-          <span className="draft__label">Op wie</span>
+          <span className="draft__label">{state.type === 'attack' ? 'Waarheen' : 'Op wie'}</span>
           <span className="draft__value">
             {state.zoneTo === null
               ? '—'
               : `positie ${state.zoneTo}${
-                  opponentPositions?.[state.zoneTo] != null
+                  state.type === 'serve' && opponentPositions?.[state.zoneTo] != null
                     ? ` · #${opponentPositions[state.zoneTo]}`
                     : ''
                 }`}
@@ -619,15 +627,17 @@ function QualityButton({
 }
 
 /**
- * Op wie er geserveerd is.
+ * Waar de bal op hun helft terechtkwam.
  *
  * Hun helft, in de volgorde waarin je hem voor je ziet: hun voorlijn aan het
  * net, en hun zone 4 voor jou rechts. Staat hun opstelling erin, dan staat het
  * rugnummer in het vak — dan tik je op #38 en niet op 'positie 5'.
  *
- * Overslaan mag. Maar het is één tik, en het is de tik waar het serveeradvies
- * op rust én waar hun pass aan wordt opgehangen: die leidt de app hieruit af in
- * plaats van er apart om te vragen.
+ * Twee momenten, twee vragen. Bij onze service: waar je naartoe serveert — de
+ * tik waar het serveeradvies op rust én waar hun pass aan wordt opgehangen. Bij
+ * onze aanval: waar ze heen sloeg, wat precies is wat een 'matig' openlaat.
+ *
+ * Overslaan mag allebei: soms zie je het niet.
  */
 function ServeTargetStep({
   state,
@@ -640,8 +650,12 @@ function ServeTargetStep({
 }): ReactElement {
   return (
     <StepCard
-      title="Op wie geserveerd?"
-      hint="Hun helft, zoals je hem voor je ziet. Eén tik — hier hangt het serveeradvies aan."
+      title={state.type === 'attack' ? 'Waar sloeg ze hem heen?' : 'Op wie geserveerd?'}
+      hint={
+        state.type === 'attack'
+          ? 'Hun helft, zoals je hem voor je ziet. Dit is wat je bij een matige aanval overhoudt: waar hij landde.'
+          : 'Hun helft, zoals je hem voor je ziet. Eén tik — hier hangt het serveeradvies aan.'
+      }
     >
       <div className="court court--them" role="group" aria-label="Helft van de tegenstander">
         {OPPONENT_GRID.map((row, index) => (

@@ -25,6 +25,7 @@ import { useQuery, useStore } from '../StoreProvider';
 import { entryReducer, initialEntryState, toActionDraft } from '../entry/entryReducer';
 import { courtPositions, emptyPositions, positionsAt } from '../../domain/rotation';
 import { receiverForZone, receiversFor } from '../../domain/reception';
+import { FRONT_ZONES } from '../../domain/zones';
 import { receptionFromServe } from '../../domain/derive';
 import { DEFAULT_SETTINGS } from '../../domain/settings';
 import {
@@ -340,16 +341,27 @@ export function ScoringScreen({
   function refinePlayers(action: Action): readonly Player[] {
     if (action.team === 'us') return data?.ownPlayers ?? [];
     const all = data?.opponentPlayers ?? [];
-    if (action.type !== 'reception' || !themIds) return all;
-    const receivers = new Set(
-      receiversFor(themIds, {
-        rolesOf: (playerId) => rolesOf(playersById.get(playerId) ?? { role: null, roles: null }),
-      }),
-    );
-    if (receivers.size === 0) return all;
-    return [...all].sort(
-      (a, b) => Number(receivers.has(b.id)) - Number(receivers.has(a.id)),
-    );
+    if (!themIds) return all;
+
+    // Een aanval aan het net of een blok komt van hun voorlijn; een pass van hun
+    // passers. De hele ploeg aanbieden maakt van een keuze een zoekopdracht —
+    // en het zijn er zes van de twaalf die het niet geweest kunnen zijn.
+    const likely =
+      action.type === 'reception'
+        ? new Set(
+            receiversFor(themIds, {
+              rolesOf: (playerId) =>
+                rolesOf(playersById.get(playerId) ?? { role: null, roles: null }),
+            }),
+          )
+        : action.type === 'attack' || action.type === 'block'
+          ? new Set(FRONT_ZONES.map((zone) => themIds[zone]).filter((id): id is string => !!id))
+          : null;
+
+    if (!likely || likely.size === 0) return all;
+    // Sorteren en niet filteren: een achterspeelster kan wél vanaf de achterlijn
+    // aanvallen, en de app hoort dat niet onmogelijk te maken.
+    return [...all].sort((a, b) => Number(likely.has(b.id)) - Number(likely.has(a.id)));
   }
 
   /**

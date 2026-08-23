@@ -3056,10 +3056,12 @@ button {
 }
 
 /*
-  Een hint die op een veld volgt in plaats van op een kop: de negatieve
-  bovenmarge van .step__hint trok hem anders over het netlabel heen.
+  De negatieve bovenmarge van .step__hint hoort bij een hint die direct onder
+  een kop staat. Volgt hij op iets anders — een veld, of een tweede hint — dan
+  trok hij de tekst over de regel erboven heen.
 */
-.court + .step__hint {
+.court + .step__hint,
+.step__hint + .step__hint {
   margin-top: 0.5rem;
 }
 
@@ -3084,4 +3086,40 @@ button {
 .lineupcell--input input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/*
+  Het criterium op de kwalificatieknop stond op twee of drie regels afgekapt.
+  Op een telefoon moet dat ook: daar past de zin niet en is de kleur plus het
+  woord genoeg. Maar op een tablet of laptop staat er ruimte op de knop
+  ongebruikt terwijl de zin halverwege ophoudt, en dan doet de uitleg precies
+  niet waar hij voor is — twijfel wegnemen zonder dat je ergens op hoeft te
+  drukken. Vanaf 40rem staat hij er dus helemaal.
+*/
+@media (min-width: 40rem) {
+  .quality__criterion,
+  .qualitybutton__hint {
+    display: block;
+    -webkit-line-clamp: none;
+    line-clamp: none;
+    overflow: visible;
+    font-size: 0.78rem;
+    line-height: 1.3;
+  }
+
+  /* Vier knoppen naast elkaar hebben smalle kolommen; met de hele zin erin is
+     iets meer lucht nodig dan de ondergrens voor een vingertik. */
+  .quality {
+    min-height: 5.5rem;
+  }
+
+  .qualitybutton {
+    align-content: start;
+  }
+
+  /* De kolom mag meegroeien met de langste zin in plaats van hem af te knippen. */
+  .qualitygrid {
+    height: auto;
+    align-content: start;
+  }
 }

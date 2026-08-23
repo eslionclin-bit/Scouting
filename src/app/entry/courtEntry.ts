@@ -62,12 +62,14 @@ export function initialCourtState(
  * Betekent een tik op de helft van de tegenstander 'daar ging de bal naartoe'
  * in plaats van 'zij deden iets'?
  *
- * Bij onze eigen service wel. Dat is het enige moment waarop hun helft leeg
- * ligt en de tik geen andere betekenis kán hebben — en meteen het moment waarop
- * de doelzone het meest oplevert.
+ * Bij onze eigen service en bij onze eigen aanval. Dat zijn de twee momenten
+ * waarop wíj de bal hun kant op sturen, dus kan de tik daar niets anders
+ * betekenen — en het zijn precies de twee waar de richting iets zegt. Bij een
+ * service: waar je naartoe serveert. Bij een aanval: waar ze heen slaat, en dat
+ * is de vraag die overblijft als een aanval matig was.
  */
 export function targetsOpponent(state: CourtEntryState): boolean {
-  return state.type === 'serve' && state.expectedTeam === 'us';
+  return (state.type === 'serve' || state.type === 'attack') && state.expectedTeam === 'us';
 }
 
 /**

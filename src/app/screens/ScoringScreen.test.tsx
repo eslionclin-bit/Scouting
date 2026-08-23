@@ -102,8 +102,12 @@ describe('ScoringScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Aanval' }));
     await user.click(screen.getByRole('button', { name: 'Zone 4 (linksvoor)' }));
 
-    // Bij een aanval komt de vraag naar tempo en blok ertussen; het blok brengt
-    // je door naar de kwalificatie.
+    // Waarheen ze slaat komt eerst: bij 'matig' is dat de enige vraag die nog
+    // overblijft, en dan wil je hem al gesteld hebben.
+    await user.click(screen.getByRole('button', { name: /^Positie 1/ }));
+
+    // Daarna de vraag naar tempo en blok; het blok brengt je door naar de
+    // kwalificatie.
     expect(screen.getByText('Hoe ging de aanval?')).toBeDefined();
     await user.click(screen.getByRole('button', { name: 'Snel' }));
     await user.click(screen.getByRole('button', { name: '2 blok' }));
@@ -179,6 +183,8 @@ describe('ScoringScreen als assistent', () => {
     await user.click(screen.getByRole('button', { name: '#9 Fem' }));
     await user.click(screen.getByRole('button', { name: 'Aanval' }));
     await user.click(screen.getByRole('button', { name: 'Zone 4 (linksvoor)' }));
+    // Waarheen mag je overslaan; soms zie je het niet.
+    await user.click(screen.getByRole('button', { name: 'Weet ik niet' }));
     await user.click(screen.getByRole('button', { name: 'Overslaan' }));
     await user.click(screen.getByRole('button', { name: /^Fout/ }));
 
