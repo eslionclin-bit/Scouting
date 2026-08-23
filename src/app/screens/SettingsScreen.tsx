@@ -280,6 +280,12 @@ export function SettingsScreen({
               </>
             ) : (
               <>
+                {/*
+                  Drie getallen, en samen zeggen ze precies waar het hangt.
+                  Zonder deze drie is 'het werkt niet' niet te onderscheiden van
+                  'het is nog niet klaar', en dat verschil bepaalt volledig wat
+                  je eraan moet doen — dat kostte een avond raden.
+                */}
                 <ul className="settings">
                   <li className="settings__item">
                     <div className="settings__text">
@@ -288,22 +294,53 @@ export function SettingsScreen({
                         {cloud.state.lastSyncAt
                           ? `Laatst bijgewerkt om ${new Date(cloud.state.lastSyncAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}.`
                           : 'Nog niet bijgewerkt sinds het koppelen.'}
-                        {cloud.state.pending > 0
-                          ? ` ${cloud.state.pending} wijziging${cloud.state.pending === 1 ? '' : 'en'} staat nog klaar.`
-                          : ' Alles is weggeschreven.'}
+                      </span>
+                    </div>
+                  </li>
+                  <li className="settings__item">
+                    <div className="settings__text">
+                      <strong>Hier klaar om te versturen</strong>
+                      <span className="settings__hint">
+                        {cloud.state.pending === 0
+                          ? 'Niets — alles van dit apparaat is weg.'
+                          : `${cloud.state.pending} wijziging${cloud.state.pending === 1 ? '' : 'en'}.`}
+                      </span>
+                    </div>
+                  </li>
+                  <li className="settings__item">
+                    <div className="settings__text">
+                      <strong>Bij de ploeg opgeslagen</strong>
+                      <span className="settings__hint">
+                        {cloud.onServer === null
+                          ? 'Nog niet kunnen kijken — geen verbinding gehad.'
+                          : cloud.onServer === 0
+                            ? 'Niets. Is dit het tweede apparaat, dan klopt de koppeling niet.'
+                            : `${cloud.onServer} wijzigingen. Staan ze hier niet, tik dan hieronder op 'Nu synchroniseren'.`}
                       </span>
                     </div>
                   </li>
                 </ul>
+
+                <button
+                  type="button"
+                  className="button"
+                  disabled={busy || cloud.state.status === 'syncing'}
+                  onClick={() => void cloud.syncNow()}
+                >
+                  {cloud.state.status === 'syncing' ? 'Bezig…' : 'Nu synchroniseren'}
+                </button>
                 {/*
-                  Alleen tonen waar je iets mee kunt. 'Failed to fetch' is voor
-                  een invoerder geen informatie maar een schrikreactie, en de
-                  gewone toestand in een sporthal zonder bereik. Een code die
-                  niet deugt is wél iets om te melden: dat lost zichzelf niet op.
+                  Een code die niet deugt is een echte fout en staat groot. De
+                  rest — 'Failed to fetch' en zijn soortgenoten — is in een
+                  sporthal de gewone gang van zaken, maar wel het eerste wat je
+                  wilt weten als er iets níet klopt. Dus klein, onderaan.
                 */}
-                {cloud.state.lastError && /code/i.test(cloud.state.lastError) && (
-                  <p className="setup__error">{cloud.state.lastError}</p>
-                )}
+                {cloud.state.lastError &&
+                  (/code/i.test(cloud.state.lastError) ? (
+                    <p className="setup__error">{cloud.state.lastError}</p>
+                  ) : (
+                    <p className="settings__hint">Laatste melding: {cloud.state.lastError}</p>
+                  ))}
 
                 {/*
                   Het enige geval dat de server niet zelf kan zien: een typefout

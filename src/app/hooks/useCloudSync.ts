@@ -11,7 +11,7 @@
  * hele punt van offline-first, en het is de reden dat dit bestand zo kort is.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SyncEngine } from '../../sync/engine';
 import { CloudTransport } from '../../sync/cloud';
 import { cloudUrl, isCloudConfigured } from '../../sync/cloudConfig';
@@ -24,6 +24,8 @@ export interface CloudSync {
   /** Draait de koppeling nu? */
   connected: boolean;
   state: SyncState;
+  /** Nu een ronde draaien, zonder te wachten op de klok. */
+  syncNow: () => Promise<void>;
   /**
    * Staat er al iets onder deze code?
    *
@@ -47,6 +49,27 @@ export function useCloudSync(teamCode: string | null): CloudSync {
   const store = useStore();
   const [state, setState] = useState<SyncState>(IDLE);
   const [onServer, setOnServer] = useState<number | null>(null);
+  const engineRef = useRef<SyncEngine | null>(null);
+  const transportRef = useRef<CloudTransport | null>(null);
+
+  /**
+   * Zelf een ronde starten, en meteen opnieuw tellen wat er op de server staat.
+   *
+   * Dat tweede is waar het om gaat: zonder dat getal is 'het werkt niet' niet te
+   * onderscheiden van 'het is nog niet klaar', en dat verschil bepaalt volledig
+   * wat je eraan moet doen.
+   */
+  const syncNow = useCallback(async (): Promise<void> => {
+    await engineRef.current?.syncNow({ force: true });
+    const transport = transportRef.current;
+    if (!transport) return;
+    try {
+      const response = await transport.pull({ deviceId: store.deviceId, cursor: '0' });
+      setOnServer(response.total ?? null);
+    } catch {
+      setOnServer(null);
+    }
+  }, [store]);
   const available = isCloudConfigured();
   const active = available && teamCode !== null && teamCode.length > 0;
 
@@ -58,6 +81,7 @@ export function useCloudSync(teamCode: string | null): CloudSync {
     }
 
     const transport = new CloudTransport({ url: cloudUrl(), teamCode });
+    transportRef.current = transport;
     let cancelled = false;
 
     // Eén keer kijken wat er onder deze code staat. Dat is puur om een typefout
@@ -77,6 +101,7 @@ export function useCloudSync(teamCode: string | null): CloudSync {
       // Rustiger dan de koppeling in de zaal: dit is bijwerken, geen meelezen.
       { intervalMs: 30_000 },
     );
+    engineRef.current = engine;
     const unsubscribe = engine.subscribe(setState);
     engine.start();
 
@@ -84,8 +109,10 @@ export function useCloudSync(teamCode: string | null): CloudSync {
       cancelled = true;
       unsubscribe();
       engine.stop();
+      engineRef.current = null;
+      transportRef.current = null;
     };
   }, [store, active, teamCode]);
 
-  return { available, connected: active, state, onServer };
+  return { available, connected: active, state, onServer, syncNow };
 }
