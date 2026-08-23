@@ -492,3 +492,39 @@ describe('wisselen', () => {
     }
   });
 });
+
+describe('de beginservice achteraf omzetten', () => {
+  it('rekent wie er serveerde en de rotaties opnieuw door', async () => {
+    // Eén tik verkeerd bij 'wie begint met serveren' zette de hele set scheef:
+    // de rotatie telt door vanaf wie er serveerde.
+    const store = await openTestStore();
+    try {
+      const fixture = await seedMatch(store);
+      await store.sets.setStartingServe(fixture.set.id, 'us');
+
+      // Drie rally's: wij, zij, zij.
+      for (const wonBy of ['us', 'them', 'them'] as const) {
+        const rally = await store.rallies.start({ setId: fixture.set.id });
+        await store.rallies.complete(rally.id, wonBy);
+      }
+
+      const before = await store.rallies.listBySet(fixture.set.id);
+      expect(before[0]?.servingTeam).toBe('us');
+
+      await store.sets.setStartingServe(fixture.set.id, 'them');
+      const changed = await store.rallies.rebuildForStartingServe(fixture.set.id, 'them');
+      expect(changed).toBeGreaterThan(0);
+
+      const after = await store.rallies.listBySet(fixture.set.id);
+      // De eerste rally wisselt van serverende ploeg; de rest volgt uit wie won,
+      // en dat verandert niet.
+      expect(after[0]?.servingTeam).toBe('them');
+      expect(after[1]?.servingTeam).toBe('us');
+      // Wij wonnen rally 1 terwijl zij serveerden: dan draaien wij door.
+      expect(after[0]?.rotationUs).toBe(1);
+      expect(after[1]?.rotationUs).toBe(2);
+    } finally {
+      store.close();
+    }
+  });
+});

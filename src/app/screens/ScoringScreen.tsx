@@ -646,6 +646,34 @@ export function ScoringScreen({
     }
   }
 
+  /**
+   * De beginservice van deze set alsnog omzetten.
+   *
+   * Anders dan `chooseStartingServe` mag dit halverwege: de acties en de
+   * uitslagen blijven staan, alleen wie er serveerde en in welke rotatie wordt
+   * opnieuw uitgerekend. Zonder dit ging een set met één verkeerde tik in het
+   * begin de hele wedstrijd de mist in.
+   */
+  async function fixStartingServe(side: TeamSide): Promise<void> {
+    if (!data?.set) return;
+    try {
+      await store.sets.setStartingServe(data.set.id, side);
+      const changed = await store.rallies.rebuildForStartingServe(data.set.id, side);
+      // De lopende invoer klopt nu niet meer met wie er serveert. Leegmaken en
+      // het voorinvullen opnieuw laten lopen zodra de nieuwe gegevens binnen zijn.
+      dispatch({ kind: 'reset' });
+      prefilledRallyRef.current = null;
+      push(
+        'info',
+        changed === 0
+          ? 'Beginservice bijgewerkt.'
+          : `Beginservice omgezet; ${changed} ${changed === 1 ? 'rally' : "rally's"} opnieuw doorgerekend.`,
+      );
+    } catch (cause) {
+      push('error', cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function addMissedPoint(wonBy: TeamSide): Promise<void> {
     if (!data?.set) return;
     try {
@@ -815,7 +843,7 @@ export function ScoringScreen({
           </button>
           {leads && showMore && (
             <button type="button" className="button button--ghost" onClick={() => setShowScoreFix(true)}>
-              Stand
+              Stand &amp; service
             </button>
           )}
           {leads && showMore && (
@@ -1026,7 +1054,9 @@ export function ScoringScreen({
         <ScoreFixSheet
           pointsUs={set.pointsUs}
           pointsThem={set.pointsThem}
+          startingServe={set.startingServe}
           onAdd={addMissedPoint}
+          onFixStartingServe={fixStartingServe}
           onClose={() => setShowScoreFix(false)}
         />
       )}
@@ -1057,6 +1087,7 @@ export function ScoringScreen({
             (a, b) => a - b,
           )}
           onSave={(atStart) => void saveThemLineup(atStart)}
+          onAddPlayer={(number, name) => addPlayer({ team: 'them', number, name })}
           onClose={() => setShowThemLineup(false)}
         />
       )}

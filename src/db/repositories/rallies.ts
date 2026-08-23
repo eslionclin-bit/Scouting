@@ -79,6 +79,47 @@ export class RallyRepository {
   }
 
   /**
+   * De beginservice van een hele set alsnog omzetten.
+   *
+   * Eén tik verkeerd bij 'wie begint met serveren' en de rest van de set klopt
+   * niet meer: de rotatie telt door vanaf wie er serveerde, dus elke rally staat
+   * dan een slag verkeerd. Dat moet te herstellen zijn zonder de set opnieuw in
+   * te voeren.
+   *
+   * De acties blijven staan en de uitslagen ook — alleen wie er serveerde en in
+   * welke rotatie wordt opnieuw uitgerekend, precies zoals de app het bij het
+   * invoeren zelf ook doet. Wie een rally wón verandert niet, dus alleen de
+   * eerste rally wisselt van serverende ploeg; de rotaties schuiven allemaal.
+   */
+  async rebuildForStartingServe(setId: string, startingServe: TeamSide): Promise<number> {
+    return this.ctx.lock.run(async () => {
+      const rallies = await this.listBySet(setId);
+      const ops: WriteOp[] = [];
+
+      rallies.forEach((rally, index) => {
+        const before = rallies.slice(0, index);
+        const servingTeam = before.at(-1)?.wonBy ?? startingServe;
+        const rotationUs = rotationForNextRally(before, startingServe, 'us');
+        const rotationThem = rotationForNextRally(before, startingServe, 'them');
+        if (
+          rally.servingTeam === servingTeam &&
+          rally.rotationUs === rotationUs &&
+          rally.rotationThem === rotationThem
+        ) {
+          return;
+        }
+        ops.push({
+          entity: 'rallies',
+          record: reviseRecord(this.ctx, rally, { servingTeam, rotationUs, rotationThem }),
+        });
+      });
+
+      await commit(this.ctx, ops);
+      return ops.length;
+    });
+  }
+
+  /**
    * De beginservice van een set alsnog goed zetten in de rally die al openstaat.
    *
    * De eerste rally wordt aangemaakt zodra het scherm opengaat, en op dat moment

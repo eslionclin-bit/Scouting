@@ -9,7 +9,7 @@
  * alleen nog een tegenstander ingevuld te worden.
  */
 
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { rolesOf, PLAYER_ROLES, PLAYER_ROLE_LABELS } from '../../domain/players';
 import type { PlayerRole } from '../../domain/types';
 import { useQuery, useStore } from '../StoreProvider';
@@ -46,6 +46,8 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
   const [opponentRows, setOpponentRows] = useState<PlayerRow[]>(EMPTY_OPPONENT_ROWS);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** Is de lijst al een keer met de bestaande selectie gevuld? */
+  const prefilled = useRef(false);
 
   const { data: existing } = useQuery(async (instance) => {
     const ownTeam = await instance.teams.ownTeam();
@@ -55,8 +57,14 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
 
   // Een bestaand eigen team is de normale situatie: dan hoeft alleen de
   // tegenstander nog ingevuld te worden.
+  //
+  // Eén keer, en daarna niet meer. Deze query draait opnieuw bij elke schrijfactie
+  // in de app, en dan zette hij de lijst terug op wat er in de opslag stond —
+  // precies terwijl je een naam aan het verbeteren was. Dat is hoe 'de namen
+  // veranderen weer terug' ontstond.
   useEffect(() => {
-    if (!existing?.ownTeam) return;
+    if (!existing?.ownTeam || prefilled.current) return;
+    prefilled.current = true;
     setOwnTeamName(existing.ownTeam.name);
     setRows(
       existing.players.length > 0
@@ -92,15 +100,20 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
         await store.teams.update(ownTeam.id, { name: ownTeamName.trim() });
       }
 
+      // Bestaande speelsters werden hier stilzwijgend overgeslagen: een naam of
+      // positie verbeteren deed dan niets, en dat was niet te zien. Nu wordt wat
+      // er anders is ook echt bijgewerkt.
       const known = new Map((existing?.players ?? []).map((player) => [player.number, player]));
-      const newPlayers = rows
+      const filled = rows
         .map((row) => ({
           number: Number(row.number),
           name: row.name.trim(),
           role: row.roles?.[0] ?? null,
           roles: row.roles ?? [],
         }))
-        .filter((row) => Number.isInteger(row.number) && row.name.length > 0)
+        .filter((row) => Number.isInteger(row.number) && row.name.length > 0);
+
+      const newPlayers = filled
         .filter((row) => !known.has(row.number))
         .map((row) => ({
           teamId: ownTeam.id,
@@ -110,6 +123,20 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
           roles: row.roles,
         }));
       if (newPlayers.length > 0) await store.players.createMany(newPlayers);
+
+      for (const row of filled) {
+        const player = known.get(row.number);
+        if (!player) continue;
+        const sameRoles =
+          rolesOf(player).length === row.roles.length &&
+          rolesOf(player).every((role, index) => role === row.roles[index]);
+        if (player.name === row.name && sameRoles) continue;
+        await store.players.update(player.id, {
+          name: row.name,
+          role: row.role,
+          roles: row.roles,
+        });
+      }
 
       const opponent = await store.teams.findOrCreateOpponent(opponentName.trim());
 
@@ -121,12 +148,21 @@ export function NewMatchScreen({ onCreated, onCancel }: NewMatchScreenProps): Re
           player,
         ]),
       );
-      const newOpponents = opponentRows
+      const filledOpponents = opponentRows
         .map((row) => ({ number: Number(row.number), name: row.name.trim() }))
-        .filter((row) => Number.isInteger(row.number) && row.number > 0)
+        .filter((row) => Number.isInteger(row.number) && row.number > 0);
+
+      const newOpponents = filledOpponents
         .filter((row) => !knownOpponents.has(row.number))
         .map((row) => ({ teamId: opponent.id, number: row.number, name: row.name }));
       if (newOpponents.length > 0) await store.players.createMany(newOpponents);
+
+      for (const row of filledOpponents) {
+        const player = knownOpponents.get(row.number);
+        // Een lege naam overschrijft een naam die je eerder wél wist niet.
+        if (!player || row.name === '' || player.name === row.name) continue;
+        await store.players.update(player.id, { name: row.name });
+      }
 
       const match = await store.matches.create({
         date,

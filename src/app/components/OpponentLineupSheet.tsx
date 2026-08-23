@@ -13,6 +13,11 @@
  * Je vult in wat je nú in het veld ziet, niet hun beginopstelling: dat is wat je
  * op dat moment voor je hebt. De app rekent zelf terug naar het begin van de
  * set, want daar is de rotatietelling op gebouwd.
+ *
+ * Onderaan kun je ook een rugnummer toevoegen dat níét in de zes staat. Dat was
+ * er niet, en dan zat je vast zodra je er tijdens de warming-up eentje had
+ * gemist: een invalster die er later in komt, of een nummer dat je pas op het
+ * wedstrijdformulier zag.
  */
 
 import { useState, type ReactElement } from 'react';
@@ -31,6 +36,8 @@ export interface OpponentLineupSheetProps {
   known: readonly number[];
   /** Ontvangt de opstelling zoals die aan het begin van de set stond. */
   onSave: (atStartOfSet: Record<Zone, number | null>) => void;
+  /** Een rugnummer erbij zetten zonder het in de zes te zetten. */
+  onAddPlayer: (number: number, name: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -41,9 +48,30 @@ export function OpponentLineupSheet({
   rotation,
   known,
   onSave,
+  onAddPlayer,
   onClose,
 }: OpponentLineupSheetProps): ReactElement {
   const [draft, setDraft] = useState<Record<Zone, number | null>>({ ...EMPTY, ...current });
+  const [extraNumber, setExtraNumber] = useState('');
+  const [extraName, setExtraName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function addExtra(): Promise<void> {
+    const number = Number.parseInt(extraNumber, 10);
+    if (!Number.isInteger(number)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onAddPlayer(number, extraName.trim());
+      setExtraNumber('');
+      setExtraName('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function set(zone: Zone, value: string): void {
     const number = value.trim() === '' ? null : Number.parseInt(value, 10);
@@ -95,6 +123,38 @@ export function OpponentLineupSheet({
             Al gezien deze wedstrijd: {known.map((number) => `#${number}`).join(' ')}
           </p>
         )}
+
+        <h3 className="sheet__subtitle">Rugnummer erbij</h3>
+        <p className="step__hint">
+          Voor wie niet in de zes staat: een invalster, of een nummer dat je pas later zag. Een naam
+          hoeft niet.
+        </p>
+        <div className="roster__row">
+          <input
+            className="roster__number"
+            inputMode="numeric"
+            value={extraNumber}
+            onChange={(event) => setExtraNumber(event.target.value)}
+            placeholder="#"
+            aria-label="Rugnummer tegenstander toevoegen"
+          />
+          <input
+            className="roster__name"
+            value={extraName}
+            onChange={(event) => setExtraName(event.target.value)}
+            placeholder="Naam (optioneel)"
+            aria-label="Naam tegenstander toevoegen"
+          />
+          <button
+            type="button"
+            className="button"
+            disabled={busy || !Number.isInteger(Number.parseInt(extraNumber, 10))}
+            onClick={() => void addExtra()}
+          >
+            Toevoegen
+          </button>
+        </div>
+        {error && <p className="setup__error">{error}</p>}
 
         <div className="sheet__actions">
           <button type="button" className="button button--ghost" onClick={onClose}>

@@ -5,6 +5,11 @@
  * de stand in de app achter op het scorebord — en, vervelender, ook de rotatie.
  * Hier tel je zo'n punt bij. Het komt in de data te staan als 'niet ingevoerd',
  * dus de stand klopt weer zonder te doen alsof er acties bekend zijn.
+ *
+ * En wie er begon met serveren staat hier ook. Eén tik verkeerd bij die vraag en
+ * de rest van de set klopt niet meer — de rotatie telt door vanaf wie er
+ * serveerde — dus dat moet te herstellen zijn zonder de set opnieuw in te
+ * voeren.
  */
 
 import { useState, type ReactElement } from 'react';
@@ -13,14 +18,20 @@ import type { TeamSide } from '../../domain/types';
 export interface ScoreFixSheetProps {
   pointsUs: number;
   pointsThem: number;
+  /** Wie er volgens de app met serveren begon in deze set. */
+  startingServe: TeamSide | null;
   onAdd: (wonBy: TeamSide) => Promise<void>;
+  /** Zet de beginservice om en rekent de hele set opnieuw door. */
+  onFixStartingServe: (side: TeamSide) => Promise<void>;
   onClose: () => void;
 }
 
 export function ScoreFixSheet({
   pointsUs,
   pointsThem,
+  startingServe,
   onAdd,
+  onFixStartingServe,
   onClose,
 }: ScoreFixSheetProps): ReactElement {
   const [busy, setBusy] = useState(false);
@@ -29,6 +40,15 @@ export function ScoreFixSheet({
     setBusy(true);
     try {
       await onAdd(wonBy);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function fixServe(side: TeamSide): Promise<void> {
+    setBusy(true);
+    try {
+      await onFixStartingServe(side);
     } finally {
       setBusy(false);
     }
@@ -71,6 +91,28 @@ export function ScoreFixSheet({
           >
             + punt zij
           </button>
+        </div>
+
+        <h3 className="sheet__subtitle">Wie begon met serveren</h3>
+        <p className="sheet__principle">
+          Staat dit verkeerd, dan klopt de rotatie de hele set niet. Omzetten laat de acties en de
+          uitslagen staan; alleen wie er serveerde en in welke rotatie wordt opnieuw uitgerekend.
+        </p>
+        <div className="scorefix__buttons">
+          {(['us', 'them'] as const).map((side) => (
+            <button
+              key={side}
+              type="button"
+              className={`button ${side === 'us' ? 'button--us' : 'button--them'} ${
+                startingServe === side ? 'button--live' : ''
+              }`}
+              disabled={busy || startingServe === side}
+              onClick={() => void fixServe(side)}
+            >
+              {side === 'us' ? 'Wij' : 'Tegenstander'}
+              {startingServe === side ? ' · staat nu zo' : ''}
+            </button>
+          ))}
         </div>
 
         <div className="sheet__actions">
