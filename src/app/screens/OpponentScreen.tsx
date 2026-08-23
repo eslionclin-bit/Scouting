@@ -172,7 +172,9 @@ export function OpponentScreen({ opponentId, onExit, onOpenMatch }: OpponentScre
               er toch uitkomt is geen doelwit. Onder {MIN_RECEPTIONS_PER_PLAYER} passes zwijgt de
               tabel. Deze cijfers zijn afgeleid uit onze eigen servicekwalificaties, tenzij je hun
               pass zelf invoert: het is dus hoe wij haar zagen worstelen, niet een oordeel van een
-              scout aan hun kant.
+              scout aan hun kant. En een pass komt alleen op naam als er bij de service ook echt
+              een passer in dat vak stond — bij een korte bal loopt daar iemand anders naartoe, en
+              dan telt hij wel voor de ploeg maar niet voor een speelster.
             </p>
             <div className="tablewrap">
               <table className="stats">

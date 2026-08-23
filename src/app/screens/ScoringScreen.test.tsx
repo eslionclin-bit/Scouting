@@ -607,14 +607,12 @@ describe('als de tegenstander serveert', () => {
     await waitFor(async () => {
       const actions = await store.actions.listByMatch(fixture.match.id);
       expect(actions).toHaveLength(2);
+      const serve = actions.find((action) => action.type === 'serve');
+      const pass = actions.find((action) => action.type === 'reception');
+      expect(serve).toMatchObject({ team: 'them', quality: 'good', derived: true });
+      expect(pass).toMatchObject({ team: 'us', quality: 'poor' });
       // De service staat vóór de pass: een rally begint nu eenmaal met een service.
-      expect(actions[0]).toMatchObject({
-        team: 'them',
-        type: 'serve',
-        quality: 'good',
-        derived: true,
-      });
-      expect(actions[1]).toMatchObject({ team: 'us', type: 'reception', quality: 'poor' });
+      expect(serve!.sequence).toBeLessThan(pass!.sequence);
     });
 
     store.close();

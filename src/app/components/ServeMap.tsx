@@ -4,7 +4,14 @@
  * De cijfers hiervoor stonden al in het dossier, maar een tabel lees je niet
  * tijdens een time-out. Dit is dezelfde informatie in de vorm waarin je hem
  * nodig hebt: hun helft, zoals je hem vanaf de bank ziet, met per plek wat
- * onze service daar oplevert en wie er staat.
+ * onze service daar oplevert.
+ *
+ * Het rugnummer is wie er bij de service in dat vak stáát — niet per se wie de
+ * bal aanneemt. Dat mag ook niet door elkaar lopen: bij de opslag staat iedereen
+ * in zijn rotatievak, maar daarna schuift men op, en een passer-loper die
+ * midvoor staat mag prima een bal linksachter aannemen zolang ze rechts van de
+ * speelster op 4 en voor die op 6 blijft. Het advies gaat dus over de plek, en
+ * het nummer zegt wie daar op dat moment aan de bal moet zien te komen.
  *
  * Wat er níet gebeurt: kleuren op te weinig ballen. Een vak dat groen kleurt op
  * drie services is geen advies maar een toevalstreffer, en daar een wedstrijd
@@ -19,7 +26,10 @@ import { OPPONENT_GRID, ZONE_LABELS } from '../../domain/zones';
 
 export interface ServeMapProps {
   targets: ServeTargets;
-  /** Rugnummer per zone bij de tegenstander, als hun opstelling bekend is. */
+  /**
+   * Rugnummer per zone bij de tegenstander bij de service, als hun opstelling
+   * bekend is. Dat is hun rotatievak, niet waar ze daarna gaat staan.
+   */
   numbers?: Record<Zone, number | null>;
 }
 
@@ -70,7 +80,8 @@ export function ServeMap({ targets, numbers }: ServeMapProps): ReactElement {
           ? ' Nog niets om mee te vergelijken.'
           : ` Gemiddeld ${Math.round(gemiddeld * 100)}% over al onze services.`}{' '}
         Groen is beter dan dat, rood slechter; grijs betekent te weinig ballen om iets van te
-        vinden.
+        vinden. Het rugnummer is wie er bij de service in dat vak staat; wie de bal daarna
+        aanneemt kan iemand anders zijn.
       </p>
     </div>
   );
