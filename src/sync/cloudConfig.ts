@@ -75,3 +75,50 @@ export function generateTeamCode(): string {
   const digits = String(random[4]! % 10_000).padStart(4, '0');
   return [...words, digits].join('-');
 }
+
+/**
+ * De koppeling doorgeven als link.
+ *
+ * Een code overtikken op een telefoon gaat mis, en het gaat stil mis: het
+ * klavier verandert er iets aan, de server hasht hem, en je belandt zonder
+ * foutmelding bij een lege ploeg. Een link heeft dat probleem niet — je tikt
+ * hem aan en klaar.
+ *
+ * De code staat achter een `#`. Dat is geen opmaak maar het hele punt: alles na
+ * een hekje blijft in de browser en gaat nooit mee in een verzoek naar de
+ * server die de app uitlevert. GitHub ziet hem dus niet.
+ *
+ * Wat blijft gelden: wie de link heeft, heeft de code, en wie de code heeft
+ * ziet de wedstrijden van de ploeg. Stuur hem dus naar jezelf en naar je
+ * teamgenoten, en niet in een groep waar de tegenstander in zit.
+ */
+const LINK_KEY = 'ploeg';
+
+export function couplingLink(code: string): string {
+  const base = `${globalThis.location?.origin ?? ''}${globalThis.location?.pathname ?? '/'}`;
+  return `${base}#${LINK_KEY}=${encodeURIComponent(code)}`;
+}
+
+/**
+ * Leest de code uit de link en haalt hem daarna uit de adresbalk.
+ *
+ * Dat opruimen is niet cosmetisch: anders staat de code in de geschiedenis van
+ * de browser en in elke schermafbeelding die iemand van de app maakt.
+ */
+export function takeCouplingCode(): string | null {
+  const hash = globalThis.location?.hash ?? '';
+  const match = new RegExp(`[#&]${LINK_KEY}=([^&]+)`).exec(hash);
+  if (!match?.[1]) return null;
+
+  const code = normalizeTeamCode(decodeURIComponent(match[1]));
+
+  try {
+    const { origin, pathname, search } = globalThis.location;
+    globalThis.history?.replaceState(null, '', `${origin}${pathname}${search}`);
+  } catch {
+    // Lukt het opruimen niet, dan is de koppeling nog steeds gelukt; dat weegt
+    // zwaarder dan een nette adresbalk.
+  }
+
+  return code.length >= MIN_CODE_LENGTH ? code : null;
+}

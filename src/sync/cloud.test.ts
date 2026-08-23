@@ -5,7 +5,13 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CloudTransport, SyncCodeError } from './cloud';
-import { generateTeamCode, normalizeTeamCode, MIN_CODE_LENGTH } from './cloudConfig';
+import {
+  couplingLink,
+  generateTeamCode,
+  normalizeTeamCode,
+  takeCouplingCode,
+  MIN_CODE_LENGTH,
+} from './cloudConfig';
 import type { ChangeEnvelope } from './types';
 
 const config = { url: 'https://sync.example.workers.dev/', teamCode: 'wad-riet-molen-tij-0042' };
@@ -116,5 +122,59 @@ describe('een code die met de hand is overgetikt', () => {
   it('laat een code die al goed is met rust', () => {
     const code = generateTeamCode();
     expect(normalizeTeamCode(code)).toBe(code);
+  });
+});
+
+describe('koppelen via een link', () => {
+  const location = {
+    origin: 'https://eslionclin-bit.github.io',
+    pathname: '/Scouting/',
+    search: '',
+    hash: '',
+  };
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  function at(hash: string): void {
+    vi.stubGlobal('location', { ...location, hash });
+    vi.stubGlobal('history', { replaceState: vi.fn() });
+  }
+
+  it('zet de code achter een hekje, zodat hij nooit naar een server gaat', () => {
+    at('');
+    const link = couplingLink('wilg-molen-waard-wilg-1343');
+
+    expect(link).toBe(
+      'https://eslionclin-bit.github.io/Scouting/#ploeg=wilg-molen-waard-wilg-1343',
+    );
+    // Alles ná het hekje blijft in de browser. Dat is het hele punt: de server
+    // die de app uitlevert ziet de code niet.
+    expect(link.split('#')[0]).not.toContain('wilg');
+  });
+
+  it('leest de code uit de link en haalt hem uit de adresbalk', () => {
+    at('#ploeg=wilg-molen-waard-wilg-1343');
+
+    expect(takeCouplingCode()).toBe('wilg-molen-waard-wilg-1343');
+    // Opruimen is niet cosmetisch: anders staat de code in de geschiedenis van
+    // de browser en op elke schermafbeelding van de app.
+    expect(globalThis.history.replaceState).toHaveBeenCalledWith(
+      null,
+      '',
+      'https://eslionclin-bit.github.io/Scouting/',
+    );
+  });
+
+  it('vlakt af wat een klavier ervan gemaakt heeft', () => {
+    at('#ploeg=Wilg-Molen-Waard-Wilg-1343');
+    expect(takeCouplingCode()).toBe('wilg-molen-waard-wilg-1343');
+  });
+
+  it('geeft niets terug bij een gewone start of een te korte code', () => {
+    at('');
+    expect(takeCouplingCode()).toBeNull();
+
+    at('#ploeg=kort');
+    expect(takeCouplingCode()).toBeNull();
   });
 });

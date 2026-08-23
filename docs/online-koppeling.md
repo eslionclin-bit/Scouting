@@ -148,7 +148,21 @@ werkt:
 Open dat adres in een tabblad: je hoort `{"error":"Alleen POST."}` te zien. Dat
 is goed nieuws — de worker draait en weigert netjes wat hij niet moet doen.
 
-Daarna, op elk apparaat: **Instellingen → Online koppeling**. Op het eerste
+Daarna, op **één** apparaat: **Instellingen → Online koppeling** → *Code voor mij
+maken* → *Koppelen*.
+
+Elk volgend apparaat gaat via een link. Op het gekoppelde apparaat staat
+**Koppeling doorsturen**: stuur die link naar jezelf of naar een teamgenoot, tik
+hem aan op het andere apparaat, en dat apparaat hoort erbij. Niets over te
+tikken.
+
+Dat overtikken is er met opzet uit gehaald. Een code met de hand invoeren op een
+telefoon gaat mis, en het gaat *stil* mis: het klavier zet er een hoofdletter of
+een spatie in, de server hasht de code, en je belandt zonder foutmelding bij een
+lege ploeg. De code staat in de link achter een `#`, en alles na een hekje blijft
+in de browser — de server die de app uitlevert ziet hem dus nooit. Wie de link
+heeft ziet wel de wedstrijden van de ploeg, dus stuur hem niet in een groep waar
+de tegenstander in zit. Op het eerste
 apparaat laat je de app een code maken en schrijf je hem op; op de andere vul je
 dezelfde in.
 

@@ -15,6 +15,9 @@ import type { PeerSession } from '../hooks/usePeerSession';
 import { useQuery, useStore } from '../StoreProvider';
 
 export interface HomeScreenProps {
+  /** Dit apparaat is zojuist via een link aan de ploeg gekoppeld. */
+  justCoupled?: boolean;
+  onDismissCoupled?: () => void;
   session: PeerSession;
   /** Rolkeuze hoort bij het openen van een wedstrijd (projectbrief §6). */
   onOpenMatch: (matchId: string, role: DeviceRole) => void;
@@ -26,6 +29,8 @@ export interface HomeScreenProps {
 }
 
 export function HomeScreen({
+  justCoupled = false,
+  onDismissCoupled,
   session,
   onOpenMatch,
   onOpenDashboard,
@@ -140,6 +145,16 @@ export function HomeScreen({
           </button>
         </div>
       </header>
+
+      {justCoupled && (
+        <p className="home__coupled">
+          Dit apparaat hoort nu bij de ploeg. Wedstrijden lopen vanzelf mee zodra er internet is —
+          je hoeft verder niets in te stellen.
+          <button type="button" className="button button--ghost" onClick={onDismissCoupled}>
+            Begrepen
+          </button>
+        </p>
+      )}
 
       {readError && <p className="home__error">{readError}</p>}
 

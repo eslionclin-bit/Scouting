@@ -8,7 +8,12 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import { useCloudSync } from '../hooks/useCloudSync';
-import { generateTeamCode, normalizeTeamCode, MIN_CODE_LENGTH } from '../../sync/cloudConfig';
+import {
+  couplingLink,
+  generateTeamCode,
+  normalizeTeamCode,
+  MIN_CODE_LENGTH,
+} from '../../sync/cloudConfig';
 import { OPPONENT_DETAILS, type AppSettings, type OpponentDetail } from '../../domain/settings';
 import { useQuery, useStore } from '../StoreProvider';
 
@@ -92,6 +97,41 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
       cancelled = true;
     };
   }, [store]);
+
+  /**
+   * De koppeling doorgeven.
+   *
+   * Delen als het kan (dan kies je gewoon WhatsApp), anders naar het klembord.
+   * Wat er níet meer gebeurt is iemand een code laten overtikken: dat ging op
+   * een telefoon stil mis, want het klavier verandert er iets aan en de server
+   * kan niet zien dat dat niet de bedoeling was.
+   */
+  const [shared, setShared] = useState<string | null>(null);
+
+  async function shareCoupling(code: string): Promise<void> {
+    const link = couplingLink(code);
+    const share = (globalThis.navigator as { share?: (data: unknown) => Promise<void> }).share;
+
+    if (typeof share === 'function') {
+      try {
+        await share.call(globalThis.navigator, {
+          title: 'Volleybal scouting',
+          text: 'Tik deze link aan op het andere apparaat; dan hoort het bij de ploeg.',
+          url: link,
+        });
+        return;
+      } catch {
+        // Delen afgebroken of niet toegestaan: dan het klembord.
+      }
+    }
+
+    try {
+      await globalThis.navigator.clipboard.writeText(link);
+      setShared('Link gekopieerd. Plak hem in een bericht aan jezelf of aan het team.');
+    } catch {
+      setShared(link);
+    }
+  }
 
   async function saveCode(code: string | null): Promise<void> {
     setBusy(true);
@@ -236,7 +276,15 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
                     </div>
                   </li>
                 </ul>
-                {cloud.state.lastError && <p className="setup__error">{cloud.state.lastError}</p>}
+                {/*
+                  Alleen tonen waar je iets mee kunt. 'Failed to fetch' is voor
+                  een invoerder geen informatie maar een schrikreactie, en de
+                  gewone toestand in een sporthal zonder bereik. Een code die
+                  niet deugt is wél iets om te melden: dat lost zichzelf niet op.
+                */}
+                {cloud.state.lastError && /code/i.test(cloud.state.lastError) && (
+                  <p className="setup__error">{cloud.state.lastError}</p>
+                )}
 
                 {/*
                   Het enige geval dat de server niet zelf kan zien: een typefout
@@ -251,8 +299,23 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
                   </p>
                 )}
 
+                <h3 className="sheet__subtitle">Een apparaat erbij</h3>
                 <p className="card__hint">
-                  Ploegcode: <code>{teamCode}</code>. Vul dezelfde in op de andere apparaten.
+                  Stuur de link naar jezelf of naar een teamgenoot en tik hem aan op het andere
+                  apparaat. Dat is alles — niets over te tikken. Wie de link heeft, ziet de
+                  wedstrijden van de ploeg, dus stuur hem niet in een groep waar de tegenstander
+                  in zit.
+                </p>
+                <button
+                  type="button"
+                  className="button button--primary"
+                  onClick={() => void shareCoupling(teamCode)}
+                >
+                  Koppeling doorsturen
+                </button>
+                {shared && <p className="card__hint">{shared}</p>}
+                <p className="card__hint">
+                  Ploegcode, voor als je hem ergens wilt bewaren: <code>{teamCode}</code>
                 </p>
                 <button
                   type="button"
@@ -317,15 +380,21 @@ export function SettingsScreen({ onExit, onOpenReference }: SettingsScreenProps)
   );
 }
 
-/** De vier standen van de sync, in gewone taal. */
+/**
+ * De standen van de sync, in gewone taal.
+ *
+ * 'Er ging iets mis' stond hier eerst bij een mislukte ronde. Dat is de gewone
+ * toestand in een sporthal zonder bereik, en het laat een app die precies doet
+ * wat hij hoort te doen — wachten tot er verbinding is — stuk lijken. Er gaat
+ * niets verloren zolang de outbox vol staat, en dat is wat er hoort te staan.
+ */
 function cloudLabel(status: string): string {
   switch (status) {
     case 'syncing':
       return 'Bezig met bijwerken';
     case 'offline':
-      return 'Geen verbinding — het wacht';
     case 'error':
-      return 'Er ging iets mis';
+      return 'Wacht op verbinding';
     default:
       return 'Gekoppeld';
   }

@@ -17,6 +17,7 @@ import { ScoringScreen } from './screens/ScoringScreen';
 import { TeamScreen } from './screens/TeamScreen';
 import { CoachScreen } from './screens/CoachScreen';
 import { useStore } from './StoreProvider';
+import { takeCouplingCode } from '../sync/cloudConfig';
 
 type View =
   | { name: 'home' }
@@ -83,11 +84,29 @@ export function App(): ReactElement {
   });
   const session = usePeerSession(scope.matchId, scope.role);
 
+  /**
+   * Gekoppeld via een link.
+   *
+   * Dit is de hele koppelprocedure voor een tweede apparaat: je tikt op een
+   * link die iemand je stuurt, en klaar. Geen code overtikken — dat ging op een
+   * telefoon stil mis, want het klavier verandert er iets aan en de server kan
+   * niet zien dat dat niet de bedoeling was.
+   */
+  const [coupled, setCoupled] = useState(false);
+
   // Een tablet die tijdens de wedstrijd op slot gaat of de app afsluit, komt
   // terug in de wedstrijd waar hij mee bezig was.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      // Eerst de link: staat daar een ploegcode in, dan hoort dit apparaat er
+      // vanaf nu bij, nog voor er een scherm getekend wordt.
+      const fromLink = takeCouplingCode();
+      if (fromLink) {
+        await store.setTeamCode(fromLink);
+        if (!cancelled) setCoupled(true);
+      }
+
       const matchId = await store.getActiveMatchId();
       if (cancelled) {
         return;
@@ -199,6 +218,8 @@ export function App(): ReactElement {
     default:
       return (
         <HomeScreen
+          justCoupled={coupled}
+          onDismissCoupled={() => setCoupled(false)}
           session={session}
           onNewMatch={() => go({ name: 'new' })}
           onOpenDashboard={(matchId) => go({ name: 'dashboard', matchId })}
