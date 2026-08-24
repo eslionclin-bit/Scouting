@@ -25,6 +25,7 @@ export interface HomeScreenProps {
   onOpenOpponent: (opponentId: string) => void;
   onOpenTeam: () => void;
   onOpenSettings: () => void;
+  onOpenVideo: () => void;
   onNewMatch: () => void;
 }
 
@@ -37,6 +38,7 @@ export function HomeScreen({
   onOpenOpponent,
   onOpenTeam,
   onOpenSettings,
+  onOpenVideo,
   onNewMatch,
 }: HomeScreenProps): ReactElement {
   const store = useStore();
@@ -150,6 +152,14 @@ export function HomeScreen({
               onChange={(event) => void readFiles(event)}
             />
           </label>
+          {/*
+            Live invoeren gaat te snel — dat is de eerlijke conclusie na een paar
+            wedstrijden. Dit is de uitweg: de opname erbij pakken en op je eigen
+            tempo invoeren.
+          */}
+          <button type="button" className="button" onClick={onOpenVideo}>
+            Wedstrijd van beeld
+          </button>
           <button type="button" className="button" onClick={onOpenSettings}>
             Instellingen
           </button>
