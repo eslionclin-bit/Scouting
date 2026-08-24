@@ -11,10 +11,12 @@
  *    opgeslagen; de app krijgt alleen een verwijzing naar het bestand zolang dit
  *    scherm openstaat. Er staan minderjarigen op zulke beelden, en dan is 'we
  *    uploaden het even naar een server' geen optie die je terloops neemt.
- *  - **Beweging, geen geluid.** In een sporthal spelen meer wedstrijden tegelijk
- *    en die fluiten ook. Wat er buiten jullie veld gebeurt hoort niet mee te
- *    tellen, en het enige wat je daar écht buiten kunt houden is beeld: met het
- *    kader hieronder snijd je de rest weg.
+ *  - **Beweging én de fluit.** Beweging vertelt waar er gespeeld wordt — en is
+ *    te plaatsen, want met het kader snijd je het veld ernaast weg. De fluit
+ *    vertelt of het een rally wás: elke rally zit tussen een fluit die de
+ *    service vrijgeeft en een die de bal dood verklaart. Bewegen tussen de
+ *    rally's door heeft dat niet. Dat er meer wedstrijden tegelijk spelen blijft
+ *    waar; daarom telt de fluit nooit een rally weg, hij bevestigt er een.
  *  - **Het kijken gaat versneld.** De app speelt de opname op zestien keer de
  *    snelheid af zonder beeld te tonen, en meet per beeldje hoeveel er
  *    veranderde. Een wedstrijd van anderhalf uur is daarmee in ongeveer zes
@@ -31,10 +33,13 @@ import {
   maskFor,
   noteFor,
   ralliesFrom,
+  judge,
+  looksLikeRally,
+  whistlesFrom,
   type CornerKey,
   type Corners,
+  type JudgedSpan,
   type MotionSample,
-  type RallySpan,
 } from '../../domain/rallyIndex';
 
 export interface VideoScreenProps {
@@ -123,6 +128,19 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
+  /**
+   * Het meeluisteren, één keer opgezet.
+   *
+   * Een videobeeld mag maar één keer aan de geluidsketen gehangen worden; een
+   * tweede keer is een fout die de rest van het scherm meesleurt. Daarom blijft
+   * hij hier staan, ook tussen twee zoekopdrachten door.
+   */
+  const soundRef = useRef<{
+    context: AudioContext;
+    analyser: AnalyserNode;
+    gain: GainNode;
+    band: [number, number];
+  } | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -140,7 +158,25 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   const dragging = useRef<CornerKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [rallies, setRallies] = useState<RallySpan[] | null>(null);
+  const [rallies, setRallies] = useState<JudgedSpan[] | null>(null);
+  /**
+   * Hoeveel fluitsignalen er gehoord zijn.
+   *
+   * Nul betekent niet 'er is niet gefloten' maar 'we weten het niet' — geen
+   * geluidsspoor, een browser die niet meeluistert, een telefoon die de opname
+   * zonder geluid maakte. Alleen bij genoeg fluiten mag het oordeel meewegen.
+   */
+  const [whistleCount, setWhistleCount] = useState(0);
+  /** Stukken beweging zonder fluit: standaard uit het zicht, nooit weggegooid. */
+  const [showDoubtful, setShowDoubtful] = useState(false);
+  /**
+   * Het instellen (kader, begintijd, zoeken) open of dicht.
+   *
+   * Zodra er rally's zijn gaat het dicht. Anders staat er tussen de video en de
+   * knoppen 'punt wij / punt zij' drie schermen aan instellingen in, en scrol je
+   * na elke rally weer omlaag — honderdvijfenzestig keer.
+   */
+  const [setupOpen, setSetupOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** Los van de zoekfout: een opmerking bij het instellen van de begintijd. */
   const [startNote, setStartNote] = useState<string | null>(null);
@@ -161,6 +197,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     setRemoved(new Set());
     setDone(new Set());
     setPlaying(null);
+    setSetupOpen(true);
   }
 
   /** Welke hoek zit het dichtst bij waar je tikte. */
@@ -226,6 +263,52 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
   }
 
+  /**
+   * Meeluisteren naar de fluit tijdens dezelfde snelle scan.
+   *
+   * Dat het op zestien keer de snelheid werkt is uitgeprobeerd: de browser rekt
+   * het geluid op zonder de toonhoogte te veranderen, dus een fluit van drie
+   * en een halve kilohertz blijft op drie en een halve kilohertz staan — hij
+   * duurt alleen zestien keer zo kort. In de proef kwam hij er telkens ruim
+   * boven uit: een piek van 149 tegen een zaalgeluid van 3.
+   *
+   * Lukt het niet — geen geluidsspoor, een browser die dwarsligt — dan geeft
+   * dit niets terug en zoekt de app gewoon op beweging alleen.
+   */
+  function listen(video: HTMLVideoElement): typeof soundRef.current {
+    if (soundRef.current) return soundRef.current;
+    type WithLegacy = typeof window & { webkitAudioContext?: typeof AudioContext };
+    const Ctor = window.AudioContext ?? (window as WithLegacy).webkitAudioContext;
+    if (!Ctor) return null;
+    try {
+      const context = new Ctor();
+      const source = context.createMediaElementSource(video);
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0;
+      // De regelbare kraan zit ná het meten: zo kan het geluid tijdens het
+      // zoeken dicht (zestien keer versneld geluid is niet om aan te horen)
+      // terwijl er wel gemeten wordt. Dempen met de video zelf zou ook de
+      // meting op nul zetten.
+      const gain = context.createGain();
+      source.connect(analyser);
+      analyser.connect(gain);
+      gain.connect(context.destination);
+      void context.resume();
+      const perBin = context.sampleRate / analyser.fftSize;
+      // De band waar een scheidsrechtersfluit in zit. Ruim genomen: de ene fluit
+      // is de andere niet, en een erbsenfluit klinkt hoger dan een pea-less.
+      const band: [number, number] = [
+        Math.floor(2600 / perBin),
+        Math.min(analyser.frequencyBinCount - 1, Math.ceil(4400 / perBin)),
+      ];
+      soundRef.current = { context, analyser, gain, band };
+      return soundRef.current;
+    } catch {
+      return null;
+    }
+  }
+
   async function analyse(): Promise<void> {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -267,6 +350,26 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     let previous: Float32Array | null = null;
     let lastMeasured = -Infinity;
 
+    const sound = listen(video);
+    const bins = sound ? new Uint8Array(sound.analyser.frequencyBinCount) : null;
+    /**
+     * Het hardste fluitgeluid sinds de vorige meting.
+     *
+     * Er wordt vaker naar het geluid gekeken dan er metingen worden bewaard.
+     * Een fluit duurt op zestien keer de snelheid nog geen vijftigste seconde;
+     * wie alleen op de meetmomenten luistert, hoort hem net niet.
+     */
+    let loudest = 0;
+
+    const hear = (): void => {
+      if (!sound || !bins) return;
+      sound.analyser.getByteFrequencyData(bins);
+      const [from, to] = sound.band;
+      let total = 0;
+      for (let i = from; i <= to; i++) total += bins[i]!;
+      loudest = Math.max(loudest, total / (to - from + 1));
+    };
+
     // Eén keer uitrekenen welke vakjes binnen jullie veld vallen; daarna gaat er
     // per beeldje alleen nog een optelling overheen.
     const mask = maskFor(corners, GRID.width, GRID.height);
@@ -292,7 +395,10 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
         for (let i = 0; i < grey.length; i++) {
           if (mask[i]) sum += Math.abs(grey[i]! - previous[i]!);
         }
-        samples.push({ at, energy: sum / counted });
+        samples.push(
+          sound ? { at, energy: sum / counted, whistle: loudest } : { at, energy: sum / counted },
+        );
+        loudest = 0;
       }
       previous = grey;
       // Zonder bekende lengte kan er geen percentage: dan laat het scherm zien
@@ -302,8 +408,11 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
 
     try {
       await new Promise<void>((resolve, reject) => {
+        // Wat er tijdens het zoeken loopt en achteraf uit moet.
+        const ears: (number | undefined)[] = [];
         const stop = (): void => {
           video.pause();
+          for (const ear of ears) if (ear !== undefined) window.clearInterval(ear);
           video.removeEventListener('ended', onEnded);
           resolve();
         };
@@ -316,7 +425,12 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
         // helemaal niet gevonden. De aanloop offeren we liever op dan het spel.
         const runUp = Math.max(0, from - 3);
         if (Number.isFinite(runUp) && runUp > 0) video.currentTime = runUp;
-        video.muted = true;
+        if (sound) {
+          sound.gain.gain.value = 0;
+          video.muted = false;
+        } else {
+          video.muted = true;
+        }
 
         // Zo snel als de browser wil. Sommige weigeren boven de vier, dus we
         // proberen van hoog naar laag en nemen wat blijft staan.
@@ -338,6 +452,13 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
           perFrame?.(tick);
         };
 
+        // Luisteren gaat op een eigen klokje en niet op de beeldjes. Op zestien
+        // keer de snelheid duurt een fluit nog geen twee honderdsten seconde,
+        // en beeldjes komen hooguit zestig keer per seconde langs — dan hoor je
+        // hem net niet. Dit kijkt vaak genoeg om er niet overheen te stappen.
+        const ear = sound ? window.setInterval(hear, 8) : undefined;
+        ears.push(ear);
+
         let timer: number | undefined;
         if (perFrame) {
           perFrame(tick);
@@ -358,8 +479,24 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
         });
       });
 
-      const found = ralliesFrom(samples);
+      const spans = ralliesFrom(samples);
+      // Het geluid loopt achter op het beeld: de meter kijkt altijd naar het
+      // venster dat net voorbij is, en de geluidskaart doet er ook iets over.
+      // In opnametijd is dat zoveel keer meer als de opname sneller liep.
+      const lagSeconds = sound
+        ? (sound.analyser.fftSize / sound.context.sampleRate / 2 +
+            sound.context.baseLatency +
+            (sound.context.outputLatency || 0)) *
+          video.playbackRate
+        : 0;
+      const heard = whistlesFrom(samples, { lagSeconds });
+      const found = judge(spans, heard);
+      setWhistleCount(heard.length);
+      // Alleen verbergen als er genoeg gefloten is om iets te betekenen. Anders
+      // zou een opname zonder bruikbaar geluid de hele lijst leegvegen.
+      setShowDoubtful(heard.length < spans.length);
       setRallies(found);
+      setSetupOpen(found.length === 0);
       if (found.length === 0) {
         setError(
           samples.length < 10
@@ -372,6 +509,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       video.playbackRate = 1;
+      if (soundRef.current) soundRef.current.gain.gain.value = 1;
+      video.muted = false;
       setBusy(false);
       setProgress(1);
     }
@@ -391,7 +530,9 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     if (!video || !span) return;
     video.playbackRate = 1;
     video.muted = false;
-    video.currentTime = Math.max(0, span.start - 1);
+    // Is de servicefluit gehoord, dan begint het daar: dat is exact het moment
+    // waarop de rally vrijgegeven werd, preciezer dan een seconde gokken.
+    video.currentTime = Math.max(0, span.serveWhistle !== null ? span.serveWhistle - 0.5 : span.start - 1);
     setPlaying(index);
     // De lijst staat onder de speler; zonder dit kijk je naar de knoppen terwijl
     // de rally boven je scherm afspeelt.
@@ -439,11 +580,30 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     }
   }
 
+  /**
+   * Mag de fluit meepraten over deze opname?
+   *
+   * Pas als er ongeveer één fluit per gevonden rally gehoord is. Daaronder zegt
+   * 'geen fluit bij deze rally' niets over die rally en alles over het geluid.
+   */
+  const whistlesUsable = rallies !== null && rallies.length > 0 && whistleCount >= rallies.length;
+
+  /** Beweging zonder enige fluit eromheen: waarschijnlijk geen rally. */
+  function doubtful(index: number): boolean {
+    const span = rallies?.[index];
+    return span !== undefined && whistlesUsable && !looksLikeRally(span);
+  }
+
+  /** Staat hij nu niet in de lijst — weggegooid of als twijfelgeval verborgen. */
+  function outOfSight(index: number): boolean {
+    return removed.has(index) || (!showDoubtful && doubtful(index));
+  }
+
   /** Door naar de eerstvolgende die er nog staat, zonder oordeel. */
   function advance(from: number): void {
     if (!rallies) return;
     for (let i = from + 1; i < rallies.length; i++) {
-      if (!removed.has(i)) return play(i);
+      if (!outOfSight(i)) return play(i);
     }
     videoRef.current?.pause();
     setPlaying(null);
@@ -463,6 +623,12 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     }
   }
 
+  const doubtfulCount =
+    rallies?.reduce(
+      (count, _span, index) => count + (doubtful(index) && !removed.has(index) ? 1 : 0),
+      0,
+    ) ?? 0;
+
   // De video stopt zelf aan het eind van de rally die je aantikte.
   useEffect(() => {
     const video = videoRef.current;
@@ -470,8 +636,11 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     const span = rallies[playing];
     if (!span) return;
 
+    // Tot de eindfluit als die er is: dan zie je de bal nog vallen en hoor je
+    // hem doodverklaren.
+    const until = Math.max(span.end, span.endWhistle ?? span.end) + 0.5;
     const check = (): void => {
-      if (video.currentTime >= span.end + 0.5) {
+      if (video.currentTime >= until) {
         video.pause();
       }
     };
@@ -567,6 +736,20 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
             onSeeked={drawPreview}
           />
 
+          {!setupOpen && (
+            // Dicht: alleen een regel om het weer open te doen. De video staat
+            // dan direct boven het blokje met 'punt wij / punt zij'.
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => setSetupOpen(true)}
+            >
+              Kader, begintijd of opnieuw zoeken ▾
+            </button>
+          )}
+
+          {setupOpen && (
+            <>
           <section className="card">
             <h2>2 · Waar begint het spel</h2>
             <p className="card__hint">
@@ -708,7 +891,20 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
               </button>
             )}
             {error && <p className="setup__error">{error}</p>}
+            {rallies && rallies.length > 0 && (
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setSetupOpen(false)}
+              >
+                Instellingen dichtklappen ▴
+              </button>
+            )}
           </section>
+            </>
+          )}
+
+          {!setupOpen && error && <p className="setup__error">{error}</p>}
 
           <canvas ref={canvasRef} className="visually-hidden" />
 
@@ -724,6 +920,33 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                 {removed.size > 0 ? ` · ${removed.size} weggegooid` : ''}
                 {done.size > 0 ? ` · ${done.size} gedaan` : ''}
               </h2>
+              {whistlesUsable ? (
+                <p className="card__hint">
+                  {whistleCount} fluitsignalen gehoord.{' '}
+                  {doubtfulCount > 0
+                    ? showDoubtful
+                      ? `${doubtfulCount} stukken beweging hebben er geen — waarschijnlijk geen rally.`
+                      : `${doubtfulCount} stukken beweging zonder fluitsignaal staan hieronder niet tussen.`
+                    : 'Bij elk stuk beweging hoorde er een — dit lijkt allemaal spel.'}
+                </p>
+              ) : (
+                <p className="card__hint">
+                  {whistleCount === 0
+                    ? 'Er is geen fluitsignaal gehoord. Staat er geluid op de opname? Zonder geluid zoekt de app alleen op beweging, en dan staat er meer tussen dat geen rally is.'
+                    : `Maar ${whistleCount} fluitsignalen gehoord op ${rallies.length} stukken beweging. Te weinig om er rally’s mee te beoordelen — de lijst hieronder gaat dus alleen op beweging.`}
+                </p>
+              )}
+              {whistlesUsable && doubtfulCount > 0 && (
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setShowDoubtful((open) => !open)}
+                >
+                  {showDoubtful
+                    ? `Twijfelgevallen verbergen (${doubtfulCount})`
+                    : `Toon de ${doubtfulCount} zonder fluitsignaal`}
+                </button>
+              )}
               <p className="card__hint">
                 Tik op een rally: de video springt erheen en <strong>stopt vanzelf aan het eind</strong>.
                 {match?.set
@@ -812,8 +1035,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
 
               <ul className="rallylist">
                 {rallies.map((span, index) => {
-                  if (removed.has(index)) return null;
-                  const note = noteFor(span);
+                  if (outOfSight(index)) return null;
+                  const note = doubtful(index) ? 'geen fluitsignaal gehoord' : noteFor(span);
                   return (
                     <li key={`${span.start}`} className="rallylist__row">
                       <button

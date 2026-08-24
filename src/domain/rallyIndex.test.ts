@@ -4,6 +4,9 @@ import {
   noteFor,
   ralliesFrom,
   splitPoint,
+  whistlesFrom,
+  judge,
+  looksLikeRally,
   type Corners,
   type MotionSample,
 } from './rallyIndex';
@@ -144,5 +147,135 @@ describe('de vierhoek om jullie veld', () => {
     const on = mask.reduce((sum, value) => sum + value, 0);
     expect(on).toBeGreaterThan(40 * 40 * 0.45);
     expect(on).toBeLessThan(40 * 40 * 0.55);
+  });
+});
+
+/** Dezelfde metingen, met fluitsignalen op de opgegeven momenten. */
+function withSound(
+  base: readonly MotionSample[],
+  blows: readonly { at: number; level: number }[],
+  floor = 4,
+): MotionSample[] {
+  return base.map((sample, index) => {
+    const blow = blows.find((item) => Math.abs(item.at - sample.at) < 0.3);
+    const jitter = ((index * 13) % 7) / 3;
+    return { ...sample, whistle: blow ? blow.level : floor + jitter };
+  });
+}
+
+describe('de fluitsignalen eruit halen', () => {
+  it('hoort ze waar ze zitten en nergens anders', () => {
+    const heard = whistlesFrom(withSound(samples([[10, 18]], 60), [
+      { at: 8, level: 200 },
+      { at: 18.5, level: 190 },
+    ]));
+    expect(heard.map((peak) => Math.round(peak.at))).toEqual([8, 18]);
+  });
+
+  it('hoort niets in een opname zonder fluit', () => {
+    expect(whistlesFrom(withSound(samples([[10, 18]], 60), []))).toEqual([]);
+  });
+
+  it('zwijgt netjes als er niet meegeluisterd kon worden', () => {
+    expect(whistlesFrom(samples([[10, 18]], 60))).toEqual([]);
+  });
+
+  it('houdt ook de zachtere fluiten', () => {
+    // Hardheid zegt niets over afstand: dezelfde fluit meet de ene keer 200 en
+    // de andere keer 70, puur door waar de meting in de toon viel. Wie op die
+    // getallen filtert, gooit echte rally’s weg.
+    const blows = [8, 18.5, 30, 40, 50, 60].map((at, index) => ({
+      at,
+      level: index % 2 === 0 ? 200 : 70,
+    }));
+    expect(whistlesFrom(withSound(samples([[10, 18]], 70), blows))).toHaveLength(6);
+  });
+
+  it('rekent de meetvertraging terug', () => {
+    // Het geluid komt later binnen dan het beeld; met de vertraging erbij hoort
+    // de fluit weer bij het moment waarop hij klonk.
+    const heard = whistlesFrom(
+      withSound(samples([[10, 18]], 60), [{ at: 8.5, level: 200 }]),
+      { lagSeconds: 0.5 },
+    );
+    // De metingen liggen op een vijfde seconde; dichterbij dan dat kan niet.
+    expect(Math.abs(heard[0]!.at - 8)).toBeLessThanOrEqual(0.2);
+  });
+
+  it('hoort een fluit boven een zaal die zelf al ruist', () => {
+    const noisy = samples([[10, 18]], 60).map((sample, index) => ({
+      ...sample,
+      whistle: 40 + ((index * 13) % 9),
+    }));
+    noisy[40] = { ...noisy[40]!, whistle: 190 };
+    const heard = whistlesFrom(noisy);
+    expect(heard).toHaveLength(1);
+    expect(heard[0]!.at).toBeCloseTo(8, 1);
+  });
+});
+
+describe('een gevonden stuk beweging beoordelen', () => {
+  const spans = [
+    { start: 10, end: 18 },
+    { start: 30, end: 36 },
+  ];
+
+  it('koppelt de service- en eindfluit aan de juiste rally', () => {
+    const judged = judge(spans, [
+      { at: 7, level: 200 },
+      { at: 19, level: 200 },
+      { at: 27, level: 200 },
+      { at: 37, level: 200 },
+    ]);
+    expect(judged[0]!.serveWhistle).toBe(7);
+    expect(judged[0]!.endWhistle).toBe(19);
+    expect(judged[1]!.serveWhistle).toBe(27);
+    expect(judged[1]!.endWhistle).toBe(37);
+    expect(judged.every(looksLikeRally)).toBe(true);
+  });
+
+  it('rekent de eindfluit van de vorige rally niet als service van de volgende', () => {
+    // Een korte pauze: de eindfluit van rally 1 ligt binnen negen seconden
+    // vóór het begin van rally 2, maar hij hoort bij rally 1.
+    const judged = judge(
+      [
+        { start: 10, end: 18 },
+        { start: 22, end: 28 },
+      ],
+      [{ at: 18.5, level: 200 }],
+    );
+    expect(judged[0]!.endWhistle).toBe(18.5);
+    expect(judged[1]!.serveWhistle).toBeNull();
+  });
+
+  it('herkent bewegen tussen de rally’s door aan het ontbreken van fluit', () => {
+    const judged = judge(
+      [
+        { start: 10, end: 18 },
+        // Twee ploegen die van speelhelft wisselen: beweging, geen fluit.
+        { start: 45, end: 52 },
+      ],
+      [
+        { at: 7, level: 200 },
+        { at: 19, level: 200 },
+      ],
+    );
+    expect(looksLikeRally(judged[0]!)).toBe(true);
+    expect(looksLikeRally(judged[1]!)).toBe(false);
+  });
+
+  it('geeft een fluit aan het stuk beweging waar hij het dichtst bij ligt', () => {
+    // Tussen een rally en het gerommel erna ligt de eindfluit. Die hoort bij de
+    // rally, ook al valt hij binnen het zoekbereik van het gerommel.
+    const judged = judge(
+      [
+        { start: 10, end: 18 },
+        { start: 24, end: 30 },
+      ],
+      [{ at: 18.6, level: 200 }],
+    );
+    expect(judged[0]!.endWhistle).toBe(18.6);
+    expect(judged[1]!.serveWhistle).toBeNull();
+    expect(looksLikeRally(judged[1]!)).toBe(false);
   });
 });

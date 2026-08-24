@@ -6,12 +6,19 @@
  * live hoeft: je springt van rally naar rally en kijkt zo vaak terug als je
  * wilt.
  *
- * Het voor de hand liggende idee — luisteren naar de scheidsrechtersfluit —
- * werkt in een sporthal niet. Daar spelen meestal meer wedstrijden tegelijk, en
- * die fluiten ook; een fluit vertelt niet van welk veld hij komt. Dus gaat het
- * op beweging: tijdens een rally beweegt er veel in het veld, ertussen staat
- * iedereen te wachten. En beweging is wél te plaatsen — wat buiten het veld
- * gebeurt, snijd je gewoon uit beeld.
+ * Het gaat op twee dingen tegelijk. **Beweging**: tijdens een rally beweegt er
+ * veel in het veld, ertussen staat iedereen te wachten — en beweging is te
+ * plaatsen, want wat buiten jullie veld gebeurt snijd je met het kader weg.
+ * En **de fluit**: elke rally in volleybal zit tussen twee fluitsignalen, een
+ * om de service vrij te geven en een om de bal dood te verklaren. Dat is een
+ * patroon waar bewegen tussen de rally's door niet aan voldoet.
+ *
+ * Het bezwaar tegen geluid — in een sporthal spelen meer wedstrijden tegelijk
+ * en die fluiten ook — is niet weg, maar wel kleiner te maken. Jullie
+ * scheidsrechter staat vlak bij de camera en klinkt daarom harder dan die twee
+ * velden verderop. Waar dat verschil duidelijk in de opname zit, gebruikt de
+ * app het; waar het er niet in zit, doet hij alsof alle fluiten kunnen kloppen.
+ * Nooit andersom: een fluit die niet te plaatsen is, mag geen rally wegnemen.
  *
  * Deze module rekent alleen; het aflezen van de beelden gebeurt in het scherm
  * dat hem gebruikt. Zo is de redenering te testen zonder video.
@@ -23,6 +30,14 @@ export interface MotionSample {
   at: number;
   /** Hoeveel er veranderde ten opzichte van het vorige beeld. */
   energy: number;
+  /**
+   * Hoeveel geluid er op dat moment in de fluitband zat (0 tot 255).
+   *
+   * Ontbreekt als er niet meegeluisterd kon worden — geen geluidsspoor, of een
+   * browser die het niet toelaat. Dan werkt alles hieronder gewoon door op
+   * beweging alleen.
+   */
+  whistle?: number;
 }
 
 export interface RallySpan {
@@ -159,6 +174,175 @@ export function ralliesFrom(
   }
 
   return merged.filter((span) => span.end - span.start >= minSeconds);
+}
+
+/** Eén fluitsignaal: wanneer, en hoe hard. */
+export interface Whistle {
+  at: number;
+  level: number;
+}
+
+export interface WhistleOptions {
+  /**
+   * Onder deze waarde is het geen fluit maar zaalgeluid.
+   *
+   * Anders dan bij beweging kan hier een vaste ondergrens onder: de meting is
+   * een vaste schaal — hoeveel geluid er in de fluitband zat, van 0 tot 255.
+   */
+  minLevel?: number;
+  /** Hoeveel een fluit boven het gewone zaalgeluid moet uitkomen. */
+  marginOverNoise?: number;
+  /** Twee metingen vlak na elkaar zijn één fluit, geen twee. */
+  minGapSeconds?: number;
+  /**
+   * Hoeveel later het geluid binnenkomt dan het beeld, in opnameseconden.
+   *
+   * De geluidsmeter kijkt altijd naar het stukje dat net voorbij is, en op
+   * zestien keer de snelheid is dat stukje zestien keer zoveel opnametijd. Op
+   * de proefopname kwam elke fluit een halve seconde te laat binnen; precies
+   * wat je uitrekent uit de vensterlengte maal de snelheid. Wie dat niet
+   * terugrekent, hangt de fluit aan de verkeerde rally.
+   */
+  lagSeconds?: number;
+}
+
+const WHISTLE_DEFAULTS: Required<WhistleOptions> = {
+  minLevel: 25,
+  marginOverNoise: 15,
+  minGapSeconds: 0.8,
+  lagSeconds: 0,
+};
+
+/**
+ * De fluitsignalen uit de metingen halen.
+ *
+ * Alles wat duidelijk boven het gewone zaalgeluid uitkomt telt als fluit, en
+ * verder niets. Uit welk veld hij komt, blijkt hier níet uit: dat is
+ * uitgeprobeerd en het werkt niet. De browser meet geluid op een logaritmische
+ * schaal en knipt bij zestien keer de snelheid de piek half af, waardoor
+ * dezelfde fluit de ene keer 204 en de andere keer 73 oplevert. Op zulke
+ * getallen 'de zachte zijn van het veld ernaast' bouwen is een gok die er
+ * echte rally's uit gooide.
+ *
+ * Het onderscheid komt daarom verderop, uit de tijd in plaats van de hardheid:
+ * een rally heeft een fluit vlak vóór de eerste beweging én een vlak na de
+ * laatste, en elke fluit hoort maar bij één rally. Een fluit twee velden
+ * verderop valt daar zelden precies in, en valt hij er wel in, dan kost dat
+ * hooguit één stuk beweging dat blijft staan. Nooit een rally die verdwijnt.
+ */
+export function whistlesFrom(
+  samples: readonly MotionSample[],
+  options: WhistleOptions = {},
+): Whistle[] {
+  const { minLevel, marginOverNoise, minGapSeconds, lagSeconds } = {
+    ...WHISTLE_DEFAULTS,
+    ...options,
+  };
+  const heard = samples.filter((sample) => typeof sample.whistle === 'number');
+  if (heard.length < 3) return [];
+
+  const levels = heard.map((sample) => sample.whistle!).sort((a, b) => a - b);
+  const noise = levels[Math.floor(levels.length / 2)]!;
+  const threshold = Math.max(minLevel, noise + marginOverNoise);
+
+  // Een rij metingen boven de drempel is één fluit. Het tijdstip is dat van de
+  // eerste meting erboven, niet van de hardste: een fluit begint met de aanzet,
+  // en de hardste meting ligt verderop in de toon.
+  const peaks: Whistle[] = [];
+  for (const sample of heard) {
+    const level = sample.whistle!;
+    if (level <= threshold) continue;
+    const previous = peaks[peaks.length - 1];
+    if (previous && sample.at - lagSeconds - previous.at <= minGapSeconds) {
+      previous.level = Math.max(previous.level, level);
+      continue;
+    }
+    peaks.push({ at: sample.at - lagSeconds, level });
+  }
+  return peaks;
+}
+
+/**
+ * Een rally met de fluitsignalen erbij die erbij horen.
+ *
+ * De fluit vóór de rally geeft de service vrij; die erna verklaart de bal dood.
+ * Zitten ze er allebei, dan is dit vrijwel zeker een rally. Zit er geen van
+ * beide, dan is het waarschijnlijk iets anders — inspelen, wisselen, een bal
+ * die teruggegooid wordt.
+ */
+export interface JudgedSpan extends RallySpan {
+  /** De fluit die de service vrijgaf, als hij gehoord is. */
+  serveWhistle: number | null;
+  /** De fluit waarmee de rally werd afgefloten. */
+  endWhistle: number | null;
+}
+
+export interface JudgeOptions {
+  /** Zoveel eerder dan de eerste beweging mag de servicefluit liggen. */
+  leadSeconds?: number;
+  /** Zoveel later dan de laatste beweging mag de eindfluit liggen. */
+  tailSeconds?: number;
+}
+
+const JUDGE_DEFAULTS: Required<JudgeOptions> = {
+  // De regels geven acht seconden tussen fluit en service; in de praktijk zijn
+  // het er drie of vier. Ruim nemen kost niets: er ligt toch geen tweede fluit
+  // tussen twee rally's in.
+  leadSeconds: 9,
+  tailSeconds: 4,
+};
+
+export function judge(
+  spans: readonly RallySpan[],
+  whistles: readonly Whistle[],
+  options: JudgeOptions = {},
+): JudgedSpan[] {
+  const { leadSeconds, tailSeconds } = { ...JUDGE_DEFAULTS, ...options };
+
+  // Elke fluit hoort bij één rally. Zonder die boekhouding wordt de eindfluit
+  // van de vorige rally ook de servicefluit van de volgende — bij een korte
+  // pauze liggen die immers vlak bij elkaar — en lijkt alles even zeker.
+  const used = new Set<number>();
+  const claim = (from: number, to: number, last: boolean): number | null => {
+    const options_ = whistles.filter(
+      (peak, index) => !used.has(index) && peak.at >= from && peak.at <= to,
+    );
+    const picked = last ? options_[options_.length - 1] : options_[0];
+    if (!picked) return null;
+    used.add(whistles.indexOf(picked));
+    return picked.at;
+  };
+
+  return spans.map((span, index) => {
+    // Een fluit tussen twee stukken beweging in hoort bij het stuk waar hij het
+    // dichtst bij ligt. Zonder die grens pikt een wissel de servicefluit van de
+    // rally erna in, en lijkt die wissel net zo goed een rally.
+    const previous = spans[index - 1];
+    const next = spans[index + 1];
+    const floor = Math.max(
+      span.start - leadSeconds,
+      previous ? (previous.end + span.start) / 2 : -Infinity,
+    );
+    // De laatste vóór de eerste beweging: dat is degene die deze service vrijgaf.
+    const serveWhistle = claim(floor, span.start + 1.5, true);
+    const ceiling = Math.min(
+      span.end + tailSeconds,
+      next ? (span.end + next.start) / 2 : Infinity,
+    );
+    const endWhistle = claim(span.end - 1, ceiling, false);
+    return { ...span, serveWhistle, endWhistle };
+  });
+}
+
+/**
+ * Is dit waarschijnlijk een echte rally?
+ *
+ * Alleen een oordeel als er überhaupt fluiten gehoord zijn. Anders is 'geen
+ * fluit gevonden' geen aanwijzing over deze rally maar over de opname, en dan
+ * hoort het niets te betekenen.
+ */
+export function looksLikeRally(span: JudgedSpan): boolean {
+  return span.serveWhistle !== null || span.endWhistle !== null;
 }
 
 /** Wat er aan een gevonden rally opvalt, in gewone taal. */
