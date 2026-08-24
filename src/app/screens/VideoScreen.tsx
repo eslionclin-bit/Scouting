@@ -80,6 +80,7 @@ function parseClock(value: string): number {
 
 export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -124,11 +125,22 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
     return best;
   }
 
+  /**
+   * Waar op het beeld je tikte, als deel van de breedte en hoogte.
+   *
+   * Buiten het beeld mag ook, tot een stuk erbuiten. Dat is nodig: staat de
+   * camera schuin, dan valt een hoek van het veld gewoon buiten de opname, en
+   * dan moet je die hoek toch ergens kunnen aanwijzen. Zet je hem op de rand van
+   * de foto, dan snijdt de lijn ernaartoe een stuk veld af dat wél in beeld is.
+   */
   function pointFrom(event: ReactPointerEvent<HTMLDivElement>): [number, number] {
-    const box = event.currentTarget.getBoundingClientRect();
+    const stage = stageRef.current;
+    if (!stage) return [0, 0];
+    const box = stage.getBoundingClientRect();
+    const clamp = (value: number): number => Math.min(1.5, Math.max(-0.5, value));
     return [
-      Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)),
-      Math.min(1, Math.max(0, (event.clientY - box.top) / box.height)),
+      clamp((event.clientX - box.left) / box.width),
+      clamp((event.clientY - box.top) / box.height),
     ];
   }
 
@@ -245,7 +257,12 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
         const onEnded = (): void => stop();
         video.addEventListener('ended', onEnded);
 
-        if (Number.isFinite(from) && from > 0) video.currentTime = from;
+        // Een paar seconden aanloop. De browser heeft even nodig om op volle
+        // snelheid te komen, en in die tijd worden er beeldjes overgeslagen —
+        // een rally die daar begint werd daardoor half gemeten en soms
+        // helemaal niet gevonden. De aanloop offeren we liever op dan het spel.
+        const runUp = Math.max(0, from - 3);
+        if (Number.isFinite(runUp) && runUp > 0) video.currentTime = runUp;
         video.muted = true;
 
         // Zo snel als de browser wil. Sommige weigeren boven de vier, dus we
@@ -385,26 +402,37 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
               onPointerUp={endDrag}
               onPointerCancel={endDrag}
             >
-              <canvas ref={previewRef} className="videocrop__frame" />
-              <svg className="videocrop__shape" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <polygon
-                  points={CORNER_KEYS.map((key) =>
-                    `${corners[key][0] * 100},${corners[key][1] * 100}`,
-                  ).join(' ')}
-                />
-              </svg>
-              {CORNER_KEYS.map((key) => (
-                <span
-                  key={key}
-                  className="videocrop__handle"
-                  style={{ left: `${corners[key][0] * 100}%`, top: `${corners[key][1] * 100}%` }}
-                  aria-label={`Hoek ${CORNER_LABELS[key]}`}
-                />
-              ))}
+              <div className="videocrop__stage" ref={stageRef}>
+                <canvas ref={previewRef} className="videocrop__frame" />
+                <svg
+                  className="videocrop__shape"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <polygon
+                    points={CORNER_KEYS.map((key) =>
+                      `${corners[key][0] * 100},${corners[key][1] * 100}`,
+                    ).join(' ')}
+                  />
+                </svg>
+                {CORNER_KEYS.map((key) => (
+                  <span
+                    key={key}
+                    className="videocrop__handle"
+                    style={{ left: `${corners[key][0] * 100}%`, top: `${corners[key][1] * 100}%` }}
+                    aria-label={`Hoek ${CORNER_LABELS[key]}`}
+                  />
+                ))}
+              </div>
             </div>
             <p className="step__hint">
-              Tik en sleep; de dichtstbijzijnde stip volgt je vinger. Staat het scheef, dan klopt
-              het — jullie veld is op het beeld ook scheef.
+              Tik en sleep; de dichtstbijzijnde stip volgt je vinger.
+            </p>
+            <p className="step__hint">
+              Valt een hoek van het veld buiten de opname? Sleep die stip dan gewoon <strong>buiten
+              de foto</strong>, in de donkere rand eromheen. De lijn loopt dan door zoals het veld
+              doorloopt, in plaats van een stuk af te snijden dat er wel bij hoort.
             </p>
             <button
               type="button"
