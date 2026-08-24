@@ -3136,32 +3136,65 @@ button {
 
 .videocrop {
   position: relative;
-  display: inline-block;
-  max-width: 100%;
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: #000;
+  display: block;
+  width: 100%;
+  /*
+    Bewust niet afgeknipt: een hoekpunt dat tegen de rand van het beeld staat
+    zou anders half wegvallen, en juist dat is de hoek die je moet kunnen
+    pakken.
+  */
+  overflow: visible;
+  /* Anders scrolt de pagina mee zodra je een hoekpunt versleept. */
+  touch-action: none;
+  cursor: crosshair;
 }
 
 .videocrop__frame {
   display: block;
-  max-width: 100%;
+  width: 100%;
   height: auto;
+  border-radius: var(--radius);
+  background: #000;
 }
 
-/* Het kader zelf: alleen een rand, want je moet eronder kunnen kijken. */
-.videocrop__box {
+/* Het vlak zelf: alleen een rand en een waas, want je moet eronder kunnen kijken. */
+.videocrop__shape {
   position: absolute;
-  border: 2px solid var(--accent);
-  box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.45);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
 }
 
-.videocrop__sliders {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.75rem;
+.videocrop__shape polygon {
+  fill: rgb(56 189 248 / 0.16);
+  stroke: var(--accent);
+  stroke-width: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+/*
+  Groot genoeg om met een vinger te pakken, en met een gaatje in het midden zodat
+  je ziet waar de hoek precies ligt.
+*/
+.videocrop__handle {
+  position: absolute;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin: -1.1rem 0 0 -1.1rem;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: rgb(56 189 248 / 0.25);
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+}
+
+.videocrop__handle::after {
+  content: '';
+  position: absolute;
+  inset: 45%;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .rallylist {

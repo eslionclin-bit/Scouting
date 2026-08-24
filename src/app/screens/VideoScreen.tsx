@@ -21,8 +21,18 @@
  *    minuten bekeken.
  */
 
-import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { noteFor, ralliesFrom, type MotionSample, type RallySpan } from '../../domain/rallyIndex';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
+import {
+  CORNER_KEYS,
+  DEFAULT_CORNERS,
+  maskFor,
+  noteFor,
+  ralliesFrom,
+  type CornerKey,
+  type Corners,
+  type MotionSample,
+  type RallySpan,
+} from '../../domain/rallyIndex';
 
 export interface VideoScreenProps {
   onExit: () => void;
@@ -42,14 +52,12 @@ const SPEEDS = [16, 8, 4] as const;
  */
 type FrameCallbacks = { requestVideoFrameCallback?: (callback: () => void) => number };
 
-interface Crop {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-}
-
-const FULL: Crop = { left: 0.05, top: 0.05, right: 0.95, bottom: 0.95 };
+const CORNER_LABELS: Record<CornerKey, string> = {
+  topLeft: 'linksboven',
+  topRight: 'rechtsboven',
+  bottomRight: 'rechtsonder',
+  bottomLeft: 'linksonder',
+};
 
 function clock(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
@@ -79,7 +87,8 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
   const [url, setUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [startAt, setStartAt] = useState('');
-  const [crop, setCrop] = useState<Crop>(FULL);
+  const [corners, setCorners] = useState<Corners>(DEFAULT_CORNERS);
+  const dragging = useRef<CornerKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [rallies, setRallies] = useState<RallySpan[] | null>(null);
@@ -98,6 +107,46 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
     setRallies(null);
     setError(null);
     setProgress(0);
+  }
+
+  /** Welke hoek zit het dichtst bij waar je tikte. */
+  function nearestCorner(x: number, y: number): CornerKey {
+    let best: CornerKey = CORNER_KEYS[0];
+    let closest = Infinity;
+    for (const key of CORNER_KEYS) {
+      const [cx, cy] = corners[key];
+      const distance = (cx - x) ** 2 + (cy - y) ** 2;
+      if (distance < closest) {
+        closest = distance;
+        best = key;
+      }
+    }
+    return best;
+  }
+
+  function pointFrom(event: ReactPointerEvent<HTMLDivElement>): [number, number] {
+    const box = event.currentTarget.getBoundingClientRect();
+    return [
+      Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)),
+      Math.min(1, Math.max(0, (event.clientY - box.top) / box.height)),
+    ];
+  }
+
+  function startDrag(event: ReactPointerEvent<HTMLDivElement>): void {
+    const [x, y] = pointFrom(event);
+    dragging.current = nearestCorner(x, y);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setCorners((current) => ({ ...current, [dragging.current!]: [x, y] }));
+  }
+
+  function moveDrag(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (!dragging.current) return;
+    const [x, y] = pointFrom(event);
+    setCorners((current) => ({ ...current, [dragging.current!]: [x, y] }));
+  }
+
+  function endDrag(): void {
+    dragging.current = null;
   }
 
   /** Een stilstaand beeld om het kader op te zetten. */
@@ -153,27 +202,32 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
     let previous: Float32Array | null = null;
     let lastMeasured = -Infinity;
 
-    const box = {
-      x: Math.round(crop.left * GRID.width),
-      y: Math.round(crop.top * GRID.height),
-      w: Math.max(1, Math.round((crop.right - crop.left) * GRID.width)),
-      h: Math.max(1, Math.round((crop.bottom - crop.top) * GRID.height)),
-    };
+    // Eén keer uitrekenen welke vakjes binnen jullie veld vallen; daarna gaat er
+    // per beeldje alleen nog een optelling overheen.
+    const mask = maskFor(corners, GRID.width, GRID.height);
+    const counted = mask.reduce((sum, value) => sum + value, 0);
+    if (counted < 20) {
+      setBusy(false);
+      setError('Het vlak om jullie veld is te klein. Sleep de hoeken verder uit elkaar.');
+      return;
+    }
 
     const measure = (at: number): void => {
       if (at - lastMeasured < SAMPLE_EVERY) return;
       lastMeasured = at;
       context.drawImage(video, 0, 0, GRID.width, GRID.height);
-      const pixels = context.getImageData(box.x, box.y, box.w, box.h).data;
-      const grey = new Float32Array(box.w * box.h);
+      const pixels = context.getImageData(0, 0, GRID.width, GRID.height).data;
+      const grey = new Float32Array(GRID.width * GRID.height);
       for (let i = 0; i < grey.length; i++) {
         // Eén kanaal is genoeg: we tellen verandering, geen kleur.
         grey[i] = pixels[i * 4]!;
       }
-      if (previous && previous.length === grey.length) {
+      if (previous) {
         let sum = 0;
-        for (let i = 0; i < grey.length; i++) sum += Math.abs(grey[i]! - previous[i]!);
-        samples.push({ at, energy: sum / grey.length });
+        for (let i = 0; i < grey.length; i++) {
+          if (mask[i]) sum += Math.abs(grey[i]! - previous[i]!);
+        }
+        samples.push({ at, energy: sum / counted });
       }
       previous = grey;
       // Zonder bekende lengte kan er geen percentage: dan laat het scherm zien
@@ -319,46 +373,46 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
           <section className="card">
             <h2>3 · Jullie veld</h2>
             <p className="card__hint">
-              Sleep de randen zo dat alleen jullie veld erin valt. Speelt er een wedstrijd naast
-              jullie, dan is dit wat die buiten de deur houdt — anders telt hun beweging mee en
-              vindt de app rally’s die er niet zijn.
+              Sleep de vier stippen naar de hoeken van jullie veld. Vier punten en geen rechthoek,
+              want een camera staat zelden recht voor het veld — schuin erachter is een veld op het
+              beeld een scheve vierhoek, en dan valt het veld ernaast er met een rechthoek niet af
+              te snijden.
             </p>
-            <div className="videocrop">
+            <div
+              className="videocrop"
+              onPointerDown={startDrag}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+            >
               <canvas ref={previewRef} className="videocrop__frame" />
-              <div
-                className="videocrop__box"
-                style={{
-                  left: `${crop.left * 100}%`,
-                  top: `${crop.top * 100}%`,
-                  width: `${(crop.right - crop.left) * 100}%`,
-                  height: `${(crop.bottom - crop.top) * 100}%`,
-                }}
-                aria-hidden="true"
-              />
-            </div>
-            <div className="videocrop__sliders">
-              {(
-                [
-                  ['left', 'Links'],
-                  ['right', 'Rechts'],
-                  ['top', 'Boven'],
-                  ['bottom', 'Onder'],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="field">
-                  <span>{label}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={Math.round(crop[key] * 100)}
-                    onChange={(event) =>
-                      setCrop((current) => ({ ...current, [key]: Number(event.target.value) / 100 }))
-                    }
-                  />
-                </label>
+              <svg className="videocrop__shape" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <polygon
+                  points={CORNER_KEYS.map((key) =>
+                    `${corners[key][0] * 100},${corners[key][1] * 100}`,
+                  ).join(' ')}
+                />
+              </svg>
+              {CORNER_KEYS.map((key) => (
+                <span
+                  key={key}
+                  className="videocrop__handle"
+                  style={{ left: `${corners[key][0] * 100}%`, top: `${corners[key][1] * 100}%` }}
+                  aria-label={`Hoek ${CORNER_LABELS[key]}`}
+                />
               ))}
             </div>
+            <p className="step__hint">
+              Tik en sleep; de dichtstbijzijnde stip volgt je vinger. Staat het scheef, dan klopt
+              het — jullie veld is op het beeld ook scheef.
+            </p>
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => setCorners(DEFAULT_CORNERS)}
+            >
+              Opnieuw beginnen
+            </button>
           </section>
 
           <section className="card">

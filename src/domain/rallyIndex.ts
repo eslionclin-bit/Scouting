@@ -168,3 +168,66 @@ export function noteFor(span: RallySpan, options: SegmentOptions = {}): string |
   if (length > maxSeconds) return 'erg lang — misschien twee rally’s aan elkaar';
   return null;
 }
+
+/**
+ * De vier hoeken van jullie veld, als deel van het beeld (0 tot 1).
+ *
+ * Een rechthoek volstaat niet. Een camera staat zelden recht voor het veld —
+ * meestal schuin achter een hoek — en dan is een veld op het beeld geen
+ * rechthoek maar een scheve vierhoek. Naast jullie veld ligt er een ander, en
+ * dat valt met een rechthoek niet weg te snijden zonder het halve eigen veld
+ * mee te nemen.
+ */
+export interface Corners {
+  topLeft: [number, number];
+  topRight: [number, number];
+  bottomRight: [number, number];
+  bottomLeft: [number, number];
+}
+
+export const CORNER_KEYS = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'] as const;
+
+export type CornerKey = (typeof CORNER_KEYS)[number];
+
+/** Een beginvorm die op de meeste opnamen ongeveer klopt: iets breder onderaan. */
+export const DEFAULT_CORNERS: Corners = {
+  topLeft: [0.2, 0.35],
+  topRight: [0.8, 0.35],
+  bottomRight: [0.95, 0.9],
+  bottomLeft: [0.05, 0.9],
+};
+
+/**
+ * Voor elk vakje van het meetrooster: telt het mee of niet.
+ *
+ * Eén keer uitrekenen en daarna hergebruiken; het gaat om duizenden beeldjes en
+ * dan is per beeldje opnieuw bepalen weggegooid werk.
+ */
+export function maskFor(corners: Corners, width: number, height: number): Uint8Array {
+  const polygon = CORNER_KEYS.map((key) => corners[key]);
+  const mask = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      mask[y * width + x] = inside((x + 0.5) / width, (y + 0.5) / height, polygon) ? 1 : 0;
+    }
+  }
+  return mask;
+}
+
+/**
+ * Ligt dit punt binnen de vierhoek?
+ *
+ * Trek een lijn naar rechts en tel hoe vaak hij een zijde kruist: oneven is
+ * binnen, even is buiten. Werkt ook bij een scheve vorm, en dat is precies wat
+ * hier nodig is.
+ */
+function inside(x: number, y: number, polygon: readonly (readonly [number, number])[]): boolean {
+  let result = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i]!;
+    const [xj, yj] = polygon[j]!;
+    const crosses = yi > y !== yj > y;
+    if (crosses && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) result = !result;
+  }
+  return result;
+}
