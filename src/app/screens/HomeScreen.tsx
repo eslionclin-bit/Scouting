@@ -25,7 +25,7 @@ export interface HomeScreenProps {
   onOpenOpponent: (opponentId: string) => void;
   onOpenTeam: () => void;
   onOpenSettings: () => void;
-  onOpenVideo: () => void;
+  onOpenVideo: (matchId?: string) => void;
   onNewMatch: () => void;
 }
 
@@ -157,7 +157,7 @@ export function HomeScreen({
             wedstrijden. Dit is de uitweg: de opname erbij pakken en op je eigen
             tempo invoeren.
           */}
-          <button type="button" className="button" onClick={onOpenVideo}>
+          <button type="button" className="button" onClick={() => onOpenVideo()}>
             Wedstrijd van beeld
           </button>
           <button type="button" className="button" onClick={onOpenSettings}>
@@ -243,6 +243,18 @@ export function HomeScreen({
                 }
               >
                 Dossier{earlier > 0 ? ` (${earlier + 1})` : ''}
+              </button>
+              {/*
+                Van beeld invoeren hoort bij een wedstrijd, niet ernaast: pas
+                als de app weet welke wedstrijd het is, kun je per rally iets
+                vastleggen in plaats van alleen kijken.
+              */}
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => onOpenVideo(match.id)}
+              >
+                Beeld
               </button>
               <button type="button" className="button button--ghost" onClick={() => void download(match.id, 'json')}>
                 JSON

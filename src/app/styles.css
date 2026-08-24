@@ -1104,6 +1104,15 @@ button {
   gap: 1rem;
 }
 
+/*
+  Een rasteronderdeel mag standaard niet smaller worden dan zijn inhoud, en dan
+  duwt één brede rij knoppen de hele kolom voorbij de schermrand — met tekst die
+  rechts wegvalt. Dit laat ze wél krimpen, zodat wat erin zit netjes afbreekt.
+*/
+.dashboard > * {
+  min-width: 0;
+}
+
 .dashboard__header {
   display: flex;
   align-items: center;
@@ -3224,6 +3233,19 @@ button {
   align-items: end;
 }
 
+/*
+  Een invoerveld is standaard zo'n twintig tekens breed, en dat is de ondergrens
+  die een rasterkolom aanhoudt. Twee daarvan naast elkaar passen niet op een
+  telefoon en duwden de hele kaart voorbij de schermrand.
+*/
+.startat > * {
+  min-width: 0;
+}
+
+.startat input {
+  width: 100%;
+}
+
 @media (max-width: 28rem) {
   .startat {
     grid-template-columns: 1fr 1fr;
@@ -3248,8 +3270,15 @@ button {
 }
 
 .rallynow__label {
-  flex: 1;
+  /* Op een smal scherm de hele regel, zodat de knoppen eronder passen. */
+  flex: 1 0 100%;
   font-weight: 700;
+}
+
+@media (min-width: 34rem) {
+  .rallynow__label {
+    flex: 1 1 auto;
+  }
 }
 
 .rallylist {

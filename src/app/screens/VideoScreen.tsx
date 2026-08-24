@@ -22,6 +22,9 @@
  */
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
+import { matchStatus, rulesOf, setOutcome } from '../../domain/scoring';
+import type { TeamSide } from '../../domain/types';
+import { useQuery, useStore } from '../StoreProvider';
 import {
   CORNER_KEYS,
   DEFAULT_CORNERS,
@@ -35,6 +38,14 @@ import {
 } from '../../domain/rallyIndex';
 
 export interface VideoScreenProps {
+  /**
+   * De wedstrijd waar dit beeld bij hoort.
+   *
+   * Zonder wedstrijd is dit scherm een kijkdoos: je vindt de rally's wel, maar
+   * je kunt er niets mee vastleggen. Mét wedstrijd wordt het een werklijst —
+   * rally speelt, stopt, jij tikt wie hem won, de volgende speelt vanzelf.
+   */
+  matchId?: string | null;
   onExit: () => void;
 }
 
@@ -83,7 +94,20 @@ function toSeconds(minutes: string, seconds: string): number {
   return (Number.isFinite(m) ? m : 0) * 60 + (Number.isFinite(s) ? s : 0);
 }
 
-export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
+export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): ReactElement {
+  const store = useStore();
+  const { data: match } = useQuery(
+    async (instance) => {
+      if (!matchId) return null;
+      const record = await instance.matches.require(matchId);
+      const opponent = await instance.teams.get(record.opponentTeamId);
+      const sets = await instance.sets.listByMatch(matchId);
+      const set = sets.filter((item) => item.status === 'live').at(-1) ?? sets.at(-1) ?? null;
+      return { match: record, opponent, sets, set };
+    },
+    [matchId],
+  );
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -100,6 +124,7 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
   const [removed, setRemoved] = useState<ReadonlySet<number>>(new Set());
   /** Rally's die je hebt afgehandeld. */
   const [done, setDone] = useState<ReadonlySet<number>>(new Set());
+  const [saving, setSaving] = useState(false);
   const [corners, setCorners] = useState<Corners>(DEFAULT_CORNERS);
   const dragging = useRef<CornerKey | null>(null);
   const [busy, setBusy] = useState(false);
@@ -358,6 +383,46 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
     void video.play();
   }
 
+  /**
+   * Deze rally vastleggen bij de wedstrijd en doorgaan.
+   *
+   * Eén rally in beeld wordt één rally in de wedstrijd: aanmaken en meteen
+   * afronden. De stand, de rotatie en de sideout per rotatie rekent de app daar
+   * zelf uit — dat is precies wat je met één tik per rally al binnenhaalt.
+   */
+  async function score(index: number, wonBy: TeamSide): Promise<void> {
+    if (!match?.set) return;
+    setSaving(true);
+    try {
+      const rally = await store.rallies.start({ setId: match.set.id });
+      await store.rallies.complete(rally.id, wonBy);
+      next(index);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** De set sluiten en zo nodig de volgende beginnen. */
+  async function closeSet(): Promise<void> {
+    if (!match?.set || !matchId) return;
+    setSaving(true);
+    try {
+      await store.sets.finish(match.set.id);
+      const played = match.sets.map((item) =>
+        item.id === match.set!.id ? { ...item, status: 'finished' as const } : item,
+      );
+      if (!matchStatus(played, rulesOf(match.match.rules)).complete) {
+        await store.sets.start({ matchId });
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   /** Deze afgehandeld, door naar de eerstvolgende die er nog staat. */
   function next(from: number): void {
     if (!rallies) return;
@@ -407,6 +472,33 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
           </p>
         </div>
       </header>
+
+      {match?.set && (
+        <section className="card">
+          <h2>
+            Set {match.set.setNumber} · {match.set.pointsUs}–{match.set.pointsThem}
+          </h2>
+          <p className="card__hint">
+            Tegen {match.opponent?.name ?? 'onbekend'}. Elke rally die je hieronder afhandelt telt
+            mee voor de stand, de rotatie en de sideout per rotatie — dat rekent de app zelf uit.
+          </p>
+          {setOutcome(
+            match.set.pointsUs,
+            match.set.pointsThem,
+            match.set.setNumber,
+            rulesOf(match.match.rules),
+          ).complete && (
+            <button
+              type="button"
+              className="button button--primary"
+              disabled={saving}
+              onClick={() => void closeSet()}
+            >
+              Set {match.set.setNumber} afronden
+            </button>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <h2>1 · De opname</h2>
@@ -590,9 +682,12 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
               </h2>
               <p className="card__hint">
                 Tik op een rally: de video springt erheen en <strong>stopt vanzelf aan het eind</strong>.
-                Daarna brengt ‘Volgende’ je naar de rally erna. Is het er geen — een wissel, een
-                time-out, iemand die een bal terugrolt — gooi hem dan weg met het kruisje. De app
-                zoekt liever iets te ruim, want een gemiste rally krijg je niet terug.
+                {match?.set
+                  ? ' Tik dan wie hem won — dat legt hem vast en speelt meteen de volgende af.'
+                  : ' Daarna brengt ‘Volgende’ je naar de rally erna.'}{' '}
+                Is het er geen — een wissel, een time-out, iemand die een bal terugrolt — gooi hem
+                dan weg met het kruisje. De app zoekt liever iets te ruim, want een gemiste rally
+                krijg je niet terug.
               </p>
 
               {playing !== null && (
@@ -603,13 +698,43 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
                   <button type="button" className="button" onClick={() => play(playing)}>
                     Opnieuw
                   </button>
-                  <button
-                    type="button"
-                    className="button button--primary"
-                    onClick={() => next(playing)}
-                  >
-                    Volgende ›
-                  </button>
+                  {match?.set ? (
+                    // Mét wedstrijd is 'wie won' de vraag, en die legt hem meteen
+                    // vast; doorgaan zonder vastleggen kan er nog steeds naast.
+                    <>
+                      <button
+                        type="button"
+                        className="button button--us"
+                        disabled={saving}
+                        onClick={() => void score(playing, 'us')}
+                      >
+                        Punt wij
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--them"
+                        disabled={saving}
+                        onClick={() => void score(playing, 'them')}
+                      >
+                        Punt zij
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--ghost"
+                        onClick={() => next(playing)}
+                      >
+                        Overslaan ›
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      onClick={() => next(playing)}
+                    >
+                      Volgende ›
+                    </button>
+                  )}
                 </div>
               )}
 

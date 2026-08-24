@@ -29,7 +29,7 @@ type View =
   | { name: 'viewer'; matchId: string }
   | { name: 'dashboard'; matchId: string }
   | { name: 'opponent'; opponentId: string }
-  | { name: 'video' }
+  | { name: 'video'; matchId?: string | null }
   | { name: 'player'; playerId: string }
   | { name: 'reference' }
   | { name: 'settings' }
@@ -228,7 +228,7 @@ export function App(): ReactElement {
     case 'reference':
       return <ReferenceScreen onExit={back} />;
     case 'video':
-      return <VideoScreen onExit={back} />;
+      return <VideoScreen matchId={view.matchId ?? null} onExit={back} />;
     case 'settings':
       return (
         <SettingsScreen
@@ -278,7 +278,7 @@ export function App(): ReactElement {
           onOpenOpponent={(opponentId) => go({ name: 'opponent', opponentId })}
           onOpenTeam={() => go({ name: 'team' })}
           onOpenSettings={() => go({ name: 'settings' })}
-          onOpenVideo={() => go({ name: 'video' })}
+          onOpenVideo={(matchId) => go({ name: 'video', matchId: matchId ?? null })}
           onOpenMatch={(matchId, role) => {
             void store.setActiveMatchId(matchId);
             void store.setMatchRole(matchId, role);
