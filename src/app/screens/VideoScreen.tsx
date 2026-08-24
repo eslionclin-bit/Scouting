@@ -439,15 +439,20 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     }
   }
 
-  /** Deze afgehandeld, door naar de eerstvolgende die er nog staat. */
-  function next(from: number): void {
+  /** Door naar de eerstvolgende die er nog staat, zonder oordeel. */
+  function advance(from: number): void {
     if (!rallies) return;
-    setDone((current) => new Set(current).add(from));
     for (let i = from + 1; i < rallies.length; i++) {
       if (!removed.has(i)) return play(i);
     }
     videoRef.current?.pause();
     setPlaying(null);
+  }
+
+  /** Deze afgehandeld, door naar de eerstvolgende die er nog staat. */
+  function next(from: number): void {
+    setDone((current) => new Set(current).add(from));
+    advance(from);
   }
 
   function discard(index: number): void {
@@ -709,8 +714,13 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
 
           {rallies && rallies.length > 0 && (
             <section className="card">
+              {/*
+                Het totaal, niet wat er nog staat. Anders telt de kop naar 165
+                terwijl het blokje eronder 'rally 32 van 167' zegt, en dan zit je
+                te rekenen in plaats van te kijken.
+              */}
               <h2>
-                {rallies.length - removed.size} rally’s
+                {rallies.length} rally’s gevonden
                 {removed.size > 0 ? ` · ${removed.size} weggegooid` : ''}
                 {done.size > 0 ? ` · ${done.size} gedaan` : ''}
               </h2>
@@ -759,15 +769,43 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                       >
                         Overslaan ›
                       </button>
+                      {/*
+                        Ook hier, en niet alleen in de lijst eronder. Of iets een
+                        rally is zie je terwijl je kijkt, en dan is naar beneden
+                        scrollen om het kruisje te zoeken precies één handeling
+                        te veel — honderdzestig keer per wedstrijd.
+                      */}
+                      <button
+                        type="button"
+                        className="button button--danger"
+                        onClick={() => {
+                          discard(playing);
+                          advance(playing);
+                        }}
+                      >
+                        Geen rally ×
+                      </button>
                     </>
                   ) : (
-                    <button
-                      type="button"
-                      className="button button--primary"
-                      onClick={() => next(playing)}
-                    >
-                      Volgende ›
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="button button--primary"
+                        onClick={() => next(playing)}
+                      >
+                        Volgende ›
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--danger"
+                        onClick={() => {
+                          discard(playing);
+                          advance(playing);
+                        }}
+                      >
+                        Geen rally ×
+                      </button>
+                    </>
                   )}
                 </div>
               )}
