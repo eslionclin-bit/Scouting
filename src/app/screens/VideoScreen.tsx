@@ -81,6 +81,17 @@ function clock(seconds: number): string {
 }
 
 /**
+ * Alleen cijfers, en niet hoger dan wat er in dit vakje thuishoort.
+ *
+ * Boven de 59 zijn seconden gewoon minuten, en die horen in het vakje ernaast.
+ */
+function onlyNumber(value: string, max: number): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits === '') return '';
+  return String(Math.min(max, Number.parseInt(digits, 10)));
+}
+
+/**
  * Minuten en seconden naar seconden.
  *
  * Twee losse velden en geen '30:20' in één vak. Op een telefoon geeft een
@@ -131,6 +142,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   const [progress, setProgress] = useState(0);
   const [rallies, setRallies] = useState<RallySpan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Los van de zoekfout: een opmerking bij het instellen van de begintijd. */
+  const [startNote, setStartNote] = useState<string | null>(null);
   const cancelRef = useRef(false);
 
   // De verwijzing naar het bestand weer vrijgeven; anders blijft hij hangen
@@ -380,6 +393,9 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     video.muted = false;
     video.currentTime = Math.max(0, span.start - 1);
     setPlaying(index);
+    // De lijst staat onder de speler; zonder dit kijk je naar de knoppen terwijl
+    // de rally boven je scherm afspeelt.
+    video.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     void video.play();
   }
 
@@ -522,19 +538,42 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
 
       {url && (
         <>
+          {/*
+            De speler staat hier en niet onderaan. Hij hoorde bij het einde van
+            het scherm, ver van de knop 'Neem deze plek' — en dan neem je de plek
+            van een video die je nooit hebt verschoven, zonder dat iets je dat
+            vertelt. Wat je moet verplaatsen hoort naast de knop te staan die het
+            overneemt.
+          */}
+          <video
+            ref={videoRef}
+            src={url}
+            className="videoplayer"
+            controls
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={(event) => {
+              setDuration(event.currentTarget.duration);
+              event.currentTarget.currentTime = Math.min(
+                toSeconds(startMinutes, startSeconds) || 1,
+                Math.max(0, event.currentTarget.duration - 1),
+              );
+            }}
+            onSeeked={drawPreview}
+          />
+
           <section className="card">
             <h2>2 · Waar begint het spel</h2>
             <p className="card__hint">
-              Staat de warming-up op de opname, vul dan in vanaf wanneer er gespeeld wordt. Of
-              spoel de video hieronder naar de eerste service en tik op ‘Neem deze plek’ — dan hoef
-              je niets te typen.
+              Spoel de video hierboven naar de eerste service en tik op ‘Neem deze plek’. Typen mag
+              ook, in de twee vakjes.
             </p>
             <div className="startat">
               <label className="field">
                 <span>Minuten</span>
                 <input
                   value={startMinutes}
-                  onChange={(event) => setStartMinutes(event.target.value.replace(/\D/g, ''))}
+                  onChange={(event) => setStartMinutes(onlyNumber(event.target.value, 599))}
                   placeholder="30"
                   inputMode="numeric"
                   aria-label="Beginnen bij minuut"
@@ -544,7 +583,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                 <span>Seconden</span>
                 <input
                   value={startSeconds}
-                  onChange={(event) => setStartSeconds(event.target.value.replace(/\D/g, ''))}
+                  onChange={(event) => setStartSeconds(onlyNumber(event.target.value, 59))}
                   placeholder="20"
                   inputMode="numeric"
                   aria-label="Beginnen bij seconde"
@@ -555,6 +594,16 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                 className="button"
                 onClick={() => {
                   const at = Math.floor(videoRef.current?.currentTime ?? 0);
+                  // Staat de video nog waar hij begon, dan is 'deze plek' niet
+                  // wat je bedoelde. Dat hoort de app te zeggen in plaats van
+                  // stilletjes nul over te nemen.
+                  if (at <= 2) {
+                    setStartNote(
+                      'De video staat nog aan het begin. Spoel hem eerst naar de eerste service.',
+                    );
+                    return;
+                  }
+                  setStartNote(null);
                   setStartMinutes(String(Math.floor(at / 60)));
                   setStartSeconds(String(at % 60));
                 }}
@@ -565,6 +614,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
             <p className="step__hint">
               Begint nu bij {clock(toSeconds(startMinutes, startSeconds))}.
             </p>
+            {startNote && <p className="setup__error">{startNote}</p>}
           </section>
 
           <section className="card">
@@ -655,22 +705,6 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
             {error && <p className="setup__error">{error}</p>}
           </section>
 
-          <video
-            ref={videoRef}
-            src={url}
-            className="videoplayer"
-            controls
-            playsInline
-            preload="metadata"
-            onLoadedMetadata={(event) => {
-              setDuration(event.currentTarget.duration);
-              event.currentTarget.currentTime = Math.min(
-                toSeconds(startMinutes, startSeconds) || 1,
-                Math.max(0, event.currentTarget.duration - 1),
-              );
-            }}
-            onSeeked={drawPreview}
-          />
           <canvas ref={canvasRef} className="visually-hidden" />
 
           {rallies && rallies.length > 0 && (
