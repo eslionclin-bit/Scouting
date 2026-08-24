@@ -3216,12 +3216,76 @@ button {
   background: var(--accent);
 }
 
+/* Twee vakjes naast elkaar: minuten en seconden, plus de knop ernaast. */
+.startat {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+@media (max-width: 28rem) {
+  .startat {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .startat > button {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Wat er nu speelt, met de twee knoppen die je dan nodig hebt. */
+.rallynow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  padding: 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent);
+  background: var(--bg-raised);
+}
+
+.rallynow__label {
+  flex: 1;
+  font-weight: 700;
+}
+
 .rallylist {
   list-style: none;
   margin: 0.5rem 0 0;
   padding: 0;
   display: grid;
   gap: 0.3rem;
+}
+
+.rallylist__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3rem;
+}
+
+.rallylist__item--playing {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Afgehandeld blijft staan maar treedt terug: je moet kunnen zien hoe ver je bent. */
+.rallylist__item--done {
+  opacity: 0.5;
+}
+
+.rallylist__discard {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .rallylist__item {

@@ -69,13 +69,18 @@ function clock(seconds: number): string {
     : `${minutes}:${String(rest).padStart(2, '0')}`;
 }
 
-/** '30:20' of '1:30:20' naar seconden; leeg is vanaf het begin. */
-function parseClock(value: string): number {
-  const trimmed = value.trim();
-  if (trimmed === '') return 0;
-  return trimmed
-    .split(':')
-    .reduce((total, part) => total * 60 + (Number.parseFloat(part) || 0), 0);
+/**
+ * Minuten en seconden naar seconden.
+ *
+ * Twee losse velden en geen '30:20' in één vak. Op een telefoon geeft een
+ * getallenveld een cijfertoetsenbord zonder dubbele punt, en dan typt iemand
+ * '5.20' — wat de app als vijf seconden las en de hele wedstrijd verkeerd
+ * begon. Twee vakjes kunnen dat niet fout doen.
+ */
+function toSeconds(minutes: string, seconds: string): number {
+  const m = Number.parseInt(minutes, 10);
+  const s = Number.parseInt(seconds, 10);
+  return (Number.isFinite(m) ? m : 0) * 60 + (Number.isFinite(s) ? s : 0);
 }
 
 export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
@@ -87,7 +92,14 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
-  const [startAt, setStartAt] = useState('');
+  const [startMinutes, setStartMinutes] = useState('');
+  const [startSeconds, setStartSeconds] = useState('');
+  /** De rally die nu speelt; daarop stopt de video vanzelf. */
+  const [playing, setPlaying] = useState<number | null>(null);
+  /** Rally's die je hebt weggegooid omdat het er geen was. */
+  const [removed, setRemoved] = useState<ReadonlySet<number>>(new Set());
+  /** Rally's die je hebt afgehandeld. */
+  const [done, setDone] = useState<ReadonlySet<number>>(new Set());
   const [corners, setCorners] = useState<Corners>(DEFAULT_CORNERS);
   const dragging = useRef<CornerKey | null>(null);
   const [busy, setBusy] = useState(false);
@@ -108,6 +120,9 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
     setRallies(null);
     setError(null);
     setProgress(0);
+    setRemoved(new Set());
+    setDone(new Set());
+    setPlaying(null);
   }
 
   /** Welke hoek zit het dichtst bij waar je tikte. */
@@ -207,7 +222,7 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
       });
     }
     const total = Number.isFinite(video.duration) ? video.duration : 0;
-    const wanted = parseClock(startAt);
+    const wanted = toSeconds(startMinutes, startSeconds);
     const from = total > 0 ? Math.min(wanted, Math.max(0, total - 1)) : wanted;
 
     const samples: MotionSample[] = [];
@@ -324,14 +339,59 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
     }
   }
 
-  function jumpTo(span: RallySpan): void {
+  /**
+   * Eén rally afspelen, en aan het eind stoppen.
+   *
+   * Doorlopen was het probleem: dan kijk je naar de volgende rally terwijl je
+   * nog met deze bezig bent, en moet je terugspoelen. Een seconde aanloop zodat
+   * je de service ziet aankomen, en een halve seconde na afloop zodat je ziet
+   * waar de bal viel.
+   */
+  function play(index: number): void {
     const video = videoRef.current;
-    if (!video) return;
+    const span = rallies?.[index];
+    if (!video || !span) return;
     video.playbackRate = 1;
     video.muted = false;
     video.currentTime = Math.max(0, span.start - 1);
+    setPlaying(index);
     void video.play();
   }
+
+  /** Deze afgehandeld, door naar de eerstvolgende die er nog staat. */
+  function next(from: number): void {
+    if (!rallies) return;
+    setDone((current) => new Set(current).add(from));
+    for (let i = from + 1; i < rallies.length; i++) {
+      if (!removed.has(i)) return play(i);
+    }
+    videoRef.current?.pause();
+    setPlaying(null);
+  }
+
+  function discard(index: number): void {
+    setRemoved((current) => new Set(current).add(index));
+    if (playing === index) {
+      videoRef.current?.pause();
+      setPlaying(null);
+    }
+  }
+
+  // De video stopt zelf aan het eind van de rally die je aantikte.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || playing === null || !rallies) return;
+    const span = rallies[playing];
+    if (!span) return;
+
+    const check = (): void => {
+      if (video.currentTime >= span.end + 0.5) {
+        video.pause();
+      }
+    };
+    video.addEventListener('timeupdate', check);
+    return () => video.removeEventListener('timeupdate', check);
+  }, [playing, rallies]);
 
   return (
     <div className="dashboard">
@@ -373,18 +433,46 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
           <section className="card">
             <h2>2 · Waar begint het spel</h2>
             <p className="card__hint">
-              Staat de warming-up op de opname, vul dan in vanaf wanneer er gespeeld wordt. Als
-              minuten:seconden, bijvoorbeeld <strong>30:20</strong>. Leeg laten mag ook.
+              Staat de warming-up op de opname, vul dan in vanaf wanneer er gespeeld wordt. Of
+              spoel de video hieronder naar de eerste service en tik op ‘Neem deze plek’ — dan hoef
+              je niets te typen.
             </p>
-            <label className="field">
-              <span>Begin bij</span>
-              <input
-                value={startAt}
-                onChange={(event) => setStartAt(event.target.value)}
-                placeholder="30:20"
-                inputMode="numeric"
-              />
-            </label>
+            <div className="startat">
+              <label className="field">
+                <span>Minuten</span>
+                <input
+                  value={startMinutes}
+                  onChange={(event) => setStartMinutes(event.target.value.replace(/\D/g, ''))}
+                  placeholder="30"
+                  inputMode="numeric"
+                  aria-label="Beginnen bij minuut"
+                />
+              </label>
+              <label className="field">
+                <span>Seconden</span>
+                <input
+                  value={startSeconds}
+                  onChange={(event) => setStartSeconds(event.target.value.replace(/\D/g, ''))}
+                  placeholder="20"
+                  inputMode="numeric"
+                  aria-label="Beginnen bij seconde"
+                />
+              </label>
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  const at = Math.floor(videoRef.current?.currentTime ?? 0);
+                  setStartMinutes(String(Math.floor(at / 60)));
+                  setStartSeconds(String(at % 60));
+                }}
+              >
+                Neem deze plek
+              </button>
+            </div>
+            <p className="step__hint">
+              Begint nu bij {clock(toSeconds(startMinutes, startSeconds))}.
+            </p>
           </section>
 
           <section className="card">
@@ -485,7 +573,7 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
             onLoadedMetadata={(event) => {
               setDuration(event.currentTarget.duration);
               event.currentTarget.currentTime = Math.min(
-                parseClock(startAt) || 1,
+                toSeconds(startMinutes, startSeconds) || 1,
                 Math.max(0, event.currentTarget.duration - 1),
               );
             }}
@@ -495,39 +583,85 @@ export function VideoScreen({ onExit }: VideoScreenProps): ReactElement {
 
           {rallies && rallies.length > 0 && (
             <section className="card">
-              <h2>{rallies.length} rally’s gevonden</h2>
+              <h2>
+                {rallies.length - removed.size} rally’s
+                {removed.size > 0 ? ` · ${removed.size} weggegooid` : ''}
+                {done.size > 0 ? ` · ${done.size} gedaan` : ''}
+              </h2>
               <p className="card__hint">
-                Tik er een aan om hem te bekijken. Mediaan {clock(
-                  rallies.map((span) => span.end - span.start).sort((a, b) => a - b)[
-                    Math.floor(rallies.length / 2)
-                  ] ?? 0,
-                )}{' '}
-                per rally. Zitten er dingen tussen die geen rally zijn, dan kost dat een tik; een
-                gemiste rally zou erger zijn, dus de app zoekt liever iets te ruim.
+                Tik op een rally: de video springt erheen en <strong>stopt vanzelf aan het eind</strong>.
+                Daarna brengt ‘Volgende’ je naar de rally erna. Is het er geen — een wissel, een
+                time-out, iemand die een bal terugrolt — gooi hem dan weg met het kruisje. De app
+                zoekt liever iets te ruim, want een gemiste rally krijg je niet terug.
               </p>
+
+              {playing !== null && (
+                <div className="rallynow">
+                  <span className="rallynow__label">
+                    Rally {playing + 1} van {rallies.length}
+                  </span>
+                  <button type="button" className="button" onClick={() => play(playing)}>
+                    Opnieuw
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    onClick={() => next(playing)}
+                  >
+                    Volgende ›
+                  </button>
+                </div>
+              )}
+
               <ul className="rallylist">
                 {rallies.map((span, index) => {
+                  if (removed.has(index)) return null;
                   const note = noteFor(span);
                   return (
-                    <li key={`${span.start}`}>
+                    <li key={`${span.start}`} className="rallylist__row">
                       <button
                         type="button"
-                        className="rallylist__item"
-                        onClick={() => jumpTo(span)}
+                        className={[
+                          'rallylist__item',
+                          playing === index ? 'rallylist__item--playing' : '',
+                          done.has(index) ? 'rallylist__item--done' : '',
+                        ].join(' ')}
+                        onClick={() => play(index)}
                       >
-                        <span className="rallylist__number">{index + 1}</span>
+                        <span className="rallylist__number">
+                          {done.has(index) ? '✓' : index + 1}
+                        </span>
                         <span className="rallylist__time">{clock(span.start)}</span>
                         <span className="rallylist__duration">
                           {Math.round(span.end - span.start)}s
                         </span>
                         {note && <span className="rallylist__note">{note}</span>}
                       </button>
+                      <button
+                        type="button"
+                        className="rallylist__discard"
+                        aria-label={`Rally ${index + 1} weggooien`}
+                        onClick={() => discard(index)}
+                      >
+                        ×
+                      </button>
                     </li>
                   );
                 })}
               </ul>
+
+              {removed.size > 0 && (
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setRemoved(new Set())}
+                >
+                  Weggegooide terugzetten
+                </button>
+              )}
             </section>
           )}
+
         </>
       )}
     </div>
