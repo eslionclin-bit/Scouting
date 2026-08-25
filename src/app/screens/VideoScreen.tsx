@@ -41,6 +41,19 @@ import {
   type JudgedSpan,
   type MotionSample,
 } from '../../domain/rallyIndex';
+import {
+  ARM_GRID,
+  armDirection,
+  readArm,
+  restingFrame,
+  tallyOf,
+  winnerFor,
+  type ArmFrame,
+  type ArmReading,
+  type Box,
+  type Side,
+  type Team,
+} from '../../domain/referee';
 
 export interface VideoScreenProps {
   /**
@@ -127,6 +140,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** Apart en scherper uitgelezen: een arm is dunner dan een speelster. */
+  const armCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
   /**
    * Het meeluisteren, één keer opgezet.
@@ -156,6 +171,26 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   const [saving, setSaving] = useState(false);
   const [corners, setCorners] = useState<Corners>(DEFAULT_CORNERS);
   const dragging = useRef<CornerKey | null>(null);
+  /**
+   * Het kadertje om de scheidsrechter. Leeg betekent: niet gebruiken.
+   *
+   * Alles hieromheen is bij te zetten en niet in te bouwen. Wie geen kadertje
+   * sleept, merkt van dit hele onderdeel niets.
+   */
+  const [refBox, setRefBox] = useState<Box | null>(null);
+  /** Wat je nu aan het aanwijzen bent: het veld of de scheidsrechter. */
+  const [aiming, setAiming] = useState<'court' | 'referee'>('court');
+  const boxStart = useRef<[number, number] | null>(null);
+  /**
+   * Welke helft van het beeld van jullie is.
+   *
+   * De arm wijst naar de kant die mag serveren; zonder te weten welke kant dat
+   * is, is dat een richting en geen uitslag. Na elke set wisselen de teams van
+   * speelhelft, dus dit klapt om zodra je een set afrondt.
+   */
+  const [ourSide, setOurSide] = useState<Side>('left');
+  /** Per rally: wie hem volgens de scheidsrechter won. */
+  const [suggestions, setSuggestions] = useState<(Team | null)[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [rallies, setRallies] = useState<JudgedSpan[] | null>(null);
@@ -198,6 +233,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     setDone(new Set());
     setPlaying(null);
     setSetupOpen(true);
+    setSuggestions([]);
   }
 
   /** Welke hoek zit het dichtst bij waar je tikte. */
@@ -234,21 +270,51 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     ];
   }
 
+  /** Een kader uit twee punten, in de goede volgorde en nooit van niks. */
+  function boxOf(a: [number, number], b: [number, number]): Box {
+    return {
+      left: Math.max(0, Math.min(a[0], b[0])),
+      top: Math.max(0, Math.min(a[1], b[1])),
+      right: Math.min(1, Math.max(a[0], b[0])),
+      bottom: Math.min(1, Math.max(a[1], b[1])),
+    };
+  }
+
   function startDrag(event: ReactPointerEvent<HTMLDivElement>): void {
     const [x, y] = pointFrom(event);
-    dragging.current = nearestCorner(x, y);
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (aiming === 'referee') {
+      // Een kader trek je op, je verschuift geen stippen: het is één keer per
+      // opname en 'sleep er een hokje omheen' hoef je niemand uit te leggen.
+      boxStart.current = [x, y];
+      setRefBox(boxOf([x, y], [x, y]));
+      return;
+    }
+    dragging.current = nearestCorner(x, y);
     setCorners((current) => ({ ...current, [dragging.current!]: [x, y] }));
   }
 
   function moveDrag(event: ReactPointerEvent<HTMLDivElement>): void {
-    if (!dragging.current) return;
     const [x, y] = pointFrom(event);
+    if (aiming === 'referee') {
+      if (boxStart.current) setRefBox(boxOf(boxStart.current, [x, y]));
+      return;
+    }
+    if (!dragging.current) return;
     setCorners((current) => ({ ...current, [dragging.current!]: [x, y] }));
   }
 
   function endDrag(): void {
     dragging.current = null;
+    // Een tik zonder slepen is geen kader maar een vergissing.
+    if (boxStart.current) {
+      boxStart.current = null;
+      setRefBox((current) =>
+        current && (current.right - current.left < 0.04 || current.bottom - current.top < 0.04)
+          ? null
+          : current,
+      );
+    }
   }
 
   /** Een stilstaand beeld om het kader op te zetten. */
@@ -307,6 +373,29 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Wat de scheidsrechter na elke rally aanwees.
+   *
+   * De arm komt ná de rally omhoog, in de pauze tot de volgende service. Dus
+   * kijkt de app in dat stuk, en het antwoord hoort bij de rally die net
+   * afgelopen is: wie mag serveren, heeft die rally gewonnen.
+   *
+   * Alleen de eerste seconden van de pauze tellen mee. Daarna wisselt er
+   * iemand, loopt de scheidsrechter weg of pakt hij zijn kaartjes, en dat is
+   * beweging die niets meer betekent.
+   */
+  function readRefereeBetween(spans: readonly JudgedSpan[], frames: ArmFrame[]): (Team | null)[] {
+    if (frames.length < 10 || spans.length === 0) return [];
+    const readings: ArmReading[] = readArm(frames, restingFrame(frames));
+    return spans.map((span, index) => {
+      const from = (span.endWhistle ?? span.end) + 0.2;
+      const next = spans[index + 1];
+      const to = Math.min(from + 8, next ? (next.serveWhistle ?? next.start) - 0.2 : from + 8);
+      if (to <= from) return null;
+      return winnerFor(armDirection(readings, from, to), ourSide);
+    });
   }
 
   async function analyse(): Promise<void> {
@@ -380,6 +469,19 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       return;
     }
 
+    // Het kadertje om de scheidsrechter wordt apart uitgelezen en bewaard. Pas
+    // achteraf is te zeggen hoe het er 'normaal' uitziet — dat is de middelste
+    // waarde over de hele opname — en zonder dat is een uitstekende arm niet van
+    // een scheidsrechter met een donker shirt te onderscheiden.
+    const armCanvas = armCanvasRef.current;
+    const armContext =
+      refBox && armCanvas ? armCanvas.getContext('2d', { willReadFrequently: true }) : null;
+    if (armCanvas) {
+      armCanvas.width = ARM_GRID.width;
+      armCanvas.height = ARM_GRID.height;
+    }
+    const armFrames: ArmFrame[] = [];
+
     const measure = (at: number): void => {
       if (at - lastMeasured < SAMPLE_EVERY) return;
       lastMeasured = at;
@@ -399,6 +501,18 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
           sound ? { at, energy: sum / counted, whistle: loudest } : { at, energy: sum / counted },
         );
         loudest = 0;
+
+        if (armContext && refBox) {
+          const sx = refBox.left * video.videoWidth;
+          const sy = refBox.top * video.videoHeight;
+          const sw = Math.max(1, (refBox.right - refBox.left) * video.videoWidth);
+          const sh = Math.max(1, (refBox.bottom - refBox.top) * video.videoHeight);
+          armContext.drawImage(video, sx, sy, sw, sh, 0, 0, ARM_GRID.width, ARM_GRID.height);
+          const crop = armContext.getImageData(0, 0, ARM_GRID.width, ARM_GRID.height).data;
+          const cell = new Uint8Array(ARM_GRID.width * ARM_GRID.height);
+          for (let i = 0; i < cell.length; i++) cell[i] = crop[i * 4]!;
+          armFrames.push({ at, pixels: cell });
+        }
       }
       previous = grey;
       // Zonder bekende lengte kan er geen percentage: dan laat het scherm zien
@@ -497,6 +611,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setShowDoubtful(heard.length < spans.length);
       setRallies(found);
       setSetupOpen(found.length === 0);
+      setSuggestions(readRefereeBetween(found, armFrames));
       if (found.length === 0) {
         setError(
           samples.length < 10
@@ -573,6 +688,9 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       if (!matchStatus(played, rulesOf(match.match.rules)).complete) {
         await store.sets.start({ matchId });
       }
+      // Na elke set wisselen de teams van speelhelft, dus wat links stond staat
+      // nu rechts. Zonder dit leest de app de rest van de wedstrijd omgekeerd.
+      setOurSide((side) => (side === 'left' ? 'right' : 'left'));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -622,6 +740,13 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setPlaying(null);
     }
   }
+
+  /** De voorstellen bij elkaar, als controle op het lezen. */
+  const suggested = {
+    gelezen: suggestions.filter((item) => item !== null).length,
+    totaal: rallies?.length ?? 0,
+    tally: tallyOf(suggestions),
+  };
 
   const doubtfulCount =
     rallies?.reduce(
@@ -806,12 +931,27 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
           </section>
 
           <section className="card">
-            <h2>3 · Jullie veld</h2>
+            <h2>3 · Jullie veld{refBox ? ' en de scheidsrechter' : ''}</h2>
+            <div className="startat">
+              <button
+                type="button"
+                className={aiming === 'court' ? 'button button--primary' : 'button'}
+                onClick={() => setAiming('court')}
+              >
+                Veld aanwijzen
+              </button>
+              <button
+                type="button"
+                className={aiming === 'referee' ? 'button button--primary' : 'button'}
+                onClick={() => setAiming('referee')}
+              >
+                Scheidsrechter
+              </button>
+            </div>
             <p className="card__hint">
-              Sleep de vier stippen naar de hoeken van jullie veld. Vier punten en geen rechthoek,
-              want een camera staat zelden recht voor het veld — schuin erachter is een veld op het
-              beeld een scheve vierhoek, en dan valt het veld ernaast er met een rechthoek niet af
-              te snijden.
+              {aiming === 'court'
+                ? 'Sleep de vier stippen naar de hoeken van jullie veld. Vier punten en geen rechthoek, want een camera staat zelden recht voor het veld — schuin erachter is een veld op het beeld een scheve vierhoek, en dan valt het veld ernaast er met een rechthoek niet af te snijden.'
+                : 'Sleep een kader om de scheidsrechter op zijn stoel — hoofd tot heup, en aan weerskanten ruimte voor een gestrekte arm. De app kijkt dan na elke rally welke kant hij aanwijst, en zet die uitslag vast klaar. Hoeft niet: laat je dit leeg, dan tik je het zelf in zoals eerst.'}
             </p>
             <div
               className="videocrop"
@@ -834,28 +974,72 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                     ).join(' ')}
                   />
                 </svg>
-                {CORNER_KEYS.map((key) => (
+                {aiming === 'court' &&
+                  CORNER_KEYS.map((key) => (
+                    <span
+                      key={key}
+                      className="videocrop__handle"
+                      style={{ left: `${corners[key][0] * 100}%`, top: `${corners[key][1] * 100}%` }}
+                      aria-label={`Hoek ${CORNER_LABELS[key]}`}
+                    />
+                  ))}
+                {refBox && (
                   <span
-                    key={key}
-                    className="videocrop__handle"
-                    style={{ left: `${corners[key][0] * 100}%`, top: `${corners[key][1] * 100}%` }}
-                    aria-label={`Hoek ${CORNER_LABELS[key]}`}
+                    className="videocrop__box"
+                    style={{
+                      left: `${refBox.left * 100}%`,
+                      top: `${refBox.top * 100}%`,
+                      width: `${(refBox.right - refBox.left) * 100}%`,
+                      height: `${(refBox.bottom - refBox.top) * 100}%`,
+                    }}
+                    aria-label="Kader om de scheidsrechter"
                   />
-                ))}
+                )}
               </div>
             </div>
-            <p className="step__hint">
-              Tik en sleep; de dichtstbijzijnde stip volgt je vinger.
-            </p>
-            <p className="step__hint">
-              Valt een hoek van het veld buiten de opname? Sleep die stip dan gewoon <strong>buiten
-              de foto</strong>, in de donkere rand eromheen. De lijn loopt dan door zoals het veld
-              doorloopt, in plaats van een stuk af te snijden dat er wel bij hoort.
-            </p>
+            {aiming === 'court' && (
+              <>
+                <p className="step__hint">
+                  Tik en sleep; de dichtstbijzijnde stip volgt je vinger.
+                </p>
+                <p className="step__hint">
+                  Valt een hoek van het veld buiten de opname? Sleep die stip dan gewoon <strong>buiten
+                  de foto</strong>, in de donkere rand eromheen. De lijn loopt dan door zoals het veld
+                  doorloopt, in plaats van een stuk af te snijden dat er wel bij hoort.
+                </p>
+              </>
+            )}
+            {aiming === 'referee' && refBox && (
+              <>
+                <p className="step__hint">
+                  Welke helft van het beeld is van jullie? De arm wijst naar wie mag serveren, en
+                  wie mag serveren heeft de vorige rally gewonnen.
+                </p>
+                <div className="startat">
+                  <button
+                    type="button"
+                    className={ourSide === 'left' ? 'button button--us' : 'button'}
+                    onClick={() => setOurSide('left')}
+                  >
+                    Wij spelen links
+                  </button>
+                  <button
+                    type="button"
+                    className={ourSide === 'right' ? 'button button--us' : 'button'}
+                    onClick={() => setOurSide('right')}
+                  >
+                    Wij spelen rechts
+                  </button>
+                </div>
+              </>
+            )}
             <button
               type="button"
               className="button button--ghost"
-              onClick={() => setCorners(DEFAULT_CORNERS)}
+              onClick={() => {
+                if (aiming === 'referee') setRefBox(null);
+                else setCorners(DEFAULT_CORNERS);
+              }}
             >
               Opnieuw beginnen
             </button>
@@ -907,6 +1091,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
           {!setupOpen && error && <p className="setup__error">{error}</p>}
 
           <canvas ref={canvasRef} className="visually-hidden" />
+          <canvas ref={armCanvasRef} className="visually-hidden" />
 
           {rallies && rallies.length > 0 && (
             <section className="card">
@@ -971,19 +1156,25 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                     <>
                       <button
                         type="button"
-                        className="button button--us"
+                        className={[
+                          'button button--us',
+                          suggestions[playing] === 'us' ? 'button--suggested' : '',
+                        ].join(' ')}
                         disabled={saving}
                         onClick={() => void score(playing, 'us')}
                       >
-                        Punt wij
+                        Punt wij{suggestions[playing] === 'us' ? ' ◄' : ''}
                       </button>
                       <button
                         type="button"
-                        className="button button--them"
+                        className={[
+                          'button button--them',
+                          suggestions[playing] === 'them' ? 'button--suggested' : '',
+                        ].join(' ')}
                         disabled={saving}
                         onClick={() => void score(playing, 'them')}
                       >
-                        Punt zij
+                        Punt zij{suggestions[playing] === 'them' ? ' ◄' : ''}
                       </button>
                       <button
                         type="button"
@@ -1030,7 +1221,33 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                       </button>
                     </>
                   )}
+                  {refBox && (
+                    <span className="rallynow__hint">
+                      {suggestions[playing] === undefined || suggestions[playing] === null
+                        ? 'De scheidsrechter was hier niet te lezen — zelf kiezen.'
+                        : `De scheidsrechter wees ${
+                            suggestions[playing] === 'us' ? 'naar jullie kant' : 'naar de overkant'
+                          } aan. Klopt dat niet, tik dan de andere knop.`}
+                    </span>
+                  )}
                 </div>
+              )}
+
+              {refBox && suggested.gelezen > 0 && (
+                // De controle. Niet 'de app zegt 25-19' maar: als je alle
+                // voorstellen zou overnemen, komt hier dit uit. Klopt dat niet
+                // met wat je weet van de wedstrijd, dan is er iets mis met het
+                // lezen — en dan hoor je dat vóór het invoeren te merken.
+                <p className="card__hint">
+                  De scheidsrechter was bij {suggested.gelezen} van de {suggested.totaal} rally’s te
+                  lezen. Alle voorstellen bij elkaar geeft {suggested.tally.us}–
+                  {suggested.tally.them}
+                  {suggested.tally.decidedAfter !== null
+                    ? suggested.tally.extra > 0
+                      ? `, en dan staan er nog ${suggested.tally.extra} rally’s achter het setpunt. Ergens klopt er iets niet.`
+                      : ' — dat is een set die uitkomt.'
+                    : '. Dat is nog geen volle set.'}
+                </p>
               )}
 
               <ul className="rallylist">

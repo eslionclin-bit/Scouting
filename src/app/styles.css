@@ -3225,6 +3225,16 @@ button {
   background: var(--accent);
 }
 
+/* Het kader om de scheidsrechter. Een andere kleur dan het veld: het is iets
+   anders, en op een klein scherm moet je in één blik zien wat je aan het
+   aanwijzen bent. */
+.videocrop__box {
+  position: absolute;
+  border: 2px dashed var(--poor);
+  background: rgb(236 131 90 / 0.14);
+  pointer-events: none;
+}
+
 /* Twee vakjes naast elkaar: minuten en seconden, plus de knop ernaast. */
 .startat {
   display: grid;
@@ -3267,6 +3277,18 @@ button {
   border-radius: var(--radius);
   border: 1px solid var(--accent);
   background: var(--bg-raised);
+}
+
+/* Het voorstel van de scheidsrechter: een randje, geen ingevulde uitslag. De
+   knop moet nog steeds een knop zijn die je bewust aantikt. */
+.button--suggested {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.rallynow__hint {
+  flex: 1 0 100%;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .rallynow__label {
