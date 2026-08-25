@@ -55,6 +55,29 @@ import {
   type Team,
 } from '../../domain/referee';
 
+/**
+ * Wat er van dit scherm bewaard blijft bij de wedstrijd.
+ *
+ * De opname zelf niet — die blijft op je apparaat en de app krijgt hem alleen
+ * te leen zolang dit scherm openstaat. Maar het werk eromheen wél: het kader om
+ * het veld, het kader om de scheidsrechter, de begintijd, en de hele lijst
+ * rally's met wat je er al mee gedaan hebt. Dat is een half uur werk dat niet
+ * verloren hoort te gaan omdat je even iets anders wilde bekijken.
+ */
+interface SavedSetup {
+  fileName: string | null;
+  startMinutes: string;
+  startSeconds: string;
+  corners: Corners;
+  refBox: Box | null;
+  ourSide: Side;
+  rallies: JudgedSpan[] | null;
+  removed: number[];
+  done: number[];
+  suggestions: (Team | null)[];
+  savedAt: string;
+}
+
 export interface VideoScreenProps {
   /**
    * De wedstrijd waar dit beeld bij hoort.
@@ -182,6 +205,30 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   const [aiming, setAiming] = useState<'court' | 'referee'>('court');
   const boxStart = useRef<[number, number] | null>(null);
   /**
+   * Hoe het eruitzag voordat je begon te slepen.
+   *
+   * Een knijpbeweging begint met één vinger, en die vinger pakt eerst een stip
+   * beet. Pas als de tweede vinger neerkomt weet de app dat je wilde zoomen —
+   * en dan hoort die stip terug te gaan waar hij stond.
+   */
+  const boxBefore = useRef<Box | null>(null);
+  const cornersBefore = useRef<Corners | null>(null);
+  /**
+   * Inzoomen op het beeld.
+   *
+   * Op een telefoon is een scheidsrechter van vijftig bij tachtig beeldpunten
+   * met een vinger niet te omkaderen. Twee vingers knijpen doet wat je van een
+   * foto verwacht, en tikken en slepen blijft daarnaast gewoon werken: één
+   * vinger verzet een stip, twee vingers verplaatsen het beeld.
+   */
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState<[number, number]>([0, 0]);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const pointers = useRef(new Map<number, [number, number]>());
+  const pinch = useRef<{ distance: number; zoom: number; pan: [number, number]; mid: [number, number] } | null>(
+    null,
+  );
+  /**
    * Welke helft van het beeld van jullie is.
    *
    * De arm wijst naar de kant die mag serveren; zonder te weten welke kant dat
@@ -191,6 +238,11 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   const [ourSide, setOurSide] = useState<Side>('left');
   /** Per rally: wie hem volgens de scheidsrechter won. */
   const [suggestions, setSuggestions] = useState<(Team | null)[]>([]);
+  /** Wat er van de vorige keer klaarstaat, zodra je dezelfde opname weer kiest. */
+  const [saved, setSaved] = useState<SavedSetup | null>(null);
+  const [restored, setRestored] = useState(false);
+  /** Terug terwijl er nog werk staat: eerst vragen. */
+  const [confirmExit, setConfirmExit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [rallies, setRallies] = useState<JudgedSpan[] | null>(null);
@@ -221,17 +273,93 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   // zolang het tabblad openstaat.
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
+  /** Waaronder het werk aan deze wedstrijd bewaard staat. */
+  const setupKey = `video.setup.${matchId ?? 'los'}`;
+
+  // Eén keer ophalen wat er van de vorige keer staat. Bewust niet via de
+  // gewone gegevensvraag: die luistert mee, en dan zou het opslaan hieronder
+  // zichzelf steeds opnieuw inlezen.
+  useEffect(() => {
+    let alive = true;
+    void store.getMeta<SavedSetup>(setupKey).then((found) => {
+      if (!alive || !found) {
+        setRestored(true);
+        return;
+      }
+      setCorners(found.corners ?? DEFAULT_CORNERS);
+      setRefBox(found.refBox ?? null);
+      setOurSide(found.ourSide ?? 'left');
+      setStartMinutes(found.startMinutes ?? '');
+      setStartSeconds(found.startSeconds ?? '');
+      setSaved(found);
+      setRestored(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [setupKey, store]);
+
+  // En bewaren zodra er iets verandert. Niet bij elke muisbeweging: even
+  // wachten tot je klaar bent met slepen scheelt honderden schrijfacties.
+  useEffect(() => {
+    if (!restored) return;
+    const timer = window.setTimeout(() => {
+      void store.setMeta(setupKey, {
+        fileName: file?.name ?? saved?.fileName ?? null,
+        startMinutes,
+        startSeconds,
+        corners,
+        refBox,
+        ourSide,
+        rallies,
+        removed: [...removed],
+        done: [...done],
+        suggestions,
+        savedAt: new Date().toISOString(),
+      } satisfies SavedSetup);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [
+    restored,
+    setupKey,
+    store,
+    file,
+    saved,
+    startMinutes,
+    startSeconds,
+    corners,
+    refBox,
+    ourSide,
+    rallies,
+    removed,
+    done,
+    suggestions,
+  ]);
+
   function choose(picked: File | null): void {
     if (!picked) return;
     if (url) URL.revokeObjectURL(url);
     setFile(picked);
     setUrl(URL.createObjectURL(picked));
-    setRallies(null);
     setError(null);
     setProgress(0);
+    setPlaying(null);
+
+    // Dezelfde opname als de vorige keer? Dan staat het werk er nog. Zoeken
+    // duurt minuten en het antwoord verandert niet; dat hoef je niet opnieuw
+    // te doen omdat je tussendoor iets anders bekeken hebt.
+    const again = saved && saved.fileName === picked.name && saved.rallies;
+    if (again && saved.rallies) {
+      setRallies(saved.rallies);
+      setRemoved(new Set(saved.removed));
+      setDone(new Set(saved.done));
+      setSuggestions(saved.suggestions ?? []);
+      setSetupOpen(false);
+      return;
+    }
+    setRallies(null);
     setRemoved(new Set());
     setDone(new Set());
-    setPlaying(null);
     setSetupOpen(true);
     setSuggestions([]);
   }
@@ -280,21 +408,101 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     };
   }
 
+  /**
+   * Zoomen om een punt op het scherm heen.
+   *
+   * Wat er onder je vingers zit, hoort daar te blijven zitten. Zonder dat
+   * schuift het beeld onder je hand vandaan zodra je knijpt, en ben je met twee
+   * handelingen bezig in plaats van één.
+   */
+  function zoomAround(next: number, screenX: number, screenY: number, from?: { zoom: number; pan: [number, number] }): void {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const box = viewport.getBoundingClientRect();
+    const base = from ?? { zoom, pan };
+    const level = Math.min(8, Math.max(1, next));
+    // Waar het aangewezen punt in het onvergrote beeld ligt.
+    const ix = (screenX - box.left - base.pan[0]) / base.zoom;
+    const iy = (screenY - box.top - base.pan[1]) / base.zoom;
+    const px = screenX - box.left - ix * level;
+    const py = screenY - box.top - iy * level;
+    setZoom(level);
+    setPan(level <= 1 ? [0, 0] : [px, py]);
+  }
+
+  /** Het midden van wat je nu ziet; waar de knoppen omheen zoomen. */
+  function middleOfView(): [number, number] {
+    const box = viewportRef.current?.getBoundingClientRect();
+    return box ? [box.left + box.width / 2, box.top + box.height / 2] : [0, 0];
+  }
+
+  function fitAgain(): void {
+    setZoom(1);
+    setPan([0, 0]);
+  }
+
   function startDrag(event: ReactPointerEvent<HTMLDivElement>): void {
+    pointers.current.set(event.pointerId, [event.clientX, event.clientY]);
+    if (pointers.current.size === 2) {
+      // Twee vingers is knijpen, geen slepen. Wat er met de eerste vinger al
+      // getekend was, wordt teruggedraaid: dat was het begin van deze beweging.
+      const [a, b] = [...pointers.current.values()];
+      pinch.current = {
+        distance: Math.hypot(a![0] - b![0], a![1] - b![1]) || 1,
+        zoom,
+        pan,
+        mid: [(a![0] + b![0]) / 2, (a![1] + b![1]) / 2],
+      };
+      if (dragging.current && cornersBefore.current) setCorners(cornersBefore.current);
+      dragging.current = null;
+      cornersBefore.current = null;
+      if (boxStart.current) {
+        boxStart.current = null;
+        setRefBox(boxBefore.current);
+      }
+      return;
+    }
     const [x, y] = pointFrom(event);
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Sommige invoerapparaten laten dat niet toe; slepen werkt dan nog steeds,
+      // alleen laat het los zodra je buiten het beeld komt.
+    }
     if (aiming === 'referee') {
       // Een kader trek je op, je verschuift geen stippen: het is één keer per
       // opname en 'sleep er een hokje omheen' hoef je niemand uit te leggen.
       boxStart.current = [x, y];
+      boxBefore.current = refBox;
       setRefBox(boxOf([x, y], [x, y]));
       return;
     }
     dragging.current = nearestCorner(x, y);
+    cornersBefore.current = corners;
     setCorners((current) => ({ ...current, [dragging.current!]: [x, y] }));
   }
 
   function moveDrag(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (pointers.current.has(event.pointerId)) {
+      pointers.current.set(event.pointerId, [event.clientX, event.clientY]);
+    }
+    if (pinch.current && pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      const distance = Math.hypot(a![0] - b![0], a![1] - b![1]) || 1;
+      const mid: [number, number] = [(a![0] + b![0]) / 2, (a![1] + b![1]) / 2];
+      const start = pinch.current;
+      // Verschuiven zit erin door om het nieuwe midden te zoomen: leg je twee
+      // vingers plat opzij, dan schuift het beeld mee.
+      const shift: [number, number] = [
+        start.pan[0] + (mid[0] - start.mid[0]),
+        start.pan[1] + (mid[1] - start.mid[1]),
+      ];
+      zoomAround((distance / start.distance) * start.zoom, mid[0], mid[1], {
+        zoom: start.zoom,
+        pan: shift,
+      });
+      return;
+    }
     const [x, y] = pointFrom(event);
     if (aiming === 'referee') {
       if (boxStart.current) setRefBox(boxOf(boxStart.current, [x, y]));
@@ -304,8 +512,11 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     setCorners((current) => ({ ...current, [dragging.current!]: [x, y] }));
   }
 
-  function endDrag(): void {
+  function endDrag(event?: ReactPointerEvent<HTMLDivElement>): void {
+    if (event) pointers.current.delete(event.pointerId);
+    if (pointers.current.size < 2) pinch.current = null;
     dragging.current = null;
+    cornersBefore.current = null;
     // Een tik zonder slepen is geen kader maar een vergissing.
     if (boxStart.current) {
       boxStart.current = null;
@@ -776,9 +987,37 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   return (
     <div className="dashboard">
       <header className="dashboard__header">
-        <button type="button" className="button button--ghost" onClick={onExit}>
-          ← Terug
-        </button>
+        {confirmExit ? (
+          <div className="rallynow">
+            <span className="rallynow__label">
+              Terug? Je lijst en de kaders blijven bewaard bij deze wedstrijd — alleen de opname
+              moet je straks opnieuw kiezen, want die blijft op je apparaat.
+            </span>
+            <button type="button" className="button button--primary" onClick={onExit}>
+              Ja, terug
+            </button>
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => setConfirmExit(false)}
+            >
+              Nee, verder werken
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => {
+              // Alleen vragen als er iets te verliezen valt. Bij een leeg
+              // scherm is een tussenvraag alleen maar een extra tik.
+              if (rallies && rallies.length > done.size + removed.size) setConfirmExit(true);
+              else onExit();
+            }}
+          >
+            ← Terug
+          </button>
+        )}
         <div>
           <h1>Wedstrijd van beeld</h1>
           <p className="dashboard__sub">
@@ -827,6 +1066,18 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
           aria-label="Opname kiezen"
           onChange={(event) => choose(event.target.files?.[0] ?? null)}
         />
+        {!file && saved?.fileName && saved.rallies && saved.rallies.length > 0 && (
+          // Wat er van de vorige keer klaarstaat. Zonder deze regel kies je een
+          // bestand, ziet de lijst er ineens ingevuld uit en snap je niet
+          // waarom — of erger: je kiest een ander bestand en zoekt een half uur
+          // opnieuw.
+          <p className="card__hint">
+            Van de vorige keer staat er een lijst van {saved.rallies.length} rally’s klaar bij{' '}
+            <strong>{saved.fileName}</strong>
+            {saved.done.length > 0 ? `, waarvan ${saved.done.length} gedaan` : ''}. Kies datzelfde
+            bestand en je gaat verder waar je gebleven was; kies een ander en de app zoekt opnieuw.
+          </p>
+        )}
         {file && (
           <p className="card__hint">
             {file.name} · {(file.size / 1024 / 1024 / 1024).toFixed(2)} GB
@@ -953,14 +1204,30 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                 ? 'Sleep de vier stippen naar de hoeken van jullie veld. Vier punten en geen rechthoek, want een camera staat zelden recht voor het veld — schuin erachter is een veld op het beeld een scheve vierhoek, en dan valt het veld ernaast er met een rechthoek niet af te snijden.'
                 : 'Sleep een kader om de scheidsrechter op zijn stoel — hoofd tot heup, en aan weerskanten ruimte voor een gestrekte arm. De app kijkt dan na elke rally welke kant hij aanwijst, en zet die uitslag vast klaar. Hoeft niet: laat je dit leeg, dan tik je het zelf in zoals eerst.'}
             </p>
+            {aiming === 'referee' && (
+              <p className="step__hint">
+                Staat hij er nog niet op? Aan het begin van een opname zit de scheidsrechter vaak
+                nog niet op zijn stoel. Spoel de video eerst naar een moment waarop er gespeeld
+                wordt, dan zie je waar hij hoort te staan.
+              </p>
+            )}
             <div
               className="videocrop"
               onPointerDown={startDrag}
               onPointerMove={moveDrag}
               onPointerUp={endDrag}
               onPointerCancel={endDrag}
+              onWheel={(event) => {
+                if (!event.ctrlKey && Math.abs(event.deltaY) < 1) return;
+                zoomAround(zoom * (event.deltaY < 0 ? 1.15 : 1 / 1.15), event.clientX, event.clientY);
+              }}
             >
-              <div className="videocrop__stage" ref={stageRef}>
+              <div className="videocrop__viewport" ref={viewportRef}>
+              <div
+                className="videocrop__stage"
+                ref={stageRef}
+                style={{ transform: `translate(${pan[0]}px, ${pan[1]}px) scale(${zoom})` }}
+              >
                 <canvas ref={previewRef} className="videocrop__frame" />
                 <svg
                   className="videocrop__shape"
@@ -979,7 +1246,13 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                     <span
                       key={key}
                       className="videocrop__handle"
-                      style={{ left: `${corners[key][0] * 100}%`, top: `${corners[key][1] * 100}%` }}
+                      style={{
+                        left: `${corners[key][0] * 100}%`,
+                        top: `${corners[key][1] * 100}%`,
+                        // Tegen het zoomen in, anders wordt een stip zo groot
+                        // als een vuist zodra je inzoomt om precies te richten.
+                        transform: `scale(${1 / zoom})`,
+                      }}
                       aria-label={`Hoek ${CORNER_LABELS[key]}`}
                     />
                   ))}
@@ -996,7 +1269,23 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                   />
                 )}
               </div>
+              </div>
             </div>
+            <div className="startat startat--three">
+              <button type="button" className="button" onClick={() => zoomAround(zoom / 1.6, ...middleOfView())}>
+                Uitzoomen −
+              </button>
+              <button type="button" className="button" onClick={() => zoomAround(zoom * 1.6, ...middleOfView())}>
+                Inzoomen +
+              </button>
+              <button type="button" className="button button--ghost" onClick={fitAgain} disabled={zoom === 1}>
+                Passend
+              </button>
+            </div>
+            <p className="step__hint">
+              Knijp met twee vingers om in te zoomen; met twee vingers schuif je het beeld ook.
+              Eén vinger blijft slepen.
+            </p>
             {aiming === 'court' && (
               <>
                 <p className="step__hint">

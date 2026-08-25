@@ -3164,15 +3164,25 @@ button {
     var(--bg-panel) 8px,
     var(--bg-panel) 16px
   );
-  /* Anders scrolt de pagina mee zodra je een hoekpunt versleept. */
+  /* Anders scrolt de pagina mee zodra je een hoekpunt versleept, en knijpen
+     zoomt de hele pagina in plaats van het beeld. */
   touch-action: none;
   cursor: crosshair;
+  /* Ingezoomd loopt het beeld tot aan de rand van de gestreepte werkrand en
+     niet daarbuiten; anders duwt het de kaart uit elkaar. */
+  overflow: hidden;
+}
+
+/* Waarbinnen geschoven en gezoomd wordt. */
+.videocrop__viewport {
+  position: relative;
 }
 
 .videocrop__stage {
   position: relative;
   /* De stippen mogen erbuiten hangen; dat is het hele idee. */
   overflow: visible;
+  transform-origin: 0 0;
 }
 
 .videocrop__frame {
@@ -3233,6 +3243,11 @@ button {
   border: 2px dashed var(--poor);
   background: rgb(236 131 90 / 0.14);
   pointer-events: none;
+}
+
+/* Drie knoppen van gelijke breedte, zoals de zoomknoppen onder het beeld. */
+.startat--three {
+  grid-template-columns: 1fr 1fr 1fr;
 }
 
 /* Twee vakjes naast elkaar: minuten en seconden, plus de knop ernaast. */
