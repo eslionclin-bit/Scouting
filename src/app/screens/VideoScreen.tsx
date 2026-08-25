@@ -74,7 +74,14 @@ interface SavedSetup {
   rallies: JudgedSpan[] | null;
   removed: number[];
   done: number[];
-  suggestions: (Team | null)[];
+  /**
+   * Per rally: welke kant van het beeld de arm op ging.
+   *
+   * Bewust de richting en niet de uitslag. Welke ploeg links staat is iets wat
+   * je later kunt omzetten — en dan hoort de hele lijst mee om te klappen
+   * zonder dat er opnieuw een half uur video doorheen moet.
+   */
+  directions: (Side | null)[];
   savedAt: string;
 }
 
@@ -236,8 +243,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
    * speelhelft, dus dit klapt om zodra je een set afrondt.
    */
   const [ourSide, setOurSide] = useState<Side>('left');
-  /** Per rally: wie hem volgens de scheidsrechter won. */
-  const [suggestions, setSuggestions] = useState<(Team | null)[]>([]);
+  /** Per rally: welke kant van het beeld de scheidsrechter aanwees. */
+  const [directions, setDirections] = useState<(Side | null)[]>([]);
   /** Wat er van de vorige keer klaarstaat, zodra je dezelfde opname weer kiest. */
   const [saved, setSaved] = useState<SavedSetup | null>(null);
   const [restored, setRestored] = useState(false);
@@ -314,7 +321,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
         rallies,
         removed: [...removed],
         done: [...done],
-        suggestions,
+        directions,
         savedAt: new Date().toISOString(),
       } satisfies SavedSetup);
     }, 500);
@@ -333,7 +340,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     rallies,
     removed,
     done,
-    suggestions,
+    directions,
   ]);
 
   function choose(picked: File | null): void {
@@ -353,7 +360,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setRallies(saved.rallies);
       setRemoved(new Set(saved.removed));
       setDone(new Set(saved.done));
-      setSuggestions(saved.suggestions ?? []);
+      setDirections(saved.directions ?? []);
       setSetupOpen(false);
       return;
     }
@@ -361,7 +368,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     setRemoved(new Set());
     setDone(new Set());
     setSetupOpen(true);
-    setSuggestions([]);
+    setDirections([]);
   }
 
   /** Welke hoek zit het dichtst bij waar je tikte. */
@@ -597,7 +604,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
    * iemand, loopt de scheidsrechter weg of pakt hij zijn kaartjes, en dat is
    * beweging die niets meer betekent.
    */
-  function readRefereeBetween(spans: readonly JudgedSpan[], frames: ArmFrame[]): (Team | null)[] {
+  function readRefereeBetween(spans: readonly JudgedSpan[], frames: ArmFrame[]): (Side | null)[] {
     if (frames.length < 10 || spans.length === 0) return [];
     const readings: ArmReading[] = readArm(frames, restingFrame(frames));
     return spans.map((span, index) => {
@@ -605,7 +612,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       const next = spans[index + 1];
       const to = Math.min(from + 8, next ? (next.serveWhistle ?? next.start) - 0.2 : from + 8);
       if (to <= from) return null;
-      return winnerFor(armDirection(readings, from, to), ourSide);
+      return armDirection(readings, from, to);
     });
   }
 
@@ -822,7 +829,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setShowDoubtful(heard.length < spans.length);
       setRallies(found);
       setSetupOpen(found.length === 0);
-      setSuggestions(readRefereeBetween(found, armFrames));
+      setDirections(readRefereeBetween(found, armFrames));
       if (found.length === 0) {
         setError(
           samples.length < 10
@@ -951,6 +958,14 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setPlaying(null);
     }
   }
+
+  /**
+   * De richtingen omgezet in voorstellen.
+   *
+   * Hier en niet bij het zoeken: zo klapt de hele lijst om zodra je zegt dat
+   * jullie aan de andere kant staan, zonder de video opnieuw door te lopen.
+   */
+  const suggestions = directions.map((side) => winnerFor(side, ourSide));
 
   /** De voorstellen bij elkaar, als controle op het lezen. */
   const suggested = {
@@ -1301,8 +1316,10 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
             {aiming === 'referee' && refBox && (
               <>
                 <p className="step__hint">
-                  Welke helft van het beeld is van jullie? De arm wijst naar wie mag serveren, en
-                  wie mag serveren heeft de vorige rally gewonnen.
+                  Welke helft van het beeld is van jullie — links of rechts zoals je ernaar kijkt?
+                  De arm wijst naar wie mag serveren, en wie mag serveren heeft de vorige rally
+                  gewonnen. Staat het straks omgekeerd, dan draai je het bij de rally’s met één tik
+                  om; de hele lijst gaat mee.
                 </p>
                 <div className="startat">
                   <button
@@ -1310,14 +1327,14 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                     className={ourSide === 'left' ? 'button button--us' : 'button'}
                     onClick={() => setOurSide('left')}
                   >
-                    Wij spelen links
+                    Wij spelen links in beeld
                   </button>
                   <button
                     type="button"
                     className={ourSide === 'right' ? 'button button--us' : 'button'}
                     onClick={() => setOurSide('right')}
                   >
-                    Wij spelen rechts
+                    Wij spelen rechts in beeld
                   </button>
                 </div>
               </>
@@ -1511,15 +1528,38 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                     </>
                   )}
                   {refBox && (
+                    // In beeldrichting én met een ploegnaam erbij. 'De overkant'
+                    // klinkt als een plek in de zaal terwijl het een ploeg
+                    // bedoelde, en dan lees je precies het omgekeerde van wat
+                    // er staat.
                     <span className="rallynow__hint">
-                      {suggestions[playing] === undefined || suggestions[playing] === null
-                        ? 'De scheidsrechter was hier niet te lezen — zelf kiezen.'
-                        : `De scheidsrechter wees ${
-                            suggestions[playing] === 'us' ? 'naar jullie kant' : 'naar de overkant'
-                          } aan. Klopt dat niet, tik dan de andere knop.`}
+                      {directions[playing] == null
+                        ? 'De scheidsrechter was hier niet te lezen — kies zelf.'
+                        : `De scheidsrechter wees naar ${
+                            directions[playing] === 'left' ? 'links' : 'rechts'
+                          } in beeld. Daar ${
+                            suggestions[playing] === 'us'
+                              ? 'staan jullie'
+                              : `staat ${match?.opponent?.name ?? 'de tegenstander'}`
+                          }, dus het voorstel is punt ${
+                            suggestions[playing] === 'us' ? 'wij' : 'zij'
+                          }.`}
                     </span>
                   )}
                 </div>
+              )}
+
+              {refBox && directions.length > 0 && (
+                // Staat de kant verkeerd om, dan staan álle voorstellen
+                // verkeerd om. Dat hoort met één tik recht te zetten, hier waar
+                // je het merkt, en niet drie schermen terug bij de instellingen.
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => setOurSide((side) => (side === 'left' ? 'right' : 'left'))}
+                >
+                  Jullie spelen {ourSide === 'left' ? 'links' : 'rechts'} in beeld · omdraaien
+                </button>
               )}
 
               {refBox && suggested.gelezen > 0 && (
