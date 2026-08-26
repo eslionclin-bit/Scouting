@@ -24,8 +24,26 @@
  * dat hem gebruikt. Zo is de redenering te testen zonder video.
  */
 
+/**
+ * Eén geluidsmeting.
+ *
+ * Los van de beelden, en veel vaker: luisteren kost niets terwijl een beeldje
+ * uitlezen wél tijd kost. Dat verschil is hier het punt. De momenten waarop de
+ * bal geraakt wordt, moeten op een honderdste nauwkeurig zijn — anders klopt de
+ * hoogte die eruit volgt tot meters niet — en met de beeldjes meeliften was
+ * daar veel te grof voor.
+ */
+export interface SoundSample {
+  /** Seconden vanaf het begin van de opname. */
+  at: number;
+  /** Hoeveel geluid er in de fluitband zat (0 tot 255). */
+  whistle?: number;
+  /** Hoeveel klap er over de hele breedte zat. */
+  impact?: number;
+}
+
 /** Eén meting: hoeveel er veranderde, en op welk moment in de opname. */
-export interface MotionSample {
+export interface MotionSample extends SoundSample {
   /** Seconden vanaf het begin van de opname. */
   at: number;
   /** Hoeveel er veranderde ten opzichte van het vorige beeld. */
@@ -38,6 +56,13 @@ export interface MotionSample {
    * beweging alleen.
    */
   whistle?: number;
+  /**
+   * Hoeveel klap er op dat moment in het geluid zat, over de hele breedte.
+   *
+   * Een fluit is een smalle toon; een balaanraking is een korte klap over alle
+   * hoogtes tegelijk. Twee verschillende metingen dus, van hetzelfde geluid.
+   */
+  impact?: number;
 }
 
 export interface RallySpan {
@@ -231,7 +256,7 @@ const WHISTLE_DEFAULTS: Required<WhistleOptions> = {
  * hooguit één stuk beweging dat blijft staan. Nooit een rally die verdwijnt.
  */
 export function whistlesFrom(
-  samples: readonly MotionSample[],
+  samples: readonly SoundSample[],
   options: WhistleOptions = {},
 ): Whistle[] {
   const { minLevel, marginOverNoise, minGapSeconds, lagSeconds } = {

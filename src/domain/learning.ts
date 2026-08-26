@@ -25,6 +25,8 @@ export interface RallyObservation {
   peakEnergy: number;
   meanEnergy: number;
   bursts: number;
+  /** De momenten waarop de bal geraakt werd, in seconden vanaf het begin. */
+  contacts: number[];
   /** Hoeveel arm er links en rechts uitstak in de pauze erna. */
   armLeft: number;
   armRight: number;

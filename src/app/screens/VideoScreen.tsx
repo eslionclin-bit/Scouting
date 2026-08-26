@@ -42,6 +42,8 @@ import {
   type JudgedSpan,
   type MotionSample,
   type RallyFeatures,
+  type RallySpan,
+  type SoundSample,
 } from '../../domain/rallyIndex';
 import {
   ARM_GRID,
@@ -56,6 +58,7 @@ import {
   type Side,
   type Team,
 } from '../../domain/referee';
+import { contactsIn, heightsBetween } from '../../domain/contacts';
 import {
   agreementOf,
   rowFor,
@@ -95,6 +98,7 @@ interface SavedSetup {
   /** Wat de app per rally van de beweging en de arm zag. */
   features?: RallyFeatures[];
   arms?: { left: number; right: number }[];
+  chains?: number[][];
   savedAt: string;
 }
 
@@ -198,6 +202,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     analyser: AnalyserNode;
     gain: GainNode;
     band: [number, number];
+    wide: [number, number];
   } | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
@@ -261,6 +266,12 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   /** En wat er verder van die rally te onthouden viel — de leerstof. */
   const [features, setFeatures] = useState<RallyFeatures[]>([]);
   const [arms, setArms] = useState<{ left: number; right: number }[]>([]);
+  /** Per rally de momenten waarop de bal geraakt werd. */
+  const [chains, setChains] = useState<number[][]>([]);
+  /** De gehoorde fluitsignalen, nodig bij de tweede doorloop. */
+  const [whistleTimes, setWhistleTimes] = useState<number[]>([]);
+  /** De tweede doorloop loopt: langzaam, en alleen over de rally's. */
+  const [listening, setListening] = useState(false);
   /** Wat u bij eerdere rally's antwoordde, en of het voorstel klopte. */
   const [learned, setLearned] = useState<LearnRow[]>([]);
   /** Wat er van de vorige keer klaarstaat, zodra je dezelfde opname weer kiest. */
@@ -358,6 +369,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       bursts: shape?.bursts ?? 0,
       armLeft: arm?.left ?? 0,
       armRight: arm?.right ?? 0,
+      contacts: chains[index] ?? [],
       direction: directions[index] ?? null,
       ourSide,
       suggested: suggestions[index] ?? null,
@@ -391,6 +403,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
         directions,
         features,
         arms,
+        chains,
         savedAt: new Date().toISOString(),
       } satisfies SavedSetup);
     }, 500);
@@ -412,6 +425,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     directions,
     features,
     arms,
+    chains,
   ]);
 
   function choose(picked: File | null): void {
@@ -434,6 +448,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setDirections(saved.directions ?? []);
       setFeatures(saved.features ?? []);
       setArms(saved.arms ?? []);
+      setChains(saved.chains ?? []);
       setSetupOpen(false);
       return;
     }
@@ -444,6 +459,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     setDirections([]);
     setFeatures([]);
     setArms([]);
+    setChains([]);
   }
 
   /** Welke hoek zit het dichtst bij waar je tikte. */
@@ -661,7 +677,14 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
         Math.floor(2600 / perBin),
         Math.min(analyser.frequencyBinCount - 1, Math.ceil(4400 / perBin)),
       ];
-      soundRef.current = { context, analyser, gain, band };
+      // En een tweede, brede band voor de klappen. Een fluit is een smalle
+      // toon; een balaanraking is een korte klap over alle hoogtes tegelijk.
+      // Dezelfde meting, andere vraag.
+      const wide: [number, number] = [
+        Math.floor(400 / perBin),
+        Math.min(analyser.frequencyBinCount - 1, Math.ceil(8000 / perBin)),
+      ];
+      soundRef.current = { context, analyser, gain, band, wide };
       return soundRef.current;
     } catch {
       return null;
@@ -746,7 +769,16 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
      * Een fluit duurt op zestien keer de snelheid nog geen vijftigste seconde;
      * wie alleen op de meetmomenten luistert, hoort hem net niet.
      */
-    let loudest = 0;
+    /**
+     * Het geluid op zijn eigen, veel fijnere tijdlijn.
+     *
+     * Niet meeliften op de beeldjes. Een beeldje uitlezen kost tijd, dus dat
+     * gebeurt vier keer per seconde opnametijd; luisteren kost niets en gebeurt
+     * ruim honderd keer. Dat verschil is precies wat een hoogte bruikbaar
+     * maakt: op een tiende seconde na weet je de hoogte binnen een halve meter,
+     * op een halve seconde na weet je hem niet.
+     */
+    const beats: SoundSample[] = [];
 
     const hear = (): void => {
       if (!sound || !bins) return;
@@ -754,7 +786,19 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       const [from, to] = sound.band;
       let total = 0;
       for (let i = from; i <= to; i++) total += bins[i]!;
-      loudest = Math.max(loudest, total / (to - from + 1));
+
+      const [wideFrom, wideTo] = sound.wide;
+      let broad = 0;
+      for (let i = wideFrom; i <= wideTo; i++) broad += bins[i]!;
+
+      const at = video.currentTime;
+      if (Number.isFinite(at)) {
+        beats.push({
+          at,
+          whistle: total / (to - from + 1),
+          impact: broad / (wideTo - wideFrom + 1),
+        });
+      }
     };
 
     // Eén keer uitrekenen welke vakjes binnen jullie veld vallen; daarna gaat er
@@ -795,10 +839,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
         for (let i = 0; i < grey.length; i++) {
           if (mask[i]) sum += Math.abs(grey[i]! - previous[i]!);
         }
-        samples.push(
-          sound ? { at, energy: sum / counted, whistle: loudest } : { at, energy: sum / counted },
-        );
-        loudest = 0;
+        samples.push({ at, energy: sum / counted });
 
         if (armContext && refBox) {
           const sx = refBox.left * video.videoWidth;
@@ -901,7 +942,9 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
             (sound.context.outputLatency || 0)) *
           video.playbackRate
         : 0;
-      const heard = whistlesFrom(samples, { lagSeconds });
+      // De vertraging geldt voor beide banden: het is dezelfde geluidsketen.
+      const gehoord: SoundSample[] = beats.map((beat) => ({ ...beat, at: beat.at - lagSeconds }));
+      const heard = whistlesFrom(beats, { lagSeconds });
       const found = judge(spans, heard);
       setWhistleCount(heard.length);
       // Alleen verbergen als er genoeg gefloten is om iets te betekenen. Anders
@@ -915,6 +958,15 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       // De beweging per rally samenvatten zolang de metingen er nog zijn. Na dit
       // scherm zijn ze weg, en dan is deze wedstrijd voorgoed geen leerstof meer.
       setFeatures(found.map((span) => featuresFor(samples, span)));
+      // De aanrakingen binnen elke rally, en de hoogtes ertussen. Dit kan
+      // alleen nu: straks zijn de metingen weg en is de opname alleen nog een
+      // bestand op uw telefoon.
+      const heardWhistles = heard.map((peak) => peak.at);
+      setWhistleTimes(heardWhistles);
+      // Op zestien keer de snelheid zijn balaanrakingen niet te horen — dat is
+      // gemeten: van vier klappen bleef er nul over. Ze komen uit een tweede,
+      // langzame doorloop die alleen de rally's afgaat.
+      setChains([]);
       if (found.length === 0) {
         setError(
           samples.length < 10
@@ -932,6 +984,143 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setBusy(false);
       setProgress(1);
     }
+  }
+
+  /**
+   * De tweede doorloop: luisteren naar de balaanrakingen.
+   *
+   * Waarom apart en langzamer: op zestien keer de snelheid duurt een tik van
+   * veertig milliseconde nog maar tweeënhalve, en het meetvenster van de
+   * geluidsmeter is er tien keer zo lang als dat. Uitgeprobeerd op een
+   * proefopname: op zestien keer nul van de vier aanrakingen, op acht keer één,
+   * op vier keer alle vier — op drie honderdste seconde nauwkeurig.
+   *
+   * Vier keer de snelheid over een hele wedstrijd zou een half uur duren. Dat
+   * hoeft niet: de rally's zijn al bekend, en samen zijn ze een fractie van de
+   * opname. Alleen die stukjes worden afgeluisterd.
+   */
+  async function measureContacts(): Promise<void> {
+    const video = videoRef.current;
+    if (!video || !rallies || rallies.length === 0) return;
+    const sound = listen(video);
+    if (!sound) {
+      setError('Er kan niet meegeluisterd worden met deze opname.');
+      return;
+    }
+
+    setListening(true);
+    setError(null);
+    setProgress(0);
+    cancelRef.current = false;
+
+    // Een korter meetvenster: dat kijkt naar minder geluid tegelijk en hoort
+    // daardoor kort en scherp verschil. Voor de fluit was juist het lange
+    // venster beter, dus die staat straks weer terug.
+    const wasFft = sound.analyser.fftSize;
+    sound.analyser.fftSize = 256;
+    const bins = new Uint8Array(sound.analyser.frequencyBinCount);
+    const perBin = sound.context.sampleRate / sound.analyser.fftSize;
+    const from = Math.floor(400 / perBin);
+    const to = Math.min(bins.length - 1, Math.ceil(8000 / perBin));
+    const rate = 4;
+    const lag =
+      (sound.analyser.fftSize / sound.context.sampleRate / 2 +
+        sound.context.baseLatency +
+        (sound.context.outputLatency || 0)) *
+      rate;
+
+    const found: number[][] = [];
+    try {
+      sound.gain.gain.value = 0;
+      video.muted = false;
+      for (const [index, span] of rallies.entries()) {
+        if (cancelRef.current) break;
+        const beats = await sweep(video, sound, bins, [from, to], span, rate, lag);
+        // Alleen fluiten búiten de rally tellen als stoorzender. Binnen een
+        // rally wordt er niet gefloten — dan is hij afgelopen — en de klap van
+        // een aanraking komt breed genoeg om ook in de fluitband op te duiken.
+        // Zonder dit onderscheid gooit de app precies de aanrakingen weg waar
+        // het om begonnen was.
+        // Ruim buiten: de service-aanraking ligt vaak net vóór de eerste
+        // beweging, en die hoort niet als fluit weggestreept te worden.
+        const buiten = whistleTimes.filter((at) => at < span.start - 1.2 || at > span.end + 0.2);
+        // Na de eindfluit is de rally afgelopen; wat daarna nog klinkt is een
+        // bal die terugrolt of de zaal die reageert. Zonder deze grens komt er
+        // een aanraking bij die er niet was, en die maakt van de laatste
+        // tussentijd een bal van negen meter hoog.
+        const tot = span.endWhistle ?? span.end;
+        found.push(
+          contactsIn(beats, { start: span.start, end: tot }, buiten, {
+            whistleGuardSeconds: 0.7,
+          }),
+        );
+        setChains([...found]);
+        setProgress((index + 1) / rallies.length);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      sound.analyser.fftSize = wasFft;
+      sound.gain.gain.value = 1;
+      video.playbackRate = 1;
+      video.pause();
+      setListening(false);
+      setProgress(1);
+    }
+  }
+
+  /** Eén rally afluisteren op vier keer de snelheid. */
+  function sweep(
+    video: HTMLVideoElement,
+    sound: NonNullable<typeof soundRef.current>,
+    bins: Uint8Array<ArrayBuffer>,
+    band: [number, number],
+    span: RallySpan,
+    rate: number,
+    lag: number,
+  ): Promise<SoundSample[]> {
+    return new Promise((resolve, reject) => {
+      const beats: SoundSample[] = [];
+      const until = span.end + 0.5;
+      // Ruim aanlopen. Na het springen duurt het even voor de opname op
+      // snelheid is, en in die tijd wordt er niets gehoord — de service zit
+      // precies daar.
+      const start = Math.max(0, span.start - 2);
+
+      const run = (): void => {
+        // Pas luisteren als de opname écht op de goede plek staat. Zonder deze
+        // controle loopt de vorige rally door in de volgende meting, en dan
+        // horen we aanrakingen die ergens anders vandaan komen.
+        if (Math.abs(video.currentTime - start) > 1.5) {
+          video.currentTime = start;
+          video.addEventListener('seeked', run, { once: true });
+          return;
+        }
+        video.playbackRate = rate;
+        const timer = window.setInterval(() => {
+          sound.analyser.getByteFrequencyData(bins);
+          let broad = 0;
+          for (let i = band[0]; i <= band[1]; i++) broad += bins[i]!;
+          const at = video.currentTime;
+          if (Number.isFinite(at) && at >= start - 0.2) {
+            beats.push({ at: at - lag, impact: broad / (band[1] - band[0] + 1) });
+          }
+          if (at >= until || video.ended || cancelRef.current) {
+            window.clearInterval(timer);
+            video.pause();
+            resolve(beats);
+          }
+        }, 4);
+        video.play().catch((cause: unknown) => {
+          window.clearInterval(timer);
+          reject(cause instanceof Error ? cause : new Error(String(cause)));
+        });
+      };
+
+      video.pause();
+      video.addEventListener('seeked', run, { once: true });
+      video.currentTime = start;
+    });
   }
 
   /**
@@ -1552,6 +1741,9 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                 {match?.set
                   ? ' Tik dan wie hem won — dat legt hem vast en speelt meteen de volgende af.'
                   : ' Daarna brengt ‘Volgende’ je naar de rally erna.'}{' '}
+                Wil je er ook de <strong>hoogtes</strong> bij, tik dan ‘Aanrakingen en hoogtes
+                zoeken’: de app luistert de rally’s nog een keer af, langzamer, en hoort dan waar de
+                bal geraakt werd. Uit de tijd tussen twee aanrakingen volgt hoe hoog hij ging.{' '}
                 Is het er geen — een wissel, een time-out, iemand die een bal terugrolt — gooi hem
                 dan weg met het kruisje. Werd er overgespeeld, bijvoorbeeld bij een dubbele fout of
                 een bal van het veld ernaast, tik dan ‘Overspelen’: dan telt hij wel mee als
@@ -1646,6 +1838,20 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                       </button>
                     </>
                   )}
+                  {(chains[playing]?.length ?? 0) >= 2 && (
+                    // Wat de app in deze rally hoorde. Alleen tonen wat er
+                    // gemeten is: geen contacten betekent geen regel, en geen
+                    // hoogte betekent een streepje in plaats van een getal.
+                    <span className="rallynow__hint">
+                      {chains[playing]!.length} aanrakingen gehoord
+                      {(() => {
+                        const hoogtes = heightsBetween(chains[playing]!)
+                          .filter((hoogte): hoogte is number => hoogte !== null)
+                          .map((hoogte) => `${hoogte.toFixed(1).replace('.', ',')} m`);
+                        return hoogtes.length > 0 ? ` · bal ging ${hoogtes.join(', ')} hoog` : '';
+                      })()}
+                    </span>
+                  )}
                   {refBox && (
                     // In beeldrichting én met een ploegnaam erbij. 'De overkant'
                     // klinkt als een plek in de zaal terwijl het een ploeg
@@ -1678,6 +1884,36 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                   onClick={() => setOurSide((side) => (side === 'left' ? 'right' : 'left'))}
                 >
                   Jullie spelen {ourSide === 'left' ? 'links' : 'rechts'} in beeld · omdraaien
+                </button>
+              )}
+
+              {listening || chains.length === 0 ? (
+                <button
+                  type="button"
+                  className="button"
+                  disabled={listening || busy}
+                  onClick={() => void measureContacts()}
+                >
+                  {listening
+                    ? `Luisteren… ${Math.round(progress * 100)}%`
+                    : 'Aanrakingen en hoogtes zoeken'}
+                </button>
+              ) : (
+                <p className="card__hint">
+                  Bij {chains.filter((keten) => keten.length >= 2).length} van de {chains.length}{' '}
+                  rally’s zijn de aanrakingen gehoord. Ze staan bij de rally zelf, met de hoogte die
+                  de bal tussen twee aanrakingen haalde.
+                </p>
+              )}
+              {listening && (
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => {
+                    cancelRef.current = true;
+                  }}
+                >
+                  Stoppen
                 </button>
               )}
 

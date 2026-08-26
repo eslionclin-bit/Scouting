@@ -9,6 +9,7 @@ const seen: RallyObservation = {
   peakEnergy: 9,
   meanEnergy: 4,
   bursts: 5,
+  contacts: [10.2, 11.6, 12.6],
   armLeft: 0.2,
   armRight: 0.01,
   direction: 'left',
