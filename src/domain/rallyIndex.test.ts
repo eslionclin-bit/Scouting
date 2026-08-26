@@ -4,6 +4,7 @@ import {
   noteFor,
   ralliesFrom,
   splitPoint,
+  featuresFor,
   whistlesFrom,
   judge,
   looksLikeRally,
@@ -277,5 +278,34 @@ describe('een gevonden stuk beweging beoordelen', () => {
     expect(judged[0]!.endWhistle).toBe(18.6);
     expect(judged[1]!.serveWhistle).toBeNull();
     expect(looksLikeRally(judged[1]!)).toBe(false);
+  });
+});
+
+describe('wat er van een rally onthouden wordt', () => {
+  it('vat de beweging binnen de rally samen', () => {
+    const found = featuresFor(samples([[10, 18]], 40), { start: 10, end: 18 });
+    expect(found.duration).toBe(8);
+    expect(found.peakEnergy).toBeGreaterThan(found.meanEnergy);
+    expect(found.bursts).toBeGreaterThanOrEqual(1);
+  });
+
+  it('telt de keren dat de drukte opleefde', () => {
+    // Drie duidelijke uitschieters in een verder rustige rally.
+    const base: MotionSample[] = [];
+    for (let i = 0; i <= 40; i++) {
+      const at = 10 + i / 5;
+      const piek = i === 5 || i === 18 || i === 31;
+      base.push({ at, energy: piek ? 30 : 5 });
+    }
+    expect(featuresFor(base, { start: 10, end: 18 }).bursts).toBe(3);
+  });
+
+  it('valt niet om bij een rally waar niets in zit', () => {
+    expect(featuresFor([], { start: 3, end: 9 })).toEqual({
+      duration: 6,
+      peakEnergy: 0,
+      meanEnergy: 0,
+      bursts: 0,
+    });
   });
 });

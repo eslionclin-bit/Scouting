@@ -143,23 +143,45 @@ const DIRECTION_DEFAULTS: Required<DirectionOptions> = {
  * is er een seconde of twee, de rest van de pauze staat hij stil. Een gemiddelde
  * verdunt precies het enige moment waar het om gaat.
  */
+export interface ArmWindow {
+  /** De sterkste uitslag links en rechts in dit stuk. */
+  left: number;
+  right: number;
+  /** Het oordeel, of niets als het niet te zeggen valt. */
+  side: Side | null;
+}
+
+/**
+ * De twee getallen én het oordeel, in één keer.
+ *
+ * De getallen zelf zijn het bewaren waard, ook als er geen oordeel uit komt:
+ * juist de gevallen waarin de app twijfelde zijn later het leerzaamst.
+ */
+export function armWindow(
+  readings: readonly ArmReading[],
+  from: number,
+  to: number,
+  options: DirectionOptions = {},
+): ArmWindow {
+  const { minShare, minLead } = { ...DIRECTION_DEFAULTS, ...options };
+  const window = readings.filter((reading) => reading.at >= from && reading.at <= to);
+  if (window.length === 0) return { left: 0, right: 0, side: null };
+
+  const left = Math.max(...window.map((reading) => reading.left));
+  const right = Math.max(...window.map((reading) => reading.right));
+  const [winner, best, other]: [Side, number, number] =
+    left >= right ? ['left', left, right] : ['right', right, left];
+  if (best < minShare || best < other * minLead) return { left, right, side: null };
+  return { left, right, side: winner };
+}
+
 export function armDirection(
   readings: readonly ArmReading[],
   from: number,
   to: number,
   options: DirectionOptions = {},
 ): Side | null {
-  const { minShare, minLead } = { ...DIRECTION_DEFAULTS, ...options };
-  const window = readings.filter((reading) => reading.at >= from && reading.at <= to);
-  if (window.length === 0) return null;
-
-  const left = Math.max(...window.map((reading) => reading.left));
-  const right = Math.max(...window.map((reading) => reading.right));
-  const [winner, best, other]: [Side, number, number] =
-    left >= right ? ['left', left, right] : ['right', right, left];
-  if (best < minShare) return null;
-  if (best < other * minLead) return null;
-  return winner;
+  return armWindow(readings, from, to, options).side;
 }
 
 export type Team = 'us' | 'them';

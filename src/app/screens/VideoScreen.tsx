@@ -33,6 +33,7 @@ import {
   maskFor,
   noteFor,
   ralliesFrom,
+  featuresFor,
   judge,
   looksLikeRally,
   whistlesFrom,
@@ -40,10 +41,11 @@ import {
   type Corners,
   type JudgedSpan,
   type MotionSample,
+  type RallyFeatures,
 } from '../../domain/rallyIndex';
 import {
   ARM_GRID,
-  armDirection,
+  armWindow,
   readArm,
   restingFrame,
   tallyOf,
@@ -54,6 +56,14 @@ import {
   type Side,
   type Team,
 } from '../../domain/referee';
+import {
+  agreementOf,
+  rowFor,
+  summarise,
+  type Answer,
+  type LearnRow,
+  type RallyObservation,
+} from '../../domain/learning';
 
 /**
  * Wat er van dit scherm bewaard blijft bij de wedstrijd.
@@ -82,6 +92,9 @@ interface SavedSetup {
    * zonder dat er opnieuw een half uur video doorheen moet.
    */
   directions: (Side | null)[];
+  /** Wat de app per rally van de beweging en de arm zag. */
+  features?: RallyFeatures[];
+  arms?: { left: number; right: number }[];
   savedAt: string;
 }
 
@@ -245,6 +258,11 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   const [ourSide, setOurSide] = useState<Side>('left');
   /** Per rally: welke kant van het beeld de scheidsrechter aanwees. */
   const [directions, setDirections] = useState<(Side | null)[]>([]);
+  /** En wat er verder van die rally te onthouden viel — de leerstof. */
+  const [features, setFeatures] = useState<RallyFeatures[]>([]);
+  const [arms, setArms] = useState<{ left: number; right: number }[]>([]);
+  /** Wat u bij eerdere rally's antwoordde, en of het voorstel klopte. */
+  const [learned, setLearned] = useState<LearnRow[]>([]);
   /** Wat er van de vorige keer klaarstaat, zodra je dezelfde opname weer kiest. */
   const [saved, setSaved] = useState<SavedSetup | null>(null);
   const [restored, setRestored] = useState(false);
@@ -306,6 +324,55 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     };
   }, [setupKey, store]);
 
+  // De antwoorden van eerdere keren erbij, zodat de teller doorloopt over
+  // sessies heen in plaats van bij elke keer opnieuw op nul te beginnen.
+  const learnKey = `video.learn.${matchId ?? 'los'}`;
+  useEffect(() => {
+    let alive = true;
+    void store.getMeta<LearnRow[]>(learnKey).then((found) => {
+      if (alive && found) setLearned(found);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [learnKey, store]);
+
+  /**
+   * Wat de app bij deze rally zag, klaar om naast uw antwoord te zetten.
+   *
+   * Ook als er niets te lezen viel. Juist de rally's waar de app twijfelde zijn
+   * later het leerzaamst — die weglaten zou het beeld mooier maken dan het is.
+   */
+  function observationOf(index: number): RallyObservation | null {
+    const span = rallies?.[index];
+    if (!span) return null;
+    const shape = features[index];
+    const arm = arms[index];
+    return {
+      at: span.start,
+      duration: span.end - span.start,
+      serveWhistle: span.serveWhistle,
+      endWhistle: span.endWhistle,
+      peakEnergy: shape?.peakEnergy ?? 0,
+      meanEnergy: shape?.meanEnergy ?? 0,
+      bursts: shape?.bursts ?? 0,
+      armLeft: arm?.left ?? 0,
+      armRight: arm?.right ?? 0,
+      direction: directions[index] ?? null,
+      ourSide,
+      suggested: suggestions[index] ?? null,
+    };
+  }
+
+  /** Uw antwoord bij de getallen zetten en bewaren. */
+  async function remember(index: number, answer: Answer): Promise<void> {
+    const seen = observationOf(index);
+    if (!seen) return;
+    const rows = [...learned.filter((row) => row.at !== seen.at), rowFor(seen, answer)];
+    setLearned(rows);
+    await store.setMeta(learnKey, rows);
+  }
+
   // En bewaren zodra er iets verandert. Niet bij elke muisbeweging: even
   // wachten tot je klaar bent met slepen scheelt honderden schrijfacties.
   useEffect(() => {
@@ -322,6 +389,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
         removed: [...removed],
         done: [...done],
         directions,
+        features,
+        arms,
         savedAt: new Date().toISOString(),
       } satisfies SavedSetup);
     }, 500);
@@ -341,6 +410,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     removed,
     done,
     directions,
+    features,
+    arms,
   ]);
 
   function choose(picked: File | null): void {
@@ -361,6 +432,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setRemoved(new Set(saved.removed));
       setDone(new Set(saved.done));
       setDirections(saved.directions ?? []);
+      setFeatures(saved.features ?? []);
+      setArms(saved.arms ?? []);
       setSetupOpen(false);
       return;
     }
@@ -369,6 +442,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     setDone(new Set());
     setSetupOpen(true);
     setDirections([]);
+    setFeatures([]);
+    setArms([]);
   }
 
   /** Welke hoek zit het dichtst bij waar je tikte. */
@@ -604,15 +679,20 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
    * iemand, loopt de scheidsrechter weg of pakt hij zijn kaartjes, en dat is
    * beweging die niets meer betekent.
    */
-  function readRefereeBetween(spans: readonly JudgedSpan[], frames: ArmFrame[]): (Side | null)[] {
-    if (frames.length < 10 || spans.length === 0) return [];
+  function readRefereeBetween(
+    spans: readonly JudgedSpan[],
+    frames: ArmFrame[],
+  ): { left: number; right: number; side: Side | null }[] {
+    if (frames.length < 10 || spans.length === 0) {
+      return spans.map(() => ({ left: 0, right: 0, side: null }));
+    }
     const readings: ArmReading[] = readArm(frames, restingFrame(frames));
     return spans.map((span, index) => {
       const from = (span.endWhistle ?? span.end) + 0.2;
       const next = spans[index + 1];
       const to = Math.min(from + 8, next ? (next.serveWhistle ?? next.start) - 0.2 : from + 8);
-      if (to <= from) return null;
-      return armDirection(readings, from, to);
+      if (to <= from) return { left: 0, right: 0, side: null };
+      return armWindow(readings, from, to);
     });
   }
 
@@ -829,7 +909,12 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setShowDoubtful(heard.length < spans.length);
       setRallies(found);
       setSetupOpen(found.length === 0);
-      setDirections(readRefereeBetween(found, armFrames));
+      const gelezen = readRefereeBetween(found, armFrames);
+      setDirections(gelezen.map((item) => item.side));
+      setArms(gelezen.map(({ left, right }) => ({ left, right })));
+      // De beweging per rally samenvatten zolang de metingen er nog zijn. Na dit
+      // scherm zijn ze weg, en dan is deze wedstrijd voorgoed geen leerstof meer.
+      setFeatures(found.map((span) => featuresFor(samples, span)));
       if (found.length === 0) {
         setError(
           samples.length < 10
@@ -886,6 +971,27 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     try {
       const rally = await store.rallies.start({ setId: match.set.id });
       await store.rallies.complete(rally.id, wonBy);
+      await remember(index, wonBy);
+      next(index);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /**
+   * Overgespeeld: wel gezien, geen punt.
+   *
+   * Bij een dubbele fout, of als er een bal van het veld ernaast in rolt, laat
+   * de scheidsrechter de rally overspelen. Er valt dan niets te noteren in de
+   * stand — en dat is precies waarom deze knop moet bestaan: zonder hem zou je
+   * 'punt wij' of 'punt zij' tikken en klopt de stand de hele set niet meer.
+   */
+  async function replay(index: number): Promise<void> {
+    setSaving(true);
+    try {
+      await remember(index, 'replay');
       next(index);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -966,6 +1072,9 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
    * jullie aan de andere kant staan, zonder de video opnieuw door te lopen.
    */
   const suggestions = directions.map((side) => winnerFor(side, ourSide));
+
+  /** Hoe vaak het voorstel klopte, over alles wat u ooit bij deze wedstrijd antwoordde. */
+  const meting = summarise(agreementOf(learned));
 
   /** De voorstellen bij elkaar, als controle op het lezen. */
   const suggested = {
@@ -1444,7 +1553,9 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                   ? ' Tik dan wie hem won — dat legt hem vast en speelt meteen de volgende af.'
                   : ' Daarna brengt ‘Volgende’ je naar de rally erna.'}{' '}
                 Is het er geen — een wissel, een time-out, iemand die een bal terugrolt — gooi hem
-                dan weg met het kruisje. De app zoekt liever iets te ruim, want een gemiste rally
+                dan weg met het kruisje. Werd er overgespeeld, bijvoorbeeld bij een dubbele fout of
+                een bal van het veld ernaast, tik dan ‘Overspelen’: dan telt hij wel mee als
+                gezien, maar niet in de stand. De app zoekt liever iets te ruim, want een gemiste rally
                 krijg je niet terug.
               </p>
 
@@ -1481,6 +1592,14 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                         onClick={() => void score(playing, 'them')}
                       >
                         Punt zij{suggestions[playing] === 'them' ? ' ◄' : ''}
+                      </button>
+                      <button
+                        type="button"
+                        className="button"
+                        disabled={saving}
+                        onClick={() => void replay(playing)}
+                      >
+                        Overspelen
                       </button>
                       <button
                         type="button"
@@ -1560,6 +1679,12 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                 >
                   Jullie spelen {ourSide === 'left' ? 'links' : 'rechts'} in beeld · omdraaien
                 </button>
+              )}
+
+              {meting && (
+                // De teller. Niet om indruk te maken maar om te weten waar we
+                // staan: zonder dit cijfer is elke volgende stap gokwerk.
+                <p className="card__hint">{meting}</p>
               )}
 
               {refBox && suggested.gelezen > 0 && (

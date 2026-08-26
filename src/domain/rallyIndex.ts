@@ -415,3 +415,51 @@ function inside(x: number, y: number, polygon: readonly (readonly [number, numbe
   }
   return result;
 }
+
+/**
+ * Wat er van de beweging tijdens één rally te onthouden valt.
+ *
+ * Niet om er nu iets mee te doen, maar om het niet weg te gooien. Dit zijn de
+ * getallen waar later een oordeel op te leren valt — en ze zijn alleen te
+ * berekenen zolang de opname er is. Wie ze nu laat vallen, kan ze nooit meer
+ * terughalen zonder de hele wedstrijd opnieuw door te lopen.
+ */
+export interface RallyFeatures {
+  /** Hoe lang de rally duurde, in seconden. */
+  duration: number;
+  /** De drukste meting. Een aanval geeft meer uitslag dan een vrije bal. */
+  peakEnergy: number;
+  meanEnergy: number;
+  /**
+   * Hoe vaak de drukte opleefde.
+   *
+   * Een ruwe telling van balcontacten: elke aanraking geeft een uitschieter.
+   * Ruw, want een blok en een aanval vlak na elkaar tellen als één — maar het
+   * onderscheid tussen een rally van drie contacten en een van twaalf zit er
+   * wel in.
+   */
+  bursts: number;
+}
+
+export function featuresFor(
+  samples: readonly MotionSample[],
+  span: RallySpan,
+): RallyFeatures {
+  const inside = samples.filter((sample) => sample.at >= span.start && sample.at <= span.end);
+  const duration = span.end - span.start;
+  if (inside.length === 0) {
+    return { duration, peakEnergy: 0, meanEnergy: 0, bursts: 0 };
+  }
+  const energies = inside.map((sample) => sample.energy);
+  const peakEnergy = Math.max(...energies);
+  const meanEnergy = energies.reduce((sum, value) => sum + value, 0) / energies.length;
+
+  const level = meanEnergy + (peakEnergy - meanEnergy) / 2;
+  let bursts = 0;
+  let above = false;
+  for (const energy of energies) {
+    if (!above && energy > level) bursts += 1;
+    above = energy > level;
+  }
+  return { duration, peakEnergy, meanEnergy, bursts };
+}
