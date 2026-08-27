@@ -81,12 +81,22 @@ export interface ContactOptions {
   minRise?: number;
   /** Zo dicht bij een fluitsignaal telt een klap niet: dat is de fluit zelf. */
   whistleGuardSeconds?: number;
+  /**
+   * Hoeveel toon er bovenuit mag steken voordat het geen klap meer is.
+   *
+   * Een fluit is smal en hard op één hoogte; een balaanraking is breed en
+   * steekt nergens bovenuit. Op tijd wegstrepen kan hier niet: bij een
+   * technische fout fluit de scheidsrechter juist óp het contact, en dan zou
+   * precies de aanraking verdwijnen die het oordeel draagt.
+   */
+  toneLevel?: number;
 }
 
 const CONTACT_DEFAULTS: Required<ContactOptions> = {
   minGapSeconds: 0.25,
   minRise: 12,
   whistleGuardSeconds: 0.35,
+  toneLevel: 20,
 };
 
 /**
@@ -102,7 +112,10 @@ export function contactsIn(
   whistles: readonly number[] = [],
   options: ContactOptions = {},
 ): number[] {
-  const { minGapSeconds, minRise, whistleGuardSeconds } = { ...CONTACT_DEFAULTS, ...options };
+  const { minGapSeconds, minRise, whistleGuardSeconds, toneLevel } = {
+    ...CONTACT_DEFAULTS,
+    ...options,
+  };
   const inside = samples.filter(
     (sample) =>
       typeof sample.impact === 'number' &&
@@ -113,6 +126,10 @@ export function contactsIn(
 
   const rises: { at: number; rise: number }[] = [];
   for (let i = 1; i < inside.length; i++) {
+    // Een meting waarin een toon bovenuit steekt telt niet mee. Dat is een
+    // fluit, en die hoort de hoogste klap van de rally niet te bepalen — anders
+    // ligt de drempel opeens zo hoog dat de echte aanrakingen eronder vallen.
+    if ((inside[i]!.whistle ?? 0) > toneLevel) continue;
     const rise = inside[i]!.impact! - inside[i - 1]!.impact!;
     if (rise > 0) rises.push({ at: inside[i]!.at, rise });
   }

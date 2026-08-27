@@ -59,6 +59,7 @@ import {
   type Team,
 } from '../../domain/referee';
 import { contactsIn, heightsBetween } from '../../domain/contacts';
+import { endingOf, type Ending } from '../../domain/ending';
 import {
   agreementOf,
   rowFor,
@@ -99,6 +100,7 @@ interface SavedSetup {
   features?: RallyFeatures[];
   arms?: { left: number; right: number }[];
   chains?: number[][];
+  endWhistles?: (number | null)[];
   savedAt: string;
 }
 
@@ -270,6 +272,8 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   const [chains, setChains] = useState<number[][]>([]);
   /** De gehoorde fluitsignalen, nodig bij de tweede doorloop. */
   const [whistleTimes, setWhistleTimes] = useState<number[]>([]);
+  /** Per rally de eindfluit zoals in de langzame doorloop gemeten. */
+  const [endWhistles, setEndWhistles] = useState<(number | null)[]>([]);
   /** De tweede doorloop loopt: langzaam, en alleen over de rally's. */
   const [listening, setListening] = useState(false);
   /** Wat u bij eerdere rally's antwoordde, en of het voorstel klopte. */
@@ -363,13 +367,13 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       at: span.start,
       duration: span.end - span.start,
       serveWhistle: span.serveWhistle,
-      endWhistle: span.endWhistle,
       peakEnergy: shape?.peakEnergy ?? 0,
       meanEnergy: shape?.meanEnergy ?? 0,
       bursts: shape?.bursts ?? 0,
       armLeft: arm?.left ?? 0,
       armRight: arm?.right ?? 0,
       contacts: chains[index] ?? [],
+      endWhistle: endWhistles[index] ?? span.endWhistle,
       direction: directions[index] ?? null,
       ourSide,
       suggested: suggestions[index] ?? null,
@@ -377,10 +381,13 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
   }
 
   /** Uw antwoord bij de getallen zetten en bewaren. */
-  async function remember(index: number, answer: Answer): Promise<void> {
+  async function remember(index: number, answer: Answer, ending?: string): Promise<void> {
     const seen = observationOf(index);
     if (!seen) return;
-    const rows = [...learned.filter((row) => row.at !== seen.at), rowFor(seen, answer)];
+    const rows = [
+      ...learned.filter((row) => row.at !== seen.at),
+      { ...rowFor(seen, answer), ...(ending ? { ending } : {}) },
+    ];
     setLearned(rows);
     await store.setMeta(learnKey, rows);
   }
@@ -404,6 +411,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
         features,
         arms,
         chains,
+        endWhistles,
         savedAt: new Date().toISOString(),
       } satisfies SavedSetup);
     }, 500);
@@ -426,6 +434,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     features,
     arms,
     chains,
+    endWhistles,
   ]);
 
   function choose(picked: File | null): void {
@@ -449,6 +458,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       setFeatures(saved.features ?? []);
       setArms(saved.arms ?? []);
       setChains(saved.chains ?? []);
+      setEndWhistles(saved.endWhistles ?? []);
       setSetupOpen(false);
       return;
     }
@@ -460,6 +470,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     setFeatures([]);
     setArms([]);
     setChains([]);
+    setEndWhistles([]);
   }
 
   /** Welke hoek zit het dichtst bij waar je tikte. */
@@ -1022,6 +1033,15 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     const perBin = sound.context.sampleRate / sound.analyser.fftSize;
     const from = Math.floor(400 / perBin);
     const to = Math.min(bins.length - 1, Math.ceil(8000 / perBin));
+    // De fluitband erbij, in dezelfde doorloop. De eindfluit is al bekend uit
+    // het snelle rondje, maar op een halve seconde nauwkeurig — en juist het
+    // verschil tussen 'gefloten op het contact' en 'gefloten toen de bal lag'
+    // is een halve seconde. Twee metingen uit dezelfde pas zijn eerlijk te
+    // vergelijken; twee uit verschillende passen niet.
+    const narrow: [number, number] = [
+      Math.floor(2600 / perBin),
+      Math.min(bins.length - 1, Math.ceil(4400 / perBin)),
+    ];
     const rate = 4;
     const lag =
       (sound.analyser.fftSize / sound.context.sampleRate / 2 +
@@ -1030,31 +1050,43 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       rate;
 
     const found: number[][] = [];
+    const einden: (number | null)[] = [];
     try {
       sound.gain.gain.value = 0;
       video.muted = false;
       for (const [index, span] of rallies.entries()) {
         if (cancelRef.current) break;
-        const beats = await sweep(video, sound, bins, [from, to], span, rate, lag);
-        // Alleen fluiten búiten de rally tellen als stoorzender. Binnen een
-        // rally wordt er niet gefloten — dan is hij afgelopen — en de klap van
-        // een aanraking komt breed genoeg om ook in de fluitband op te duiken.
-        // Zonder dit onderscheid gooit de app precies de aanrakingen weg waar
-        // het om begonnen was.
-        // Ruim buiten: de service-aanraking ligt vaak net vóór de eerste
-        // beweging, en die hoort niet als fluit weggestreept te worden.
-        const buiten = whistleTimes.filter((at) => at < span.start - 1.2 || at > span.end + 0.2);
-        // Na de eindfluit is de rally afgelopen; wat daarna nog klinkt is een
-        // bal die terugrolt of de zaal die reageert. Zonder deze grens komt er
-        // een aanraking bij die er niet was, en die maakt van de laatste
-        // tussentijd een bal van negen meter hoog.
-        const tot = span.endWhistle ?? span.end;
-        found.push(
-          contactsIn(beats, { start: span.start, end: tot }, buiten, {
-            whistleGuardSeconds: 0.7,
-          }),
+        const beats = await sweep(video, sound, bins, [from, to], narrow, span, rate, lag);
+
+        // De fluitsignalen eerst, en uit deze doorloop zelf. Uit het snelle
+        // rondje zijn ze op een halve seconde nauwkeurig, en dat is precies de
+        // maat waar het hier om draait: het verschil tussen gefloten óp het
+        // contact en gefloten toen de bal lag.
+        const gefloten = whistlesFrom(beats).map((peak) => peak.at);
+
+        // De laatste fluit in dit stuk sluit de rally af. Bij een korte rally
+        // valt die middenin de beweging, en dan is hij nog steeds het einde —
+        // eerder telde hij mee als aanraking en werd een ace een passfout.
+        const sluit = gefloten.filter((at) => at > span.start + 0.4).at(-1) ?? span.endWhistle;
+
+        // Alleen de fluiten die er volgens de regels kúnnen zijn: die van de
+        // service en die waarmee de rally wordt afgefloten. Wat daartussen als
+        // fluit werd gehoord is een balaanraking — er wordt tijdens een rally
+        // niet gefloten, want dan is hij afgelopen. Wie ook die tussenliggende
+        // wegstreept, gooit de aanrakingen weg waar het om begonnen was.
+        const stoort = [sluit, ...whistleTimes.filter((at) => at < span.start + 0.2)].filter(
+          (at): at is number => at != null,
         );
+        const keten = contactsIn(beats, { start: span.start, end: sluit ?? span.end }, stoort, {
+          // Kort houden: bij een technische fout valt de fluit vrijwel op de
+          // aanraking, en die mag niet verdwijnen. Het onderscheid komt van de
+          // klank, niet van de klok.
+          whistleGuardSeconds: 0.12,
+        });
+        found.push(keten);
         setChains([...found]);
+        einden.push(sluit ?? null);
+        setEndWhistles([...einden]);
         setProgress((index + 1) / rallies.length);
       }
     } catch (cause) {
@@ -1075,6 +1107,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     sound: NonNullable<typeof soundRef.current>,
     bins: Uint8Array<ArrayBuffer>,
     band: [number, number],
+    narrow: [number, number],
     span: RallySpan,
     rate: number,
     lag: number,
@@ -1101,9 +1134,22 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
           sound.analyser.getByteFrequencyData(bins);
           let broad = 0;
           for (let i = band[0]; i <= band[1]; i++) broad += bins[i]!;
+          let tone = 0;
+          for (let i = narrow[0]; i <= narrow[1]; i++) tone += bins[i]!;
           const at = video.currentTime;
           if (Number.isFinite(at) && at >= start - 0.2) {
-            beats.push({ at: at - lag, impact: broad / (band[1] - band[0] + 1) });
+            const breed = broad / (band[1] - band[0] + 1);
+            const smal = tone / (narrow[1] - narrow[0] + 1);
+            beats.push({
+              at: at - lag,
+              impact: breed,
+              // Niet de fluitband zelf maar wat er bovenuit steekt. Een fluit is
+              // een smalle toon: hard op één hoogte en stil daarbuiten. Een
+              // balaanraking is een klap over alle hoogtes tegelijk en steekt
+              // dus nergens bovenuit. Zonder dit verschil hoort de app in elke
+              // aanraking een fluit, en gooit hij precies weg wat hij zoekt.
+              whistle: Math.max(0, smal - breed),
+            });
           }
           if (at >= until || video.ended || cancelRef.current) {
             window.clearInterval(timer);
@@ -1160,7 +1206,10 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
     try {
       const rally = await store.rallies.start({ setId: match.set.id });
       await store.rallies.complete(rally.id, wonBy);
-      await remember(index, wonBy);
+      // Nu pas is het oordeel te benoemen: de wedstrijd weet wie serveerde, en
+      // u heeft net gezegd wie won. Een service die de rally besliste is
+      // daarmee een ace of een servicefout.
+      await remember(index, wonBy, endingFor(index, wonBy, rally.servingTeam).named);
       next(index);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -1261,6 +1310,22 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
    * jullie aan de andere kant staan, zonder de video opnieuw door te lopen.
    */
   const suggestions = directions.map((side) => winnerFor(side, ourSide));
+
+  /**
+   * Waardoor rally zoveel eindigde.
+   *
+   * Wie er serveerde weet dit scherm niet zelf — dat rekent de wedstrijd uit
+   * zodra de rally wordt vastgelegd. Zonder die twee is het oordeel er nog
+   * steeds, alleen zonder naam: 'de service besliste hem' in plaats van 'ace'.
+   */
+  function endingFor(index: number, wonBy: TeamSide | null = null, servedBy: TeamSide | null = null) {
+    return endingOf({
+      contacts: chains[index] ?? [],
+      endWhistle: endWhistles[index] ?? rallies?.[index]?.endWhistle ?? null,
+      servedBy,
+      wonBy,
+    });
+  }
 
   /** Hoe vaak het voorstel klopte, over alles wat u ooit bij deze wedstrijd antwoordde. */
   const meting = summarise(agreementOf(learned));
@@ -1838,6 +1903,14 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                       </button>
                     </>
                   )}
+                  {(chains[playing]?.length ?? 0) > 0 &&
+                    endingFor(playing).ending !== 'onduidelijk' && (
+                      // Het oordeel mét de reden erbij. Een uitspraak die je
+                      // niet kunt nalopen is in dit hele project geen uitspraak.
+                      <span className="rallynow__hint">
+                        Waarschijnlijk {endingFor(playing).named} — {endingFor(playing).because}.
+                      </span>
+                    )}
                   {(chains[playing]?.length ?? 0) >= 2 && (
                     // Wat de app in deze rally hoorde. Alleen tonen wat er
                     // gemeten is: geen contacten betekent geen regel, en geen

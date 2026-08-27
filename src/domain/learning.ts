@@ -47,6 +47,8 @@ export type Answer = 'us' | 'them' | 'replay' | 'none';
 
 export interface LearnRow extends RallyObservation {
   answer: Answer;
+  /** Waardoor de rally volgens de app eindigde, op het moment van antwoorden. */
+  ending?: string;
   answeredAt: string;
 }
 
