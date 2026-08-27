@@ -1,0 +1,19 @@
+# De deelserver van de trainingsapp. Staat los van de sync-server van de
+# scouting-app: twee apps, twee databases, en geen enkele reden waarom een
+# storing in de een de ander zou moeten raken.
+name = "volley-training-share"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# De database wordt aangemaakt met:
+#
+#   npx wrangler d1 create volley-training --location weur
+#
+# `weur` is West-Europa, zodat namen en trainingen hier staan en niet aan de
+# andere kant van de oceaan. Het commando drukt een database_id af; die hoort
+# hieronder. Rolt GitHub de server voor je uit, laat de plaatshouder dan staan:
+# de workflow vult hem in vanuit het secret CLOUDFLARE_TRAINING_D1_ID.
+[[d1_databases]]
+binding = "DB"
+database_name = "volley-training"
+database_id = "vul-hier-de-id-in-die-wrangler-afdrukt"
