@@ -311,7 +311,7 @@ export interface Marker {
 }
 
 /** Lijn tussen twee punten in een fase: een pass, een aanval, een looplijn. */
-export type PathKind = 'pass' | 'attack' | 'serve' | 'run' | 'dribble';
+export type PathKind = 'pass' | 'set' | 'attack' | 'serve' | 'run' | 'dribble';
 
 export interface Path {
   markerId: string;
