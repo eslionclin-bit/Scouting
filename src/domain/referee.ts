@@ -96,6 +96,44 @@ const ARM_DEFAULTS: Required<ArmOptions> = {
   bodyShare: 0.3,
 };
 
+/**
+ * Waar de scheidsrechter zelf staat, in kolommen van het kadertje.
+ *
+ * Niet zomaar het midden. Een kader wordt met een vinger op een telefoon
+ * getrokken en zit dus zelden precies om hem heen — en staat hij een derde naar
+ * links, dan valt zijn eigen lijf in de linkerhelft en telt elke schouderdraai
+ * mee als een arm naar links. Dan wijst hij de hele wedstrijd naar één kant en
+ * komt de stand uit op 25–5.
+ *
+ * Hij staat in het rustbeeld: dat ís hij, staand te wachten. Dus wordt er
+ * gezocht naar de kolommen die het meest afwijken van hoe het kadertje er
+ * gemiddeld uitziet — een staande gestalte is nu eenmaal donkerder of lichter
+ * dan de muur erachter. Zoeken in de bewéging kan niet: wat beweegt is juist de
+ * arm, en dan zou de app hem daarop centreren.
+ */
+export function bodyColumn(resting: Uint8Array): number {
+  const { width, height } = ARM_GRID;
+  const profile = new Float64Array(width);
+  for (let x = 0; x < width; x++) {
+    let sum = 0;
+    for (let y = 0; y < height; y++) sum += resting[y * width + x]!;
+    profile[x] = sum / height;
+  }
+  const sorted = [...profile].sort((a, b) => a - b);
+  const middle = sorted[Math.floor(width / 2)]!;
+
+  let total = 0;
+  let weighted = 0;
+  for (let x = 0; x < width; x++) {
+    // Kwadratisch: een gestalte die er duidelijk uitspringt telt zwaarder dan
+    // een muur die een tint lichter is.
+    const weight = (profile[x]! - middle) ** 2;
+    total += weight;
+    weighted += weight * x;
+  }
+  return total > 0 ? weighted / total : width / 2;
+}
+
 export function readArm(
   frames: readonly ArmFrame[],
   resting: Uint8Array,
@@ -104,8 +142,8 @@ export function readArm(
   const { minChange, bodyShare } = { ...ARM_DEFAULTS, ...options };
   const { width, height } = ARM_GRID;
   const body = Math.round((width * bodyShare) / 2);
-  const middle = width / 2;
-  const side = Math.max(1, Math.round(middle - body) * height);
+  const middle = bodyColumn(resting);
+  const side = Math.max(1, Math.round(width / 2 - body) * height);
 
   return frames.map((frame) => {
     let left = 0;
@@ -233,4 +271,31 @@ export function tallyOf(winners: readonly (Team | null)[], target = 25): Tally {
   });
 
   return { us, them, decidedAfter, extra };
+}
+
+/**
+ * Aan welke kant jullie speelden, per rally.
+ *
+ * Een wedstrijd is geen set: na elke set wisselen de ploegen van speelhelft, en
+ * dan betekent 'de arm ging naar links' opeens het omgekeerde. Waar die grens
+ * ligt is aan de klok te zien — tussen twee rally's van dezelfde set zit hooguit
+ * een halve minuut, tussen twee sets een pauze van minuten.
+ *
+ * Bewust geen poging om de setstand mee te laten beslissen. Als het lezen van
+ * de arm ergens misgaat loopt die stand ook mis, en dan zou een fout zichzelf
+ * bevestigen. De klok staat daarbuiten.
+ */
+export function sidesFor(
+  spans: readonly { start: number; end: number }[],
+  startSide: Side,
+  breakSeconds = 40,
+): Side[] {
+  let side = startSide;
+  return spans.map((span, index) => {
+    const previous = spans[index - 1];
+    if (previous && span.start - previous.end > breakSeconds) {
+      side = side === 'left' ? 'right' : 'left';
+    }
+    return side;
+  });
 }

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   ARM_GRID,
   armDirection,
+  bodyColumn,
   readArm,
   restingFrame,
+  sidesFor,
   tallyOf,
   winnerFor,
   type ArmFrame,
@@ -104,5 +106,70 @@ describe('de reeks natellen', () => {
 
   it('gaat door bij een stand die nog niet uit is', () => {
     expect(tallyOf(run(25, 24))).toMatchObject({ us: 25, them: 24, decidedAfter: null });
+  });
+});
+
+describe('een kader dat niet netjes om hem heen zit', () => {
+  const { width: w, height: h } = ARM_GRID;
+
+  /** Scheidsrechter een eind naar links in het kadertje, arm naar rechts. */
+  function scheef(at: number, arm: boolean): ArmFrame {
+    const pixels = new Uint8Array(w * h).fill(70);
+    const verf = (x0: number, x1: number, y0: number, y1: number, kleur: number): void => {
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) pixels[y * w + x] = kleur;
+    };
+    const romp = Math.round(w * 0.3);
+    verf(romp - 3, romp + 3, 6, h - 4, 200);
+    if (arm) verf(romp + 3, romp + 16, 12, 17, 215);
+    return { at, pixels };
+  }
+
+  it('leest de arm nog steeds goed, ook als hij niet in het midden staat', () => {
+    const frames = [
+      ...Array.from({ length: 30 }, (_, i) => scheef(i * 0.25, false)),
+      scheef(20, true),
+      scheef(20.5, true),
+    ];
+    const readings = readArm(frames, restingFrame(frames));
+    expect(armDirection(readings, 19.5, 21)).toBe('right');
+  });
+
+  it('vindt waar hij staat in plaats van het midden aan te nemen', () => {
+    const frames = Array.from({ length: 20 }, (_, i) => scheef(i * 0.25, i % 5 === 0));
+    const kolom = bodyColumn(restingFrame(frames));
+    expect(kolom).toBeGreaterThan(w * 0.15);
+    expect(kolom).toBeLessThan(w * 0.5);
+  });
+});
+
+describe('van speelhelft wisselen tussen de sets', () => {
+  it('houdt dezelfde kant aan binnen een set', () => {
+    const spans = [
+      { start: 10, end: 18 },
+      { start: 30, end: 38 },
+      { start: 55, end: 62 },
+    ];
+    expect(sidesFor(spans, 'left')).toEqual(['left', 'left', 'left']);
+  });
+
+  it('draait om na een pauze van minuten', () => {
+    const spans = [
+      { start: 10, end: 18 },
+      { start: 30, end: 38 },
+      // Setwissel.
+      { start: 200, end: 208 },
+      { start: 220, end: 228 },
+      // En nog een.
+      { start: 500, end: 508 },
+    ];
+    expect(sidesFor(spans, 'left')).toEqual(['left', 'left', 'right', 'right', 'left']);
+  });
+
+  it('laat een time-out van een halve minuut met rust', () => {
+    const spans = [
+      { start: 10, end: 18 },
+      { start: 48, end: 56 },
+    ];
+    expect(sidesFor(spans, 'right')).toEqual(['right', 'right']);
   });
 });

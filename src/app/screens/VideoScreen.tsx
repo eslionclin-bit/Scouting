@@ -49,6 +49,7 @@ import {
   ARM_GRID,
   armWindow,
   readArm,
+  sidesFor,
   restingFrame,
   tallyOf,
   winnerFor,
@@ -123,6 +124,14 @@ const SAMPLE_EVERY = 0.25;
 const GRID = { width: 128, height: 72 };
 
 const SPEEDS = [16, 8, 4] as const;
+
+/**
+ * Zoveel stilte tussen twee rally's betekent: hier zat een setwissel.
+ *
+ * Ruim genomen. Een time-out en een lange wissel halen de veertig seconden
+ * zelden; een setwissel duurt altijd langer.
+ */
+const SET_BREAK_SECONDS = 40;
 
 /**
  * Niet elke browser kent deze; wie hem heeft geeft per getoond beeld een seintje
@@ -375,7 +384,7 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       contacts: chains[index] ?? [],
       endWhistle: endWhistles[index] ?? span.endWhistle,
       direction: directions[index] ?? null,
-      ourSide,
+      ourSide: sidePerRally[index] ?? ourSide,
       suggested: suggestions[index] ?? null,
     };
   }
@@ -1309,7 +1318,43 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
    * Hier en niet bij het zoeken: zo klapt de hele lijst om zodra je zegt dat
    * jullie aan de andere kant staan, zonder de video opnieuw door te lopen.
    */
-  const suggestions = directions.map((side) => winnerFor(side, ourSide));
+  /**
+   * Waar de sets uit elkaar vallen.
+   *
+   * Tussen twee rally's van dezelfde set zit hooguit een halve minuut. Tussen
+   * twee sets zit een pauze waarin de ploegen van speelhelft wisselen, en dat
+   * duurt minuten. Zo'n gat is dus geen stilte maar een gebeurtenis — en het
+   * enige moment waarop links en rechts van betekenis veranderen.
+   */
+  const setBreaks = new Set<number>(
+    (rallies ?? [])
+      .map((span, index) => {
+        const previous = rallies?.[index - 1];
+        return previous && span.start - previous.end > SET_BREAK_SECONDS ? index : -1;
+      })
+      .filter((index) => index >= 0),
+  );
+
+  /** Aan welke kant jullie speelden tijdens rally zoveel. */
+  const sidePerRally = sidesFor(rallies ?? [], ourSide, SET_BREAK_SECONDS);
+
+  const suggestions = directions.map((side, index) =>
+    winnerFor(side, sidePerRally[index] ?? ourSide),
+  );
+
+  /**
+   * Wordt de arm bijna altijd naar dezelfde kant gelezen?
+   *
+   * Dan klopt er iets niet. Over een hele wedstrijd wint geen ploeg viervijfde
+   * van de rally's; zo'n scheve verhouding betekent dat het kader niet om de
+   * scheidsrechter zit, of dat er iets anders in beeld beweegt dat als arm
+   * gelezen wordt. Dat hoort de app te zeggen in plaats van de uitkomst als
+   * waarheid te presenteren.
+   */
+  const readLeft = directions.filter((side) => side === 'left').length;
+  const readRight = directions.filter((side) => side === 'right').length;
+  const lopsided =
+    readLeft + readRight >= 20 && Math.max(readLeft, readRight) / (readLeft + readRight) > 0.75;
 
   /**
    * Waardoor rally zoveel eindigde.
@@ -1326,6 +1371,11 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
       wonBy,
     });
   }
+
+  /** Wat u per rally antwoordde, opzoekbaar op het moment waarop de rally begon. */
+  const answered = new Map(
+    learned.map((row) => [Math.round(row.at * 100), row.answer] as const),
+  );
 
   /** Hoe vaak het voorstel klopte, over alles wat u ooit bij deze wedstrijd antwoordde. */
   const meting = summarise(agreementOf(learned));
@@ -1911,6 +1961,15 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                         Waarschijnlijk {endingFor(playing).named} — {endingFor(playing).because}.
                       </span>
                     )}
+                  {refBox && arms[playing] && (
+                    // De rauwe meting erbij. Bij een uitslag die niet klopt is
+                    // dit het enige waaraan te zien is wáár het misgaat.
+                    <span className="rallynow__hint">
+                      Gemeten bij de scheidsrechter: links {arms[playing]!.left.toFixed(2)
+                        .replace('.', ',')} · rechts {arms[playing]!.right.toFixed(2)
+                        .replace('.', ',')}
+                    </span>
+                  )}
                   {(chains[playing]?.length ?? 0) >= 2 && (
                     // Wat de app in deze rally hoorde. Alleen tonen wat er
                     // gemeten is: geen contacten betekent geen regel, en geen
@@ -1990,6 +2049,15 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                 </button>
               )}
 
+              {lopsided && (
+                <p className="setup__error">
+                  De scheidsrechter wordt bijna altijd naar dezelfde kant gelezen ({readLeft}×
+                  links, {readRight}× rechts). Zo'n verhouding hoort niet bij een wedstrijd. Zit het
+                  kader wel om hém heen, en niet half om iets anders dat beweegt? Klap de
+                  instellingen open om het bij te stellen.
+                </p>
+              )}
+
               {meting && (
                 // De teller. Niet om indruk te maken maar om te weten waar we
                 // staan: zonder dit cijfer is elke volgende stap gokwerk.
@@ -2017,14 +2085,24 @@ export function VideoScreen({ matchId = null, onExit }: VideoScreenProps): React
                 {rallies.map((span, index) => {
                   if (outOfSight(index)) return null;
                   const note = doubtful(index) ? 'geen fluitsignaal gehoord' : noteFor(span);
+                  // Wat u erover gezegd hebt, als kleur. Bij honderdvijftig
+                  // regels wil je in één blik zien hoe ver je bent en hoe de
+                  // set liep, zonder elke regel te lezen.
+                  const answer = answered.get(Math.round(span.start * 100));
                   return (
                     <li key={`${span.start}`} className="rallylist__row">
+                      {setBreaks.has(index) && (
+                        <span className="rallylist__break">
+                          lange pauze — waarschijnlijk setwissel, kanten omgedraaid
+                        </span>
+                      )}
                       <button
                         type="button"
                         className={[
                           'rallylist__item',
                           playing === index ? 'rallylist__item--playing' : '',
                           done.has(index) ? 'rallylist__item--done' : '',
+                          answer ? `rallylist__item--${answer}` : '',
                         ].join(' ')}
                         onClick={() => play(index)}
                       >

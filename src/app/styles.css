@@ -3337,6 +3337,19 @@ button {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+/* Waar de sets uit elkaar vallen. */
+.rallylist__break {
+  grid-column: 1 / -1;
+  margin: 0.6rem 0 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-top: 1px dashed var(--line);
+  padding-top: 0.5rem;
+}
+
+
 /* Afgehandeld blijft staan maar treedt terug: je moet kunnen zien hoe ver je bent. */
 .rallylist__item--done {
   opacity: 0.5;
@@ -3370,6 +3383,21 @@ button {
   font: inherit;
   cursor: pointer;
 }
+
+/* Wat u van een rally vond, als kleur. Een streep aan de zijkant en niet de
+   hele regel: de lijst moet leesbaar blijven, niet oplichten. */
+.rallylist__item--us {
+  border-left: 5px solid var(--us);
+}
+
+.rallylist__item--them {
+  border-left: 5px solid var(--them);
+}
+
+.rallylist__item--replay {
+  border-left: 5px dashed var(--muted);
+}
+
 
 .rallylist__number {
   color: var(--muted);
