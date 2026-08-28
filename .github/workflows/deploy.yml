@@ -49,7 +49,24 @@ jobs:
         env:
           VITE_SYNC_URL: ${{ secrets.SYNC_URL }}
           VITE_TRAINING_SHARE_URL: ${{ secrets.TRAINING_SHARE_URL }}
-        run: BASE_PATH="/${GITHUB_REPOSITORY#*/}/" npm run build
+        run: |
+          BASE_PATH="/${GITHUB_REPOSITORY#*/}/" npm run build
+
+          # Of de trainingsapp om inloggen gaat vragen, hangt aan één secret dat
+          # bij het bouwen wordt ingebakken. Staat het er niet, dan werkt de app
+          # gewoon door zonder inlog — en dat is precies het soort verschil dat
+          # je pas ontdekt als je voor het scherm zit. Vandaar deze regel.
+          if [ -z "$VITE_TRAINING_SHARE_URL" ]; then
+            echo "::warning::Trainingsapp zonder inlog gebouwd: het secret TRAINING_SHARE_URL ontbreekt."
+            exit 0
+          fi
+
+          # Niet 'het secret was er', maar 'het staat in wat we uitleveren'.
+          if grep -rqF "$VITE_TRAINING_SHARE_URL" dist/assets; then
+            echo "Trainingsapp: het adres van de deelserver staat in de bouw; de app vraagt om inloggen."
+          else
+            echo "::warning::TRAINING_SHARE_URL was ingesteld, maar het adres staat niet in de gebouwde app. Dan blijft de inlog uit."
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
