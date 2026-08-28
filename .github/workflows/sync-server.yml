@@ -293,4 +293,40 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
-        run: npx --yes wrangler@4 deploy
+        run: |
+          # De uitvoer wordt bewaard, want daar staat het adres in dat je nodig
+          # hebt. Het stond eerst alleen ergens halverwege een log van
+          # honderden regels, en dat is precies waar iemand het kwijtraakt.
+          npx --yes wrangler@4 deploy | tee /tmp/deploy.log
+
+          ADRES=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' /tmp/deploy.log | head -1)
+          if [ -z "$ADRES" ]; then
+            echo "::warning::De uitrol is gelukt, maar het adres stond niet in de uitvoer. Kijk in het Cloudflare-dashboard bij Workers."
+            exit 0
+          fi
+
+          # Uitgerold en bereikbaar zijn twee verschillende dingen. Dit is het
+          # antwoord van de server zelf, van buitenaf opgevraagd.
+          ANTWOORD=$(curl -sS -m 20 "$ADRES/auth/status" || true)
+          echo "Antwoord van de server: ${ANTWOORD:-(geen)}"
+
+          {
+            echo "## Deelserver van de trainingsapp"
+            echo
+            echo "Adres: \`$ADRES\`"
+            echo
+            case "$ANTWOORD" in
+              *'"setupNeeded":true'*)
+                echo "De server antwoordt en er staat nog geen account op. Zet dit adres als"
+                echo "secret \`TRAINING_SHARE_URL\`, laat de app opnieuw bouwen, en maak in de app"
+                echo "je eigenaarsaccount aan."
+                ;;
+              *'"setupNeeded":false'*)
+                echo "De server antwoordt en er staan al accounts op. Inloggen kan."
+                ;;
+              *)
+                echo "Let op: de server is uitgerold, maar antwoordde niet op \`/auth/status\`."
+                echo "Antwoord: \`${ANTWOORD:-(geen)}\`"
+                ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
