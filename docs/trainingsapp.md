@@ -101,10 +101,58 @@ herhaalt: de kopie neemt de bewegingen mee en legt zijn eigen beginposities vast
 zodat hij niet meeschuift met wat ervoor gebeurt. Fases duren seconden, geen
 milliseconden.
 
+## Inloggen
+
+Iedere trainer heeft een eigen account met een wachtwoord. Wat dat precies
+regelt, en wat niet:
+
+- **Wie de app mag gebruiken.** Is er een deelserver ingesteld, dan komt er
+  niets op het scherm voordat er is ingelogd. Is die er niet, dan valt er niets
+  te controleren en werkt de app zoals hij zonder server werkt: alles op dit
+  apparaat.
+- **Wie er accounts aanmaakt.** Alleen de eigenaar; er is geen aanmeldpagina.
+  Op de beheerpagina staat voor hem een lijst met alle accounts, met knoppen om
+  iemand toe te voegen, een wachtwoord opnieuw te zetten, iemand eigenaar te
+  maken en iemand te verwijderen. Een verwijderd account kan meteen niets meer:
+  zijn sessies gaan mee de deur uit.
+- **Wat er per account gescheiden blijft.** Elk account krijgt op een apparaat
+  een eigen database. Logt er een tweede trainer in op dezelfde laptop, dan ziet
+  die niets van de eerste. Het eerste account dat op een apparaat inlogt neemt de
+  bestaande opslag over — dat is bijna altijd de eigenaar van die telefoon zelf,
+  en zo raakt niemand werk kwijt dat er al stond.
+
+### Hoe het beveiligd is
+
+| Wat | Hoe |
+|---|---|
+| Wachtwoord | PBKDF2-SHA256, 210.000 rondes, eigen zout per gebruiker. Het wachtwoord zelf wordt nooit bewaard. |
+| Sessie | 32 willekeurige bytes, 90 dagen geldig, in de database alleen als SHA-256. |
+| Raden afremmen | Tien mispogingen op rij zetten het account een kwartier op slot. |
+| Onbekend adres | Levert exact dezelfde melding en dezelfde wachttijd op als een fout wachtwoord — anders is de server een manier om te achterhalen wie er trainer is. |
+| Wachtwoord wijzigen | Alleen met het oude erbij, en alle andere sessies vervallen. |
+| Laatste eigenaar | Kan zichzelf niet verwijderen of degraderen. |
+
+De sessie staat in `localStorage` en gaat als `Authorization`-kop mee, niet als
+cookie: de app en de server staan op verschillende adressen, en dan is een kop
+eenvoudiger en veiliger dan een cookie die je over domeinen heen moet toestaan.
+Een bewaarde sessie is genoeg om de app te openen, ook zonder verbinding — de
+controle bij de server gebeurt erna, op de achtergrond. Anders zou de app in een
+sporthal zonder bereik om een wachtwoord vragen dat hij daar toch niet kan
+controleren.
+
+### De eerste keer
+
+Na het uitrollen staat er nog geen account. Dan, en alleen dan, biedt de app aan
+om er één aan te maken; dat account wordt de eigenaar. Doe dat meteen — tot dat
+moment kan iedereen die het adres kent het doen. Wie dat gaatje helemaal dicht
+wil, zet op de worker een secret `SETUP_TOKEN`; dan moet die code bij dat ene
+verzoek meegestuurd worden, en het invulveld daarvoor staat op het scherm.
+
 ## Delen: scopes in plaats van accounts
 
-Er zijn geen accounts, net als bij de sync van de scouting-app. In plaats
-daarvan gaat een record naar de scopes die zijn zichtbaarheid noemt:
+Wie er binnen mag, regelt de inlog. Wat je deelt, regelen de scopes — die twee
+staan los van elkaar. Een record gaat naar de scopes die zijn zichtbaarheid
+noemt:
 
 | Zichtbaarheid | Waar het heen gaat |
 |---|---|
@@ -122,9 +170,14 @@ Teams en spelers hebben geen zichtbaarheid en worden dus nooit verstuurd. De
 server weigert ze bovendien zelf, zodat een fout in de app geen namenlijst kan
 lekken.
 
-**Openbaar is openbaar.** Iedereen met het adres van dezelfde deelserver kan
-openbare oefeningen lezen én er zelf in schrijven. Dat is de prijs van 'geen
-accounts', en de app zegt dat ook op het deelscherm.
+**Openbaar is openbaar.** Iedere ingelogde gebruiker van dezelfde deelserver kan
+openbare oefeningen lezen én er zelf in schrijven. Met de inlog erbij is dat niet
+langer 'de hele wereld', maar wel iedereen die op jouw server een account heeft —
+en dat bepaal jij.
+
+Delen zit achter dezelfde inlog: zonder geldige sessie neemt de server niets aan
+en geeft hij niets terug. Merkt de app tijdens het delen dat de sessie niet meer
+geldt, dan komt het inlogscherm terug.
 
 Ingebouwde bankoefeningen staan in de code, niet in de database. Ze zijn er dus
 meteen bij een lege installatie en gaan nooit de deur uit. Wil je er iets aan
@@ -132,16 +185,39 @@ veranderen, dan maakt de app een kopie met jouw naam erop.
 
 ## De server
 
-`server/training/worker.js` is een Cloudflare Worker met twee eindpunten,
-`POST /share/push` en `POST /share/pull`, en één tabel. De outbox, het opnieuw
-proberen en het samenvoegen op revisie zitten in de app en horen daar te
-blijven: die moet ook werken als er geen server te bereiken is.
+`server/training/worker.js` is een Cloudflare Worker met drie soorten
+eindpunten en drie tabellen:
 
-Uitrollen gaat via de workflow `.github/workflows/sync-server.yml`, die naast de
-sync-server van de scouting-app ook deze deelserver meeneemt zodra het secret
-`CLOUDFLARE_TRAINING_D1_ID` bestaat. Het adres van de worker vul je in de app in
-op de beheerpagina; zonder adres blijft alles op het apparaat en werkt de rest
-gewoon.
+| Pad | Waarvoor |
+|---|---|
+| `GET /auth/status` | Is er al een account? Het enige dat zonder inlog te vragen valt. |
+| `POST /auth/setup` `/login` `/logout` `/me` `/password` | Inloggen en je eigen wachtwoord. |
+| `POST /admin/users` `…/add` `…/remove` `…/password` `…/role` | Alleen voor de eigenaar. |
+| `POST /share/push` `/share/pull` | Delen, achter dezelfde inlog. |
+
+`server/training/auth.js` staat er los naast: dat is het rekenwerk aan
+wachtwoorden en tokens, zonder database eromheen, en het is apart zodat het te
+testen valt. De outbox, het opnieuw proberen en het samenvoegen op revisie zitten
+in de app en horen daar te blijven: die moet ook werken als er geen server te
+bereiken is.
+
+### Uitrollen, in vijf stappen
+
+1. Maak een D1-database aan: `npx wrangler d1 create volley-training --location weur`.
+   Het commando drukt een `database_id` af.
+2. Zet in GitHub bij **Settings → Secrets and variables → Actions** de secrets
+   `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` en `CLOUDFLARE_TRAINING_D1_ID`
+   (die laatste is de id uit stap 1). De workflow `sync-server.yml` rolt de
+   worker dan uit; ontbreekt de id, dan slaat hij die stap over.
+3. De uitrol drukt het adres van de worker af, bijvoorbeeld
+   `https://volley-training-share.<jouw-account>.workers.dev`.
+4. Zet dat adres als secret `TRAINING_SHARE_URL`. De volgende bouw bakt het in de
+   app, en vanaf dan vraagt de app om inloggen.
+5. Open de app en maak je eigenaarsaccount aan. Doe dit meteen.
+
+Het adres kan ook met de hand op de beheerpagina worden ingevuld; dat is handig
+om te proberen. Zonder adres blijft alles op het apparaat en werkt de rest van de
+app gewoon door.
 
 ## Wat waar staat
 
@@ -149,6 +225,7 @@ gewoon.
 |---|---|
 | `src/training/domain` | Types, groepsverdeling, filters, trainingsplan, reeksen, animatiemodel |
 | `src/training/db` | IndexedDB-schema, collecties, outbox, profiel en instellingen |
+| `src/training/auth` | Inloggen: cliënt, sessie, de deur voor het scherm |
 | `src/training/sync` | Scopes, deel-engine, transport (server of in het geheugen) |
 | `src/training/bank` | De ingebouwde oefeningen, en kopiëren naar je eigen bank |
 | `src/training/app` | Schermen, veld- en animatiecomponenten, stijl |
@@ -160,7 +237,11 @@ gewoon.
   nergens geteld; koppeling met de scoutingdata (traint deze ploeg wel waar ze
   punten op verliest?) zou kunnen, maar is bewust nog niet gemaakt.
 - **Geen ledenbeheer in een groep.** Wie de code heeft, hoort erbij. Iemand
-  eruit zetten betekent een nieuwe code maken en die opnieuw doorgeven.
+  eruit zetten betekent een nieuwe code maken en die opnieuw doorgeven. De
+  accounts op de server staan daar los van: die bepalen wie de app mag
+  gebruiken, niet wie wat ziet.
+- **Geen 'wachtwoord vergeten' per e-mail.** De server verstuurt geen post. Een
+  vergeten wachtwoord zet de eigenaar opnieuw, op de gebruikerspagina.
 - **Geen conflictafhandeling met de hand.** Twee trainers die dezelfde gedeelde
   training tegelijk aanpassen: de laatste schrijver wint, zoals overal in deze
   repo.

@@ -8,7 +8,7 @@
  * uitging is nergens goed voor.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { newId } from '../../../domain/ids';
 import { allowedSizes } from '../../domain/grouping';
 import {
@@ -33,6 +33,23 @@ export function ExerciseEditScreen({ id }: { id: string }) {
   const [, go] = useRoute();
   const [point, setPoint] = useState('');
   const exercise = data.exercises.find((item) => item.id === id);
+
+  /**
+   * De animatie wordt hier vastgehouden en niet alleen in de opslag.
+   *
+   * Elke wijziging gaat wél meteen naar de database, maar het scherm wacht niet
+   * op de terugweg. Deed het dat wel, dan zou twee keer snel achter elkaar
+   * tikken — een speler en meteen de bal erbij — de eerste van de twee kunnen
+   * kwijtraken: de tweede tik rekent dan nog met de animatie van vóór de eerste.
+   */
+  const [animation, setAnimation] = useState(exercise?.animation ?? null);
+
+  // Bij een andere oefening opnieuw beginnen; binnen dezelfde oefening blijft
+  // staan wat je aan het tekenen bent.
+  useEffect(() => {
+    setAnimation(data.exercises.find((item) => item.id === id)?.animation ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (!exercise) {
     return (
@@ -351,8 +368,11 @@ export function ExerciseEditScreen({ id }: { id: string }) {
 
       <Panel title="Animatie">
         <AnimationEditor
-          animation={exercise.animation}
-          onChange={(animation) => void patch({ animation })}
+          animation={animation}
+          onChange={(next) => {
+            setAnimation(next);
+            void patch({ animation: next });
+          }}
         />
       </Panel>
 

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { newId } from '../../../domain/ids';
 import { TrainingStore } from '../../db/store';
+import { AuthProvider } from '../../auth/AuthProvider';
 import { StoreProvider } from '../StoreProvider';
 import { ExerciseEditScreen } from './ExerciseEditScreen';
 import { LibraryScreen } from './LibraryScreen';
@@ -53,7 +54,11 @@ async function seed(): Promise<{ store: TrainingStore; trainingId: string }> {
 }
 
 function renderWith(store: TrainingStore, ui: React.ReactElement) {
-  return render(<StoreProvider store={store}>{ui}</StoreProvider>);
+  return render(
+    <AuthProvider>
+      <StoreProvider store={store}>{ui}</StoreProvider>
+    </AuthProvider>,
+  );
 }
 
 describe('de oefeningenbank', () => {

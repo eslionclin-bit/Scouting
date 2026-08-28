@@ -42,8 +42,13 @@ jobs:
         # apparaat zelf — maar nodig is het niet: je kunt het adres ook in de app
         # invullen, en het reist mee in de koppellink. Dat is te verkiezen, want
         # ingebakken is het onzichtbaar en pas na een bouw te veranderen.
+        #
+        # En het adres van de deelserver van de trainingsapp. Staat dat er, dan
+        # vraagt die app om inloggen; staat het er niet, dan blijft hij precies
+        # wat hij zonder server is: alles op het apparaat zelf, zonder inlog.
         env:
           VITE_SYNC_URL: ${{ secrets.SYNC_URL }}
+          VITE_TRAINING_SHARE_URL: ${{ secrets.TRAINING_SHARE_URL }}
         run: BASE_PATH="/${GITHUB_REPOSITORY#*/}/" npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

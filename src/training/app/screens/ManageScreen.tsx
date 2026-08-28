@@ -8,6 +8,9 @@
  */
 
 import { useState } from 'react';
+import { useAuth } from '../../auth/AuthProvider';
+import { AuthError } from '../../auth/client';
+import { UsersPanel } from '../components/UsersPanel';
 import { newGroupCode, normalizeGroupCode } from '../../sync/scopes';
 import { POSITIONS, POSITION_LABELS, type Player, type Position } from '../../domain/types';
 import { useStore } from '../StoreProvider';
@@ -15,9 +18,12 @@ import { Field, Panel } from '../components/ui';
 
 export function ManageScreen() {
   const { store, data, sync, syncNow } = useStore();
+  const { account, logout, changePassword, serverUrl } = useAuth();
   const [newPlayer, setNewPlayer] = useState({ name: '', number: '' });
   const [joinCode, setJoinCode] = useState('');
   const [joinName, setJoinName] = useState('');
+  const [passwords, setPasswords] = useState({ current: '', next: '' });
+  const [passwordNote, setPasswordNote] = useState<string | null>(null);
 
   const team = data.teams[0] ?? null;
   const squad = [...data.players].sort((a, b) => (a.number ?? 99) - (b.number ?? 99));
@@ -94,15 +100,79 @@ export function ManageScreen() {
     <div className="screen">
       <h1>Beheer</h1>
 
-      <Panel title="Wie ben jij">
-        <Field label="Naam" hint="Staat als auteur op alles wat je deelt.">
-          <input
-            className="input"
-            value={data.profile.name}
-            onChange={(event) => void store.setProfileName(event.target.value)}
-          />
-        </Field>
-      </Panel>
+      {account ? (
+        <Panel title="Je account">
+          <p>
+            <strong>{account.name}</strong>{' '}
+            {account.role === 'owner' && <span className="tag">eigenaar</span>}
+            <br />
+            <span className="muted">{account.email}</span>
+          </p>
+
+          <h3>Wachtwoord wijzigen</h3>
+          <div className="grid grid--form">
+            <Field label="Huidig wachtwoord">
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                value={passwords.current}
+                onChange={(event) => setPasswords({ ...passwords, current: event.target.value })}
+              />
+            </Field>
+            <Field label="Nieuw wachtwoord" hint="Minstens tien tekens.">
+              <input
+                className="input"
+                type="password"
+                autoComplete="new-password"
+                value={passwords.next}
+                onChange={(event) => setPasswords({ ...passwords, next: event.target.value })}
+              />
+            </Field>
+          </div>
+          {passwordNote && <p className="warning warning--notice">{passwordNote}</p>}
+          <div className="row row--wrap">
+            <button
+              type="button"
+              className="button"
+              onClick={async () => {
+                setPasswordNote(null);
+                try {
+                  await changePassword(passwords.current, passwords.next);
+                  setPasswords({ current: '', next: '' });
+                  setPasswordNote('Gelukt. Op je andere apparaten moet je opnieuw inloggen.');
+                } catch (cause) {
+                  setPasswordNote(
+                    cause instanceof AuthError ? cause.message : 'Het wachtwoord is niet gewijzigd.',
+                  );
+                }
+              }}
+            >
+              Wachtwoord wijzigen
+            </button>
+            <button type="button" className="button button--ghost" onClick={() => void logout()}>
+              Uitloggen
+            </button>
+          </div>
+        </Panel>
+      ) : (
+        <Panel title="Wie ben jij">
+          <Field
+            label="Naam"
+            hint={
+              serverUrl
+                ? 'Staat als auteur op alles wat je deelt.'
+                : 'Staat als auteur op alles wat je deelt. Er is geen deelserver ingesteld, dus er is ook niets om op in te loggen.'
+            }
+          >
+            <input
+              className="input"
+              value={data.profile.name}
+              onChange={(event) => void store.setProfileName(event.target.value)}
+            />
+          </Field>
+        </Panel>
+      )}
 
       <Panel title={`Team · ${squad.length} speelsters`}>
         {team && (
@@ -267,10 +337,18 @@ export function ManageScreen() {
         </div>
       </Panel>
 
+      <UsersPanel />
+
       <Panel title="Delen">
+        <p className="muted">
+          {serverUrl
+            ? `Deze app praat met ${serverUrl}.`
+            : 'Er is geen deelserver ingesteld: alles blijft op dit apparaat, en er valt niets in te loggen.'}
+        </p>
+
         <Field
-          label="Adres van de deelserver"
-          hint="Leeg laten betekent: alles blijft op dit apparaat. Zonder server werkt de app verder gewoon."
+          label="Ander adres gebruiken"
+          hint="Leeg laten betekent: het adres dat bij het bouwen is meegegeven, of anders geen server."
         >
           <input
             className="input"

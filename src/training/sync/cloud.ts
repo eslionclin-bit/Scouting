@@ -21,7 +21,15 @@ const TIMEOUT_MS = 15_000;
 export class CloudTransport implements Transport {
   readonly name = 'cloud';
 
-  constructor(private readonly url: string) {}
+  /**
+   * Het token komt als functie binnen en niet als waarde: het verandert bij
+   * in- en uitloggen, en een transport dat bij het aanmaken een token vastlegt
+   * zou daarna met een verlopen sessie blijven praten.
+   */
+  constructor(
+    private readonly url: string,
+    private readonly token: () => string | null = () => null,
+  ) {}
 
   isAvailable(): boolean {
     const online = (globalThis as { navigator?: { onLine?: boolean } }).navigator?.onLine;
@@ -57,14 +65,24 @@ export class CloudTransport implements Transport {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
+      const token = this.token();
       const response = await fetch(`${this.url.replace(/\/$/, '')}/share/${path}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(body),
         signal: controller.signal,
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {
+        // Niet meer ingelogd is geen storing: opnieuw proberen helpt niet, er
+        // moet iemand een wachtwoord intikken. De app hangt hieraan of hij het
+        // inlogscherm weer moet tonen.
+        if (response.status === 401) {
+          throw new ShareAuthError(payload?.error ?? 'Niet meer ingelogd.');
+        }
         if (response.status === 400 && payload?.error) throw new ShareCodeError(payload.error);
         throw new Error(payload?.error ?? `Delen mislukt (${response.status}).`);
       }
@@ -80,5 +98,13 @@ export class ShareCodeError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ShareCodeError';
+  }
+}
+
+/** De sessie is verlopen of ingetrokken; er moet opnieuw ingelogd worden. */
+export class ShareAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ShareAuthError';
   }
 }

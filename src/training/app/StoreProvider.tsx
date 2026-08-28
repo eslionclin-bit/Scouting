@@ -16,11 +16,16 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { TrainingStore, type AppSettings } from '../db/store';
+import { TrainingStore, DEFAULT_SETTINGS, type AppSettings } from '../db/store';
 import { fullLibrary } from '../bank';
+import { useAuth } from '../auth/AuthProvider';
+import { AUTH_EXPIRED_EVENT } from '../auth/events';
+import { loadSession } from '../auth/session';
+import { databaseFor } from './deviceSettings';
 import { ShareEngine } from '../sync/engine';
-import { CloudTransport } from '../sync/cloud';
+import { CloudTransport, ShareAuthError } from '../sync/cloud';
 import { LoopbackTransport } from '../sync/loopback';
+import { resolveServerUrl } from '../sync/serverUrl';
 import type { SyncState } from '../sync/types';
 import type {
   Exercise,
@@ -65,7 +70,7 @@ const EMPTY: Data = {
   series: [],
   groups: [],
   profile: { id: '', name: 'Trainer' },
-  settings: { syncUrl: null, followPublic: true, activeTeamId: null, defaultParticipants: null },
+  settings: DEFAULT_SETTINGS,
 };
 
 export interface StoreProviderProps {
@@ -75,6 +80,16 @@ export interface StoreProviderProps {
 }
 
 export function StoreProvider({ children, store: provided }: StoreProviderProps) {
+  // Elk account heeft zijn eigen opslag op dit apparaat. Zo ziet de tweede
+  // trainer die op een gedeelde laptop inlogt niets van de eerste — een inlog
+  // zonder gescheiden opslag zou een halve deur zijn.
+  const { account } = useAuth();
+  // Op het id en de naam, niet op het account zelf: dat object wordt vervangen
+  // zodra de server bevestigt wie je bent, en op die identiteit meeluisteren zou
+  // de database dichtdoen en weer openen terwijl er nog schrijfacties lopen.
+  const accountId = account?.id ?? null;
+  const accountName = account?.name ?? null;
+  const databaseName = databaseFor(accountId);
   const [store, setStore] = useState<TrainingStore | null>(provided ?? null);
   const [data, setData] = useState<Data>(EMPTY);
   const [error, setError] = useState<string | null>(null);
@@ -90,17 +105,47 @@ export function StoreProvider({ children, store: provided }: StoreProviderProps)
   useEffect(() => {
     if (provided) return;
     let cancelled = false;
-    TrainingStore.open()
-      .then((opened) => {
-        if (!cancelled) setStore(opened);
+    let opened: TrainingStore | null = null;
+
+    setStore(null);
+    setData(EMPTY);
+
+    TrainingStore.open({ name: databaseName })
+      .then(async (instance) => {
+        if (cancelled) {
+          instance.close();
+          return;
+        }
+        opened = instance;
+        // Alles wat je maakt hoort op naam van je account te staan, en niet op
+        // een naam die per apparaat verschilt.
+        if (accountId && accountName) {
+          await instance.adoptAccount({ id: accountId, name: accountName });
+        }
+        if (cancelled) return;
+        setStore(instance);
       })
       .catch((cause: unknown) => {
+        // Een fout van een opening die we zelf hebben afgebroken is geen storing:
+        // die database gaat toch dicht. Alleen wat er misgaat bij de opening die
+        // nog telt, hoort op het scherm te komen.
+        if (cancelled) return;
         setError(cause instanceof Error ? cause.message : String(cause));
       });
+
     return () => {
       cancelled = true;
+      opened?.close();
     };
-  }, [provided]);
+  }, [accountId, accountName, databaseName, provided]);
+
+  // Wordt de store van buiten meegegeven (in tests, en bij een tweede
+  // apparaat-scherm), dan opent hij hier niet en moet het account er alsnog op
+  // gezet worden.
+  useEffect(() => {
+    if (!provided || !accountId || !accountName) return;
+    void provided.adoptAccount({ id: accountId, name: accountName });
+  }, [accountId, accountName, provided]);
 
   const load = useCallback(async (target: TrainingStore): Promise<Data> => {
     const [teams, players, exercises, trainings, series, groups, profile, settings] =
@@ -150,17 +195,26 @@ export function StoreProvider({ children, store: provided }: StoreProviderProps)
   const syncNow = useCallback(async () => {
     if (!store || syncing.current) return;
     const settings = await store.settings();
-    if (!settings.syncUrl) {
+    const url = resolveServerUrl(settings);
+    if (!url) {
       setSync((state) => ({ ...state, status: 'off' }));
       return;
     }
+
+    // Zonder sessie valt er niets te delen: de server neemt niets aan van wie
+    // niet is ingelogd, en het heeft geen zin om dat elke keer te proberen.
+    const session = loadSession();
+    if (!session) {
+      setSync((state) => ({ ...state, status: 'off' }));
+      return;
+    }
+
     syncing.current = true;
     setSync((state) => ({ ...state, status: 'syncing' }));
     try {
-      const transport = settings.syncUrl
-        ? new CloudTransport(settings.syncUrl)
-        : new LoopbackTransport();
+      const transport = new CloudTransport(url, () => loadSession()?.token ?? null);
       const report = await new ShareEngine(store, transport).syncOnce();
+      if (report.authExpired) dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
       setSync({
         status: report.errors.length > 0 ? 'error' : 'idle',
         pending: await store.pendingCount(),
@@ -170,6 +224,7 @@ export function StoreProvider({ children, store: provided }: StoreProviderProps)
       });
       if (report.received > 0) await reload();
     } catch (cause) {
+      if (cause instanceof ShareAuthError) dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
       setSync((state) => ({
         ...state,
         status: 'error',
