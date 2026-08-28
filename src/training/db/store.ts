@@ -63,6 +63,16 @@ export class TrainingStore {
 
   private readonly listeners = new Set<(events: readonly WriteEvent[]) => void>();
 
+  /**
+   * Of deze store al dicht is.
+   *
+   * Bij uitloggen of het wisselen van account gaat de ene database dicht en de
+   * andere open, terwijl er nog werk loopt: een herlaadronde, het opruimen van
+   * de outbox. Dat werk hoort dan stil te vallen, niet te klappen op een
+   * database die er niet meer is.
+   */
+  private closed = false;
+
   private constructor(
     readonly db: TrainingDb,
     private readonly clock: HybridClock,
@@ -99,7 +109,12 @@ export class TrainingStore {
   }
 
   close(): void {
+    this.closed = true;
     this.db.close();
+  }
+
+  get isClosed(): boolean {
+    return this.closed;
   }
 
   subscribe(listener: (events: readonly WriteEvent[]) => void): () => void {
@@ -108,6 +123,7 @@ export class TrainingStore {
   }
 
   private emit(events: readonly WriteEvent[]): void {
+    if (this.closed) return;
     // De klokstand bewaren is nuttig maar nooit dringend: gaat de database net
     // dicht (bij uitloggen, of bij het wisselen van account), dan mag dat geen
     // fout opleveren die verder niets met de app te maken heeft.
@@ -225,20 +241,24 @@ export class TrainingStore {
   // ---------- Outbox ----------
 
   async pending(limit = 200): Promise<OutboxEntry[]> {
+    if (this.closed) return [];
     return this.db.getAll('outbox', undefined, limit);
   }
 
   async pendingCount(): Promise<number> {
+    if (this.closed) return 0;
     return this.db.count('outbox');
   }
 
   async clearOutbox(seqs: readonly number[]): Promise<void> {
+    if (this.closed || seqs.length === 0) return;
     const tx = this.db.transaction('outbox', 'readwrite');
     await Promise.all(seqs.map((seq) => tx.store.delete(seq)));
     await tx.done;
   }
 
   async markFailed(seq: number, error: string): Promise<void> {
+    if (this.closed) return;
     const entry = await this.db.get('outbox', seq);
     if (!entry) return;
     await this.db.put('outbox', { ...entry, attempts: entry.attempts + 1, lastError: error });
@@ -255,6 +275,7 @@ export class TrainingStore {
   async applyRemote(
     changes: readonly { entity: EntityName; record: StoredRecord }[],
   ): Promise<{ applied: number; skipped: number }> {
+    if (this.closed) return { applied: 0, skipped: 0 };
     let applied = 0;
     let skipped = 0;
     const events: WriteEvent[] = [];

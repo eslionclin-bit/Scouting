@@ -73,6 +73,7 @@ export class ShareEngine {
     cleared: number;
     buckets: Map<string, { scope: ScopeRef; changes: ChangeEnvelope[]; seqs: number[] }>;
   }> {
+    if (this.store.isClosed) return { cleared: 0, buckets: new Map() };
     const known = groups ?? (await this.store.groups.all());
     const pending = await this.store.pending(BATCH);
     const buckets = new Map<string, { scope: ScopeRef; changes: ChangeEnvelope[]; seqs: number[] }>();
