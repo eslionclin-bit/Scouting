@@ -13,12 +13,11 @@
 #   CLOUDFLARE_D1_ID       — de Database ID van je D1-database, te vinden op de
 #                            pagina van die database
 #
-# Optioneel, alleen als je ook de trainingsapp wil laten delen:
-#   CLOUDFLARE_TRAINING_D1_ID — de Database ID van een tweede D1-database, voor
-#                            de deelserver van de trainingsapp. Ontbreekt hij,
-#                            dan wordt die server overgeslagen en werkt de
-#                            trainingsapp gewoon, maar alleen op het apparaat
-#                            zelf.
+# Voor de deelserver van de trainingsapp is verder niets nodig: die workflow
+# zoekt zijn eigen database op en maakt hem aan als hij er nog niet is. Alleen
+# wie de database met de hand wil kiezen, zet er
+#   CLOUDFLARE_TRAINING_D1_ID — de Database ID van een bestaande D1-database
+# bij; die gaat dan voor.
 
 name: Sync-server
 
@@ -164,21 +163,72 @@ jobs:
 
       # De deelserver van de trainingsapp staat naast de sync-server: een eigen
       # worker, een eigen database, en geen enkele reden waarom een storing in
-      # de een de ander zou moeten raken. Hij heeft dus ook een eigen
-      # database-id, en zonder dat secret slaat deze stap zichzelf over — dat is
-      # de normale situatie voor wie alleen de scouting-app gebruikt.
-      - name: Database-id van de trainingsapp invullen
+      # de een de ander zou moeten raken.
+      #
+      # De database-id hoeft niemand op te zoeken. Dat stond eerst wél in de
+      # handleiding — 'maak een database aan en zoek de id op' — en dat is
+      # precies het soort stap waar het misgaat: de id staat in een hoekje van
+      # een dashboard dat af en toe verandert, en met de account-id ernaast (die
+      # er bijna hetzelfde uitziet) is het ook nog verwarrend. De workflow
+      # zoekt hem nu zelf op bij Cloudflare, en maakt de database aan als hij er
+      # nog niet is. Wie hem tóch met de hand wil zetten, vult het secret
+      # CLOUDFLARE_TRAINING_D1_ID in; dat gaat voor.
+      - name: Database van de trainingsapp klaarzetten
         id: training
         if: steps.check.outputs.ready == 'true'
         env:
           TRAINING_D1: ${{ secrets.CLOUDFLARE_TRAINING_D1_ID }}
+          DB_NAME: volley-training
         run: |
+          api() {
+            # $1 = methode, $2 = pad, $3 = body (mag leeg)
+            if [ -n "$3" ]; then
+              curl -sS -X "$1" \
+                -H "authorization: Bearer $CF_TOKEN" \
+                -H "content-type: application/json" \
+                --data "$3" \
+                "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/$2"
+            else
+              curl -sS -X "$1" \
+                -H "authorization: Bearer $CF_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/$2"
+            fi
+          }
+
           D1=$(printf '%s' "$TRAINING_D1" | tr -d '[:space:]')
-          if [ -z "$D1" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Deelserver van de trainingsapp overgeslagen: CLOUDFLARE_TRAINING_D1_ID ontbreekt."
-            exit 0
+
+          if [ -n "$D1" ]; then
+            echo "De database-id komt uit het secret."
+          else
+            echo "Kijken of de database '$DB_NAME' al bestaat..."
+            LIST=$(api GET "d1/database?name=$DB_NAME" || true)
+            # `|| true` erbij: komt er iets terug dat geen JSON is (een
+            # foutpagina, of niets omdat het netwerk hikte), dan hoort deze stap
+            # netjes te melden dat het niet lukte — niet af te breken op een
+            # parse-fout van jq.
+            D1=$(printf '%s' "$LIST" | jq -r --arg name "$DB_NAME" \
+              '(.result // []) | map(select(.name == $name)) | first | .uuid // empty' 2>/dev/null || true)
+
+            if [ -z "$D1" ]; then
+              echo "Nog niet; hem aanmaken in West-Europa..."
+              CREATED=$(api POST 'd1/database' \
+                "{\"name\":\"$DB_NAME\",\"primary_location_hint\":\"weur\"}" || true)
+              D1=$(printf '%s' "$CREATED" | jq -r '.result.uuid // empty' 2>/dev/null || true)
+
+              if [ -z "$D1" ]; then
+                # De melding van Cloudflare erbij: 'het lukte niet' zonder reden
+                # kost een middag. Meestal is het een token zonder D1-rechten.
+                REDEN=$(printf '%s' "$CREATED" | jq -r '[.errors[]?.message] | join("; ")' 2>/dev/null || true)
+                echo "ready=false" >> "$GITHUB_OUTPUT"
+                echo "::warning::Deelserver van de trainingsapp overgeslagen: de database kon niet worden aangemaakt. ${REDEN:-Geen reden van Cloudflare ontvangen}. Controleer of het API-token ook 'D1: Edit' mag."
+                exit 0
+              fi
+              echo "Aangemaakt."
+            else
+              echo "Die staat er al."
+            fi
           fi
+
           echo "::add-mask::$D1"
           sed -i "s|vul-hier-de-id-in-die-wrangler-afdrukt|$D1|" server/training/wrangler.toml
           echo "ready=true" >> "$GITHUB_OUTPUT"
