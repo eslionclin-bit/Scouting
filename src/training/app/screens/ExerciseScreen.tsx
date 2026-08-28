@@ -31,8 +31,10 @@ export function ExerciseScreen({ id }: { id: string }) {
     () => data.players.filter((player) => player.active),
     [data.players],
   );
+  // Een lege selectie is niet 'nul aanwezigen' maar 'nog niet ingevuld': dan is
+  // een gangbare groepsgrootte een bruikbaarder startpunt dan een foutmelding.
   const [participants, setParticipants] = useState<number>(
-    data.settings.defaultParticipants ?? players.length ?? 8,
+    data.settings.defaultParticipants ?? (players.length || 8),
   );
 
   if (!exercise) {

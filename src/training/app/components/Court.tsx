@@ -37,9 +37,12 @@ interface Bounds {
 }
 
 function boundsFor(view: Animation['view']): Bounds {
+  // Ruimte om het veld heen, want er gebeurt van alles buiten de lijnen: de
+  // service komt van achter de achterlijn en een aanloop begint buiten de
+  // zijlijn. Meer marge dan dat is verspild scherm.
   return view === 'half'
-    ? { minX: -3.5, minY: -3.5, width: 16, height: 14 }
-    : { minX: -2.5, minY: -3.5, width: 14, height: 25 };
+    ? { minX: -1.75, minY: -2.5, width: 12.5, height: 13 }
+    : { minX: -2, minY: -2.5, width: 13, height: 23 };
 }
 
 export function Court({

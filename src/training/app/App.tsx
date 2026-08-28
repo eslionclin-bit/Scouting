@@ -43,7 +43,7 @@ export function App() {
             href={href(tab.route)}
           >
             {tab.label}
-            {tab.route.name === 'manage' && sync.pending > 0 && (
+            {tab.route.name === 'manage' && sync.status !== 'off' && sync.pending > 0 && (
               <span className="tabs__badge" aria-label={`${sync.pending} nog te delen`}>
                 {sync.pending}
               </span>

@@ -193,9 +193,12 @@ describe('het trainingsblad', () => {
         { id: newId(), kind: 'game', exerciseId: exercise.id, title: null, minutes: 30, variantId: null, note: null },
       ],
     });
+    // De volgorde waarin de opslag ze teruggeeft ligt niet vast (het zijn
+    // UUID's), dus de test kiest er vier en kijkt naar díé namen.
     const players = await store.players.all();
+    const aanwezig = players.slice(0, 4);
     await store.trainings.update(trainingId, {
-      attendance: players.slice(0, 4).map((player) => player.id),
+      attendance: aanwezig.map((player) => player.id),
       absent: players.slice(4).map((player) => player.id),
     });
 
@@ -204,8 +207,10 @@ describe('het trainingsblad', () => {
     await screen.findByText('Dinsdagtraining');
     expect(screen.getByText('20:00')).toBeTruthy();
     expect(screen.getByText('20:15')).toBeTruthy();
-    const head = screen.getByText(/4 speelsters/);
-    expect(within(head.parentElement as HTMLElement).getByText(/Speler 1/)).toBeTruthy();
+    const head = screen.getByText(/4 speelsters/).parentElement as HTMLElement;
+    for (const player of aanwezig) {
+      expect(within(head).getByText(new RegExp(player.name))).toBeTruthy();
+    }
   });
 });
 

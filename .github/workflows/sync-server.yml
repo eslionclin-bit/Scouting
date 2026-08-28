@@ -12,13 +12,23 @@
 #                            lange stuk na dash.cloudflare.com/
 #   CLOUDFLARE_D1_ID       — de Database ID van je D1-database, te vinden op de
 #                            pagina van die database
+#
+# Optioneel, alleen als je ook de trainingsapp wil laten delen:
+#   CLOUDFLARE_TRAINING_D1_ID — de Database ID van een tweede D1-database, voor
+#                            de deelserver van de trainingsapp. Ontbreekt hij,
+#                            dan wordt die server overgeslagen en werkt de
+#                            trainingsapp gewoon, maar alleen op het apparaat
+#                            zelf.
 
 name: Sync-server
 
 on:
   push:
     branches: ['main']
-    paths: ['server/cloud/**', '.github/workflows/sync-server.yml']
+    paths:
+      - 'server/cloud/**'
+      - 'server/training/**'
+      - '.github/workflows/sync-server.yml'
   workflow_dispatch:
 
 jobs:
@@ -147,6 +157,39 @@ jobs:
       - name: Uitrollen
         if: steps.check.outputs.ready == 'true'
         working-directory: server/cloud
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}
+        run: npx --yes wrangler@4 deploy
+
+      # De deelserver van de trainingsapp staat naast de sync-server: een eigen
+      # worker, een eigen database, en geen enkele reden waarom een storing in
+      # de een de ander zou moeten raken. Hij heeft dus ook een eigen
+      # database-id, en zonder dat secret slaat deze stap zichzelf over — dat is
+      # de normale situatie voor wie alleen de scouting-app gebruikt.
+      - name: Database-id van de trainingsapp invullen
+        id: training
+        if: steps.check.outputs.ready == 'true'
+        env:
+          TRAINING_D1: ${{ secrets.CLOUDFLARE_TRAINING_D1_ID }}
+        run: |
+          D1=$(printf '%s' "$TRAINING_D1" | tr -d '[:space:]')
+          if [ -z "$D1" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Deelserver van de trainingsapp overgeslagen: CLOUDFLARE_TRAINING_D1_ID ontbreekt."
+            exit 0
+          fi
+          echo "::add-mask::$D1"
+          sed -i "s|vul-hier-de-id-in-die-wrangler-afdrukt|$D1|" server/training/wrangler.toml
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      # Het adres dat hier wordt afgedrukt vul je in de trainingsapp in, op de
+      # beheerpagina. Het hoeft nergens in de build te zitten: zonder adres
+      # blijft alles op het apparaat, en dat is een geldige manier om de app te
+      # gebruiken.
+      - name: Deelserver van de trainingsapp uitrollen
+        if: steps.training.outputs.ready == 'true'
+        working-directory: server/training
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT }}

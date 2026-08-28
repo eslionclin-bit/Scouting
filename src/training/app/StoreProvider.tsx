@@ -131,7 +131,10 @@ export function StoreProvider({ children, store: provided }: StoreProviderProps)
     if (!store) return;
     const next = await load(store);
     setData(next);
-    setSync((state) => ({ ...state, pending: 0 }));
+    // Opruimen wat nergens heen hoeft. Zonder dit zou de outbox bij wie niets
+    // deelt een seizoen lang volstromen, en zou de app melden dat er van alles
+    // klaarstaat om verstuurd te worden terwijl er niets te versturen is.
+    await new ShareEngine(store, new LoopbackTransport()).prune(next.groups);
     const pending = await store.pendingCount();
     setSync((state) => ({ ...state, pending }));
   }, [load, store]);
