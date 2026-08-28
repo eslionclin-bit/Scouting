@@ -174,3 +174,37 @@ describe('twee wijzigingen vlak na elkaar', () => {
     expect(await store.pendingCount()).toBe(11);
   });
 });
+
+describe('een store die dichtgaat', () => {
+  /**
+   * Bij uitloggen of wisselen van account gaat de ene database dicht terwijl er
+   * nog werk loopt. Dat werk hoort stil te vallen, niet te klappen — in de
+   * uitrol kwam dat als een onafgevangen fout naar boven en viel de hele bouw om.
+   */
+  it('laat lopend werk stilvallen in plaats van klappen', async () => {
+    const store = await openStore();
+    const { id, rev, updatedAt, deletedAt, ...input } = makeExercise();
+    await store.exercises.create(input);
+    expect(await store.pendingCount()).toBe(1);
+
+    store.close();
+
+    expect(store.isClosed).toBe(true);
+    await expect(store.pendingCount()).resolves.toBe(0);
+    await expect(store.pending()).resolves.toEqual([]);
+    await expect(store.clearOutbox([1])).resolves.toBeUndefined();
+    await expect(store.markFailed(1, 'iets')).resolves.toBeUndefined();
+    await expect(
+      store.applyRemote([{ entity: 'exercises', record: makeExercise() }]),
+    ).resolves.toEqual({ applied: 0, skipped: 0 });
+  });
+
+  it('laat het opruimen van de outbox met rust', async () => {
+    const store = await openStore();
+    store.close();
+    const { ShareEngine } = await import('../sync/engine');
+    const { LoopbackTransport } = await import('../sync/loopback');
+    const result = await new ShareEngine(store, new LoopbackTransport()).prune();
+    expect(result).toEqual({ cleared: 0, buckets: new Map() });
+  });
+});

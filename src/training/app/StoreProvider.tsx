@@ -173,15 +173,26 @@ export function StoreProvider({ children, store: provided }: StoreProviderProps)
   }, []);
 
   const reload = useCallback(async () => {
-    if (!store) return;
-    const next = await load(store);
-    setData(next);
-    // Opruimen wat nergens heen hoeft. Zonder dit zou de outbox bij wie niets
-    // deelt een seizoen lang volstromen, en zou de app melden dat er van alles
-    // klaarstaat om verstuurd te worden terwijl er niets te versturen is.
-    await new ShareEngine(store, new LoopbackTransport()).prune(next.groups);
-    const pending = await store.pendingCount();
-    setSync((state) => ({ ...state, pending }));
+    if (!store || store.isClosed) return;
+    try {
+      const next = await load(store);
+      if (store.isClosed) return;
+      setData(next);
+
+      // Opruimen wat nergens heen hoeft. Zonder dit zou de outbox bij wie niets
+      // deelt een seizoen lang volstromen, en zou de app melden dat er van alles
+      // klaarstaat om verstuurd te worden terwijl er niets te versturen is.
+      await new ShareEngine(store, new LoopbackTransport()).prune(next.groups);
+      const pending = await store.pendingCount();
+      if (store.isClosed) return;
+      setSync((state) => ({ ...state, pending }));
+    } catch (cause) {
+      // Ging de database onder handen dicht — uitloggen, of wisselen van
+      // account — dan is dit geen storing maar het einde van werk dat toch niet
+      // meer telt. Alleen wat daarbuiten misgaat is het melden waard.
+      if (store.isClosed) return;
+      console.warn('Herladen mislukt:', cause);
+    }
   }, [load, store]);
 
   useEffect(() => {
