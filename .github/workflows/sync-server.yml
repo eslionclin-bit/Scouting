@@ -128,6 +128,30 @@ jobs:
             hint=" Ze staan wel onder het tabblad Variables: zet ze over naar Secrets."
           fi
 
+          # Een account-id en een database-id zien er totaal verschillend uit,
+          # maar staan in het dashboard vlak bij elkaar en heten allebei 'ID'.
+          # Ze verwisselen levert bij Cloudflare 'Could not route to
+          # /accounts/... [code: 7003]' op — een melding die naar van alles
+          # wijst behalve naar de oorzaak. Vandaar dat het hier staat, vóór er
+          # iets geprobeerd wordt.
+          #
+          #   account-id   32 tekens, alleen 0-9 en a-f, geen streepjes
+          #   database-id  36 tekens, met streepjes (8-4-4-4-12)
+          case "$ACCOUNT_C" in
+            ????????-????-????-????-????????????)
+              echo "::error::CLOUDFLARE_ACCOUNT_ID bevat iets met streepjes van 36 tekens; dat is de vorm van een database-id, niet van een account-id. Een account-id is 32 tekens zonder streepjes en staat in het adres van je dashboard, direct na dash.cloudflare.com/."
+              exit 1
+              ;;
+          esac
+
+          if [ -n "$ACCOUNT_C" ] && ! printf '%s' "$ACCOUNT_C" | grep -Eq '^[0-9a-fA-F]{32}$'; then
+            echo "::warning::CLOUDFLARE_ACCOUNT_ID heeft niet de gebruikelijke vorm (32 tekens, alleen cijfers en a-f). Klopt hij wel? Hij staat in het adres van je dashboard, direct na dash.cloudflare.com/."
+          fi
+
+          if [ -n "$D1_C" ] && ! printf '%s' "$D1_C" | grep -Eq '^[0-9a-fA-F-]{36}$'; then
+            echo "::warning::CLOUDFLARE_D1_ID heeft niet de gebruikelijke vorm (36 tekens met streepjes). Dit is de Database ID van je D1-database."
+          fi
+
           basis=""
           [ -n "$TOKEN_C" ]   || basis="$basis CLOUDFLARE_API_TOKEN"
           [ -n "$ACCOUNT_C" ] || basis="$basis CLOUDFLARE_ACCOUNT_ID"
@@ -195,9 +219,13 @@ jobs:
       # zoekt hem nu zelf op bij Cloudflare, en maakt de database aan als hij er
       # nog niet is. Wie hem tóch met de hand wil zetten, vult het secret
       # CLOUDFLARE_TRAINING_D1_ID in; dat gaat voor.
+      # `!cancelled()` en niet gewoon een vinkje: struikelt de sync-server van
+      # de scouting-app, dan hoort de deelserver van de trainingsapp er nog
+      # steeds te komen. Het zijn twee servers die niets met elkaar te maken
+      # hebben, en ze stonden alleen achter elkaar in dezelfde baan.
       - name: Database van de trainingsapp klaarzetten
         id: training
-        if: steps.check.outputs.training == 'true'
+        if: ${{ !cancelled() && steps.check.outputs.training == 'true' }}
         env:
           TRAINING_D1: ${{ secrets.CLOUDFLARE_TRAINING_D1_ID }}
           DB_NAME: volley-training
@@ -260,7 +288,7 @@ jobs:
       # blijft alles op het apparaat, en dat is een geldige manier om de app te
       # gebruiken.
       - name: Deelserver van de trainingsapp uitrollen
-        if: steps.training.outputs.ready == 'true'
+        if: ${{ !cancelled() && steps.training.outputs.ready == 'true' }}
         working-directory: server/training
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
