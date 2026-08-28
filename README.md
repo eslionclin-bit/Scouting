@@ -385,7 +385,8 @@ gewisseld wordt. Past een oefening niet bij de groep, dan staat dat er in gewone
 taal bij, met de oefeningen die hetzelfde trainen en wél passen.
 
 Verder: een oefeningenbank met zestien ingebouwde oefeningen (negen met
-animatie), animaties die je zelf met een vinger tekent, filters op doel en
+animatie), animaties die je zelf met een vinger tekent — slepen om iemand neer te
+zetten of om hem te laten bewegen, en afspelen terwijl je bezig bent — filters op doel en
 aantal deelnemers en op eigen oefeningen tegenover die van anderen, groepen
 waarmee je deelt via een gedeelde code, reeksen die een hele periode
 klaarzetten, en een trainingsblad dat op de telefoon én op papier te lezen is.

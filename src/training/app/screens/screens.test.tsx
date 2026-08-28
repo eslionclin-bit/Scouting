@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { newId } from '../../../domain/ids';
 import { TrainingStore } from '../../db/store';
 import { StoreProvider } from '../StoreProvider';
+import { ExerciseEditScreen } from './ExerciseEditScreen';
 import { LibraryScreen } from './LibraryScreen';
 import { SheetScreen } from './SheetScreen';
 import { TrainingScreen } from './TrainingScreen';
@@ -236,3 +237,120 @@ function exerciseInput(title: string, size: number, maxGroups = 1) {
     authorName: 'Marit',
   };
 }
+
+describe('de animatiebewerker', () => {
+  async function seedExercise(store: TrainingStore) {
+    return store.exercises.create({
+      title: 'Eigen oefening',
+      summary: '',
+      description: '',
+      goals: ['pass'],
+      level: 2,
+      minutes: 15,
+      material: [],
+      group: { min: 4, max: 8, step: 1, maxGroups: 1, roles: [] },
+      slots: ['core'],
+      coachingPoints: [],
+      variants: [],
+      animation: null,
+      visibility: 'private',
+      groupIds: [],
+      builtIn: false,
+      copiedFromId: null,
+      authorId: 'trainer-1',
+      authorName: 'Marit',
+    });
+  }
+
+  it('begint een animatie en zet elke speler op een eigen plek', async () => {
+    const { store } = await seed();
+    const exercise = await seedExercise(store);
+    renderWith(store, <ExerciseEditScreen id={exercise.id} />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Animatie beginnen' }));
+    await user.click(await screen.findByRole('button', { name: '+ Speler' }));
+    await user.click(screen.getByRole('button', { name: '+ Bal' }));
+
+    await waitFor(async () => {
+      const saved = await store.exercises.get(exercise.id);
+      expect(saved?.animation?.markers).toHaveLength(2);
+    });
+    const saved = await store.exercises.get(exercise.id);
+    const spots = Object.values(saved?.animation?.phases[0]?.positions ?? {});
+    expect(spots).toHaveLength(2);
+    expect(spots[0]).not.toEqual(spots[1]);
+  });
+
+  it('maakt van een speler een bewegende speler', async () => {
+    const { store } = await seed();
+    const exercise = await seedExercise(store);
+    renderWith(store, <ExerciseEditScreen id={exercise.id} />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Animatie beginnen' }));
+    await user.click(await screen.findByRole('button', { name: '+ Speler' }));
+    await user.click(await screen.findByRole('button', { name: 'Laat bewegen' }));
+
+    await waitFor(async () => {
+      const saved = await store.exercises.get(exercise.id);
+      expect(saved?.animation?.phases[0]?.paths).toHaveLength(1);
+    });
+    // De schakelaar staat daarna op bewegen, zodat de volgende sleep hetzelfde doet.
+    expect(screen.getByRole('button', { name: 'Laten bewegen' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('combobox', { name: 'Soort beweging' })).toBeTruthy();
+  });
+
+  it('kopieert een fase met beweging en al', async () => {
+    const { store } = await seed();
+    const exercise = await seedExercise(store);
+    renderWith(store, <ExerciseEditScreen id={exercise.id} />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Animatie beginnen' }));
+    await user.click(await screen.findByRole('button', { name: '+ Speler' }));
+    await user.click(await screen.findByRole('button', { name: 'Laat bewegen' }));
+    await user.click(await screen.findByRole('button', { name: 'Fase kopiëren' }));
+
+    await waitFor(async () => {
+      const saved = await store.exercises.get(exercise.id);
+      expect(saved?.animation?.phases).toHaveLength(2);
+      expect(saved?.animation?.phases[1]?.paths).toHaveLength(1);
+    });
+  });
+
+  it('vraagt de duur van een fase in seconden', async () => {
+    const { store } = await seed();
+    const exercise = await seedExercise(store);
+    renderWith(store, <ExerciseEditScreen id={exercise.id} />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Animatie beginnen' }));
+    const duur = await screen.findByLabelText('Duur van fase 1 in seconden');
+    expect((duur as HTMLInputElement).value).toBe('1.2');
+
+    await user.clear(duur);
+    await user.type(duur, '2');
+    await waitFor(async () => {
+      const saved = await store.exercises.get(exercise.id);
+      expect(saved?.animation?.phases[0]?.durationMs).toBe(2000);
+    });
+  });
+
+  it('speelt af in de bewerker zelf, en legt het gereedschap dan weg', async () => {
+    const { store } = await seed();
+    const exercise = await seedExercise(store);
+    renderWith(store, <ExerciseEditScreen id={exercise.id} />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Animatie beginnen' }));
+    await user.click(await screen.findByRole('button', { name: '+ Speler' }));
+    await user.click(await screen.findByRole('button', { name: 'Afspelen' }));
+
+    expect(await screen.findByRole('button', { name: 'Pauze' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '+ Speler' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Pauze' }));
+    expect(await screen.findByRole('button', { name: '+ Speler' })).toBeTruthy();
+  });
+});

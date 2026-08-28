@@ -939,6 +939,25 @@ button.chip:hover {
 
 /* ---------- Bewerker ---------- */
 
+.editor__play {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.editor__modes {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--surface-sunken);
+  border-radius: 10px;
+}
+
 .editor__row {
   display: flex;
   gap: 0.5rem;
