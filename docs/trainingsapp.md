@@ -201,19 +201,29 @@ testen valt. De outbox, het opnieuw proberen en het samenvoegen op revisie zitte
 in de app en horen daar te blijven: die moet ook werken als er geen server te
 bereiken is.
 
-### Uitrollen, in vijf stappen
+### Uitrollen, in vier stappen
 
-1. Maak een D1-database aan: `npx wrangler d1 create volley-training --location weur`.
-   Het commando drukt een `database_id` af.
-2. Zet in GitHub bij **Settings → Secrets and variables → Actions** de secrets
-   `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` en `CLOUDFLARE_TRAINING_D1_ID`
-   (die laatste is de id uit stap 1). De workflow `sync-server.yml` rolt de
-   worker dan uit; ontbreekt de id, dan slaat hij die stap over.
-3. De uitrol drukt het adres van de worker af, bijvoorbeeld
+Er hoeft geen database met de hand te worden aangemaakt en er hoeft geen
+database-id te worden opgezocht: de workflow doet dat zelf.
+
+1. Zet in GitHub bij **Settings → Secrets and variables → Actions**, op het
+   tabblad **Secrets**, twee waarden klaar:
+   - `CLOUDFLARE_API_TOKEN` — een **gebruikerstoken** (Cloudflare → My Profile →
+     API Tokens → Create Token, sjabloon *Edit Cloudflare Workers*). Het moet ook
+     `D1: Edit` mogen; klaagt de uitrol daarover, voeg dat recht dan toe.
+   - `CLOUDFLARE_ACCOUNT_ID` — het lange stuk in het adres van je
+     Cloudflare-dashboard, na `dash.cloudflare.com/`.
+2. Start de workflow **Sync-server** (Actions → Sync-server → Run workflow), of
+   push iets naar `main`. Hij zoekt de database `volley-training` op, maakt hem
+   aan in West-Europa als hij er nog niet is, en rolt de worker uit. In de
+   uitvoer staat het adres, bijvoorbeeld
    `https://volley-training-share.<jouw-account>.workers.dev`.
-4. Zet dat adres als secret `TRAINING_SHARE_URL`. De volgende bouw bakt het in de
+3. Zet dat adres als secret `TRAINING_SHARE_URL`. De volgende bouw bakt het in de
    app, en vanaf dan vraagt de app om inloggen.
-5. Open de app en maak je eigenaarsaccount aan. Doe dit meteen.
+4. Open de app en maak je eigenaarsaccount aan. Doe dit meteen.
+
+Wil je zelf bepalen welke database gebruikt wordt, zet dan het secret
+`CLOUDFLARE_TRAINING_D1_ID`; dat gaat voor op het opzoeken.
 
 Het adres kan ook met de hand op de beheerpagina worden ingevuld; dat is handig
 om te proberen. Zonder adres blijft alles op het apparaat en werkt de rest van de
