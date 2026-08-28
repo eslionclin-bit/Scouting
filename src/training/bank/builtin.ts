@@ -137,7 +137,7 @@ export const BUILT_IN_EXERCISES: Exercise[] = [
       ],
       [
         phase('ingooi', 'Bal komt in vanaf de overkant', 900,
-          { passer: ZONE.five, sv: ZONE.three, aanval: at(1.5, 6.5), bal: at(4.5, 12) },
+          { passer: ZONE.five, sv: ZONE.three, aanval: at(1.5, 6.5), bal: at(4.5, 10) },
           [ball('bal', at(1.8, 2.2), 'serve')],
         ),
         phase('pass', 'Passen op positie 3', 900, {},
@@ -147,7 +147,7 @@ export const BUILT_IN_EXERCISES: Exercise[] = [
           [ball('bal', at(1.6, 8), 'set'), move('aanval', at(1.5, 7.2))],
         ),
         phase('aanval', 'Aanval over het net', 900, {},
-          [ball('bal', at(6.5, 13), 'attack'), move('aanval', at(1.5, 8.2))],
+          [ball('bal', at(6.8, 10.2), 'attack'), move('aanval', at(1.5, 8.2))],
         ),
         phase('doorschuiven', 'Doorschuiven: P → SV → A → P', 900,
           {},

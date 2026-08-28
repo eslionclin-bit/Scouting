@@ -171,6 +171,28 @@ describe('delen tussen twee trainers', () => {
     expect(await marit.pendingCount()).toBe(0);
   });
 
+  it('ruimt de outbox ook op zonder server', async () => {
+    // Wie niets deelt heeft geen transport nodig, maar wél een outbox die niet
+    // een seizoen lang volloopt.
+    const marit = await openStore('apparaat-a');
+    await marit.exercises.create(stripMeta(makeExercise({ visibility: 'private' })));
+    await marit.trainings.create(stripMeta(makeTraining({ visibility: 'private' })));
+    const engine = new ShareEngine(marit, new LoopbackTransport());
+    const result = await engine.prune();
+    expect(result.cleared).toBe(2);
+    expect(result.buckets.size).toBe(0);
+    expect(await marit.pendingCount()).toBe(0);
+  });
+
+  it('houdt bij het opruimen vast wat wél gedeeld moet worden', async () => {
+    const marit = await openStore('apparaat-a');
+    await marit.exercises.create(stripMeta(makeExercise({ visibility: 'public' })));
+    const result = await new ShareEngine(marit, new LoopbackTransport()).prune();
+    expect(result.cleared).toBe(0);
+    expect(result.buckets.get('public')?.changes).toHaveLength(1);
+    expect(await marit.pendingCount()).toBe(1);
+  });
+
   it('houdt een wijziging vast als het versturen mislukt', async () => {
     const kapot = {
       name: 'kapot',

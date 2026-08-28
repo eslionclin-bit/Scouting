@@ -20,9 +20,11 @@ bruikbaar zonder verbinding.
 ```bash
 npm install
 npm run dev     # ontwikkelserver op http://localhost:5173
-npm run build   # typecheck + productiebuild inclusief service worker
+                # de trainingsapp staat op http://localhost:5173/training.html
+npm run build   # typecheck + productiebuild van beide apps, inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 204 tests: domein, opslag, sync, rotatie, analyse, schermen, export
+npm test        # 447 tests: domein, opslag, sync, rotatie, analyse, schermen, export,
+                # en de trainingsapp: verdeling, bank, reeksen, delen
 ```
 
 ## Wat er nu staat
@@ -36,6 +38,7 @@ npm test        # 204 tests: domein, opslag, sync, rotatie, analyse, schermen, e
 | Analyse | `src/analysis` | Tellingen per speler, actietype, zone en rotatie |
 | Export | `src/export` | JSON (canoniek) en CSV (voor Excel) |
 | App | `src/app` | React-schermen, invoerstroom, PWA-registratie |
+| Training | `src/training` | De tweede app: oefeningenbank, trainingen, reeksen, delen |
 
 ## De schermen
 
@@ -368,6 +371,27 @@ op het apparaat staat. Opzetten en de afwegingen staan in
 [docs/online-koppeling.md](docs/online-koppeling.md). Ontbreekt het adres van de
 server, dan blijft de app puur lokaal — dat is nog steeds de standaard.
 
+## De trainingsapp
+
+In dezelfde repo staat een tweede app: **trainingen maken**, op `/training.html`.
+Eigen database, eigen server, eigen iconen; gedeeld zijn alleen de bouwstenen
+(ids, logische klok, build, tests).
+
+Waar het om draait: een oefening is niet 'voor zes spelers', maar werkt van vier
+tot tien in stappen van één — of, in drietallen, alleen met drie, zes of negen.
+Vink je af wie er vanavond zijn, dan rekent elk blok van de training uit hoeveel
+groepen er draaien, wie er begint, wie wachten en om de hoeveel minuten er
+gewisseld wordt. Past een oefening niet bij de groep, dan staat dat er in gewone
+taal bij, met de oefeningen die hetzelfde trainen en wél passen.
+
+Verder: een oefeningenbank met zestien ingebouwde oefeningen (negen met
+animatie), animaties die je zelf met een vinger tekent, filters op doel en
+aantal deelnemers en op eigen oefeningen tegenover die van anderen, groepen
+waarmee je deelt via een gedeelde code, reeksen die een hele periode
+klaarzetten, en een trainingsblad dat op de telefoon én op papier te lezen is.
+
+Zie [`docs/trainingsapp.md`](docs/trainingsapp.md).
+
 ## Ontwerpkeuzes
 
 Uitgebreid toegelicht in [`docs/datamodel.md`](docs/datamodel.md). Kort:
@@ -396,6 +420,10 @@ Er zit een GitHub Actions-workflow bij die de app na elke push naar GitHub Pages
 zet. Eenmalig aanzetten: **Settings → Pages → Source: GitHub Actions**. Daarna
 staat hij op `https://<gebruiker>.github.io/<repo>/` — een echte URL die je op
 een tablet kunt openen en via 'Zet op beginscherm' kunt installeren.
+
+De trainingsapp gaat mee in dezelfde build en staat dan op
+`https://<gebruiker>.github.io/<repo>/training.html` — ook te installeren op een
+beginscherm, met een eigen icoon.
 
 Zelf hosten kan ook: `npm run build` en de map `dist/` op een willekeurige
 statische host zetten.

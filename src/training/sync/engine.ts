@@ -50,14 +50,23 @@ export class ShareEngine {
     return report;
   }
 
-  /** Alles versturen wat in de outbox staat en ergens heen moet. */
-  private async push(groups: readonly Group[], report: SyncReport): Promise<void> {
+  /**
+   * De outbox opschonen zonder iets te versturen.
+   *
+   * Nodig omdat verreweg de meeste wijzigingen nergens heen hoeven: wie niets
+   * deelt, schrijft alleen privé-records. Zonder dit zou de outbox een seizoen
+   * lang volstromen en zou de app melden dat er honderden dingen 'nog verstuurd
+   * moeten worden' terwijl er niets te versturen valt.
+   *
+   * Levert op wat er wél de deur uit moet, gebundeld per scope.
+   */
+  async prune(groups?: readonly Group[]): Promise<{
+    cleared: number;
+    buckets: Map<string, { scope: ScopeRef; changes: ChangeEnvelope[]; seqs: number[] }>;
+  }> {
+    const known = groups ?? (await this.store.groups.all());
     const pending = await this.store.pending(BATCH);
-    if (pending.length === 0) return;
-
-    // Per scope verzamelen, want elke scope is een aparte aanroep. Een oefening
-    // die met twee groepen gedeeld is, gaat dus twee keer de deur uit.
-    const perScope = new Map<string, { scope: ScopeRef; changes: ChangeEnvelope[]; seqs: number[] }>();
+    const buckets = new Map<string, { scope: ScopeRef; changes: ChangeEnvelope[]; seqs: number[] }>();
     const doneLocally: number[] = [];
 
     for (const entry of pending) {
@@ -68,23 +77,29 @@ export class ShareEngine {
         doneLocally.push(entry.seq);
         continue;
       }
-      const scopes = scopesFor(record, groups);
+      const scopes = scopesFor(record, known);
       if (scopes.length === 0) {
         doneLocally.push(entry.seq);
         continue;
       }
+      // Per scope verzamelen, want elke scope is een aparte aanroep. Een oefening
+      // die met twee groepen gedeeld is, gaat dus twee keer de deur uit.
       for (const scope of scopes) {
-        const bucket = perScope.get(scope.key) ?? { scope, changes: [], seqs: [] };
+        const bucket = buckets.get(scope.key) ?? { scope, changes: [], seqs: [] };
         bucket.changes.push({ entity: entry.entity as EntityName, record });
         bucket.seqs.push(entry.seq);
-        perScope.set(scope.key, bucket);
+        buckets.set(scope.key, bucket);
       }
     }
 
-    if (doneLocally.length > 0) {
-      await this.store.clearOutbox(doneLocally);
-      report.local += doneLocally.length;
-    }
+    if (doneLocally.length > 0) await this.store.clearOutbox(doneLocally);
+    return { cleared: doneLocally.length, buckets };
+  }
+
+  /** Alles versturen wat in de outbox staat en ergens heen moet. */
+  private async push(groups: readonly Group[], report: SyncReport): Promise<void> {
+    const { cleared, buckets: perScope } = await this.prune(groups);
+    report.local += cleared;
 
     for (const bucket of perScope.values()) {
       try {
