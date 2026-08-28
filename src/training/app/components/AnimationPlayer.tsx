@@ -7,8 +7,9 @@
  * dan wil je zelf bepalen wanneer de bal verder gaat.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { frameAt, phaseStarts, totalDuration } from '../../domain/animation';
+import { startOfPhase, useAnimationClock } from '../hooks/useAnimationClock';
 import type { Animation } from '../../domain/types';
 import { Court } from './Court';
 
@@ -21,33 +22,13 @@ export interface AnimationPlayerProps {
 
 export function AnimationPlayer({ animation, autoPlay = false, compact = false }: AnimationPlayerProps) {
   const [playing, setPlaying] = useState(autoPlay);
-  const [time, setTime] = useState(0);
   const [speed, setSpeed] = useState(1);
-  const raf = useRef<number | null>(null);
-  const last = useRef<number | null>(null);
   const duration = totalDuration(animation);
-
-  useEffect(() => {
-    if (!playing || duration === 0) return;
-    const step = (now: number) => {
-      const previous = last.current ?? now;
-      last.current = now;
-      setTime((current) => {
-        const next = current + (now - previous) * speed;
-        if (next >= duration && !animation.loop) {
-          setPlaying(false);
-          return duration;
-        }
-        return animation.loop ? next % duration : next;
-      });
-      raf.current = requestAnimationFrame(step);
-    };
-    raf.current = requestAnimationFrame(step);
-    return () => {
-      if (raf.current !== null) cancelAnimationFrame(raf.current);
-      last.current = null;
-    };
-  }, [animation.loop, duration, playing, speed]);
+  const [time, setTime] = useAnimationClock(animation, {
+    playing,
+    speed,
+    onEnd: () => setPlaying(false),
+  });
 
   const frame = frameAt({ ...animation, loop: false }, time);
   const starts = phaseStarts(animation);
@@ -56,9 +37,7 @@ export function AnimationPlayer({ animation, autoPlay = false, compact = false }
   function goToPhase(index: number) {
     const clamped = Math.max(0, Math.min(animation.phases.length - 1, index));
     setPlaying(false);
-    setTime(
-      animation.phases.slice(0, clamped).reduce((sum, item) => sum + Math.max(1, item.durationMs), 0),
-    );
+    setTime(startOfPhase(animation, clamped));
   }
 
   return (

@@ -7,6 +7,7 @@
  * zien.
  */
 
+import { PATH_ARC } from '../domain/animation';
 import type {
   Animation,
   Exercise,
@@ -32,17 +33,8 @@ export function move(markerId: string, to: Point, kind: PathKind = 'run', arc = 
 }
 
 /** Een bal boogt: een set-up hoog, een pass wat minder, een aanval nauwelijks. */
-const ARC: Record<PathKind, number> = {
-  set: 1.4,
-  pass: 1,
-  serve: 0.8,
-  attack: 0.3,
-  run: 0,
-  dribble: 0,
-};
-
 export function ball(markerId: string, to: Point, kind: PathKind = 'pass'): Path {
-  return { markerId, to, kind, arc: ARC[kind] };
+  return { markerId, to, kind, arc: PATH_ARC[kind] };
 }
 
 export function phase(

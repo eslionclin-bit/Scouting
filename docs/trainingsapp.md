@@ -79,9 +79,27 @@ uitleggen, en de rij stilstaande plaatjes op het trainingsblad en op papier.
 Coördinaten zijn meters: x van 0 tot 9 (breedte), y van 0 tot 18 (lengte), net
 op y = 9. Buiten het veld mag — de serviceplek ligt op y = −1,5.
 
-De bewerker werkt met een vinger: poppetje neerzetten, verslepen, fase erbij.
-Ook de pijlpunten zijn te pakken, want een pad is niets anders dan een marker
-die ergens heen gaat.
+De bewerker werkt met een vinger, en met één schakelaar die bepaalt wat slepen
+betekent:
+
+- **Neerzetten** — je sleept iemand naar de plek waar hij in deze fase begint.
+- **Laten bewegen** — je sleept iemand naar waar hij in deze fase heen gaat, en
+  de app tekent de lijn. Een bal wordt dan een pass, een speler een looplijn; het
+  soort (pass, set-up, aanval, service, lopen) verander je erna in één keuzelijst,
+  en de boog gaat mee.
+
+De pijlpunt zelf is ook te pakken en te verschuiven — een pad is niets anders dan
+een marker die ergens heen gaat.
+
+Afspelen kan in de bewerker zelf, op hetzelfde veld waar je aan het werk bent:
+een animatie die je niet ziet lopen kun je ook niet beoordelen. Tijdens het
+afspelen verdwijnt het gereedschap uit beeld, inclusief de pijlpunten, zodat je
+naar de oefening kijkt en niet naar de knoppen.
+
+Verder scheelt 'fase kopiëren' het meeste werk bij een oefening die zichzelf
+herhaalt: de kopie neemt de bewegingen mee en legt zijn eigen beginposities vast,
+zodat hij niet meeschuift met wat ervoor gebeurt. Fases duren seconden, geen
+milliseconden.
 
 ## Delen: scopes in plaats van accounts
 

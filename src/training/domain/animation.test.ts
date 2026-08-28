@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { emptyAnimation, frameAt, pathPoints, phaseStarts, pointOn, totalDuration } from './animation';
+import {
+  addPhase,
+  clearMovement,
+  defaultPathKind,
+  duplicatePhase,
+  emptyAnimation,
+  frameAt,
+  freeSpot,
+  pathPoints,
+  phaseStarts,
+  pointOn,
+  removeMarker,
+  removePhase,
+  setMovement,
+  setPathKind,
+  totalDuration,
+} from './animation';
 import type { Animation } from './types';
 
 function animation(): Animation {
@@ -69,5 +85,99 @@ describe('animatie', () => {
     const points = pathPoints({ x: 0, y: 0 }, { markerId: 'bal', to: { x: 2, y: 2 }, kind: 'pass', arc: 0 }, 4);
     expect(points).toHaveLength(5);
     expect(points[4]).toEqual({ x: 2, y: 2 });
+  });
+});
+
+describe('animatie bewerken', () => {
+  const phase = {
+    id: 'f1',
+    caption: 'Start',
+    durationMs: 1000,
+    positions: { a: { x: 2, y: 2 }, bal: { x: 2, y: 2 } },
+    paths: [],
+  };
+
+  it('maakt van slepen een beweging, met de boog die bij het soort hoort', () => {
+    const met = setMovement(phase, 'bal', { x: 6, y: 6 }, 'set');
+    expect(met.paths).toHaveLength(1);
+    expect(met.paths[0]).toEqual({ markerId: 'bal', to: { x: 6, y: 6 }, kind: 'set', arc: 1.4 });
+  });
+
+  it('verschuift het eindpunt in plaats van er een tweede beweging bij te zetten', () => {
+    const eerst = setMovement(phase, 'bal', { x: 6, y: 6 }, 'pass');
+    const daarna = setMovement(eerst, 'bal', { x: 7, y: 3 });
+    expect(daarna.paths).toHaveLength(1);
+    expect(daarna.paths[0]?.to).toEqual({ x: 7, y: 3 });
+    expect(daarna.paths[0]?.kind).toBe('pass');
+  });
+
+  it('haalt een beweging weg zonder de speler weg te halen', () => {
+    const met = setMovement(phase, 'a', { x: 4, y: 8 });
+    const zonder = clearMovement(met, 'a');
+    expect(zonder.paths).toEqual([]);
+    expect(zonder.positions.a).toEqual({ x: 2, y: 2 });
+  });
+
+  it('past de boog aan als de beweging van soort verandert', () => {
+    const met = setMovement(phase, 'bal', { x: 6, y: 6 }, 'run');
+    const aanval = setPathKind(met, 'bal', 'attack');
+    expect(aanval.paths[0]?.arc).toBe(0.3);
+  });
+
+  it('kiest voor een bal een pass en voor een speler een looplijn', () => {
+    expect(defaultPathKind('ball')).toBe('pass');
+    expect(defaultPathKind('player')).toBe('run');
+  });
+
+  it('laat een nieuwe fase beginnen waar de vorige eindigde', () => {
+    const basis: Animation = {
+      ...emptyAnimation(),
+      markers: [{ id: 'a', kind: 'player', label: '1', slot: 1 }],
+      phases: [setMovement(phase, 'a', { x: 5, y: 7 })],
+    };
+    const met = addPhase(basis, 0, 'f2');
+    expect(met.phases).toHaveLength(2);
+    expect(phaseStarts(met)[1]?.a).toEqual({ x: 5, y: 7 });
+    expect(met.phases[1]?.paths).toEqual([]);
+  });
+
+  it('kopieert een fase met beweging en al, losgekoppeld van wat ervoor gebeurt', () => {
+    const basis: Animation = {
+      ...emptyAnimation(),
+      markers: [{ id: 'a', kind: 'player', label: '1', slot: 1 }],
+      phases: [setMovement(phase, 'a', { x: 5, y: 7 })],
+    };
+    const met = duplicatePhase(basis, 0, 'kopie');
+    expect(met.phases).toHaveLength(2);
+    expect(met.phases[1]?.paths[0]?.to).toEqual({ x: 5, y: 7 });
+    // De kopie legt zijn beginposities zelf vast en schuift dus niet mee.
+    expect(met.phases[1]?.positions.a).toEqual({ x: 2, y: 2 });
+  });
+
+  it('houdt de laatste fase staan', () => {
+    const basis: Animation = { ...emptyAnimation(), phases: [phase] };
+    expect(removePhase(basis, 0).phases).toHaveLength(1);
+  });
+
+  it('haalt een marker overal weg, ook uit de bewegingen', () => {
+    const basis: Animation = {
+      ...emptyAnimation(),
+      markers: [
+        { id: 'a', kind: 'player', label: '1', slot: 1 },
+        { id: 'bal', kind: 'ball', label: '', slot: null },
+      ],
+      phases: [setMovement(phase, 'bal', { x: 6, y: 6 })],
+    };
+    const zonder = removeMarker(basis, 'bal');
+    expect(zonder.markers.map((marker) => marker.id)).toEqual(['a']);
+    expect(zonder.phases[0]?.paths).toEqual([]);
+    expect(zonder.phases[0]?.positions.bal).toBeUndefined();
+  });
+
+  it('zet een nieuwe marker naast de vorige in plaats van eroverheen', () => {
+    const eerste = freeSpot([]);
+    const tweede = freeSpot([eerste]);
+    expect(tweede).not.toEqual(eerste);
+    expect(Math.hypot(tweede.x - eerste.x, tweede.y - eerste.y)).toBeGreaterThan(0.9);
   });
 });
