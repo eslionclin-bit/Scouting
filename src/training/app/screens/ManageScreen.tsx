@@ -14,7 +14,7 @@ import { UsersPanel } from '../components/UsersPanel';
 import { newGroupCode, normalizeGroupCode } from '../../sync/scopes';
 import { POSITIONS, POSITION_LABELS, type Player, type Position } from '../../domain/types';
 import { useStore } from '../StoreProvider';
-import { Field, Panel } from '../components/ui';
+import { DraftInput, Field, Panel } from '../components/ui';
 
 export function ManageScreen() {
   const { store, data, sync, syncNow } = useStore();
@@ -165,10 +165,10 @@ export function ManageScreen() {
                 : 'Staat als auteur op alles wat je deelt. Er is geen deelserver ingesteld, dus er is ook niets om op in te loggen.'
             }
           >
-            <input
+            <DraftInput
               className="input"
               value={data.profile.name}
-              onChange={(event) => void store.setProfileName(event.target.value)}
+              onCommit={(name) => void store.setProfileName(name)}
             />
           </Field>
         </Panel>
@@ -177,10 +177,10 @@ export function ManageScreen() {
       <Panel title={`Team · ${squad.length} speelsters`}>
         {team && (
           <Field label="Teamnaam">
-            <input
+            <DraftInput
               className="input"
               value={team.name}
-              onChange={(event) => void store.teams.update(team.id, { name: event.target.value })}
+              onCommit={(name) => void store.teams.update(team.id, { name })}
             />
           </Field>
         )}
@@ -189,22 +189,22 @@ export function ManageScreen() {
           {squad.map((player) => (
             <li key={player.id} className={`squad__item ${player.active ? '' : 'is-inactive'}`}>
               <div className="squad__row">
-                <input
+                <DraftInput
                   className="input input--tiny"
                   type="number"
-                  value={player.number ?? ''}
+                  value={player.number === null ? '' : String(player.number)}
                   aria-label="Rugnummer"
-                  onChange={(event) =>
+                  onCommit={(value) =>
                     void store.players.update(player.id, {
-                      number: event.target.value === '' ? null : Number(event.target.value),
+                      number: value.trim() === '' ? null : Number(value),
                     })
                   }
                 />
-                <input
+                <DraftInput
                   className="input"
                   value={player.name}
                   aria-label="Naam"
-                  onChange={(event) => void store.players.update(player.id, { name: event.target.value })}
+                  onCommit={(name) => void store.players.update(player.id, { name })}
                 />
                 <button
                   type="button"
@@ -280,11 +280,11 @@ export function ManageScreen() {
         <ul className="list">
           {data.groups.map((group) => (
             <li key={group.id} className="list__item list__item--column">
-              <input
+              <DraftInput
                 className="input"
                 value={group.name}
                 aria-label="Groepsnaam"
-                onChange={(event) => void store.groups.update(group.id, { name: event.target.value })}
+                onCommit={(name) => void store.groups.update(group.id, { name })}
               />
               <p className="code">
                 <code>{group.code}</code>
@@ -350,11 +350,11 @@ export function ManageScreen() {
           label="Ander adres gebruiken"
           hint="Leeg laten betekent: het adres dat bij het bouwen is meegegeven, of anders geen server."
         >
-          <input
+          <DraftInput
             className="input"
             placeholder="https://…"
             value={data.settings.syncUrl ?? ''}
-            onChange={(event) => void store.saveSettings({ syncUrl: event.target.value || null })}
+            onCommit={(url) => void store.saveSettings({ syncUrl: url.trim() || null })}
           />
         </Field>
 

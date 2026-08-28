@@ -8,6 +8,7 @@ import { AuthProvider } from '../../auth/AuthProvider';
 import { StoreProvider } from '../StoreProvider';
 import { ExerciseEditScreen } from './ExerciseEditScreen';
 import { LibraryScreen } from './LibraryScreen';
+import { ManageScreen } from './ManageScreen';
 import { SheetScreen } from './SheetScreen';
 import { TrainingScreen } from './TrainingScreen';
 
@@ -357,5 +358,67 @@ describe('de animatiebewerker', () => {
 
     await user.click(screen.getByRole('button', { name: 'Pauze' }));
     expect(await screen.findByRole('button', { name: '+ Speler' })).toBeTruthy();
+  });
+});
+
+describe('velden waar je in typt', () => {
+  /**
+   * Deze velden schrijven naar IndexedDB en tekenen zich opnieuw met wat daar
+   * uit terugkomt. Bij elke toetsaanslag meteen bewaren leverde twee kwalen op
+   * die allebei in de echte app zichtbaar waren: snel typen raakte letters
+   * kwijt, en een veld met een terugvalwaarde ('Trainer') was niet leeg te
+   * maken — je typte daarna achter een woord dat vanzelf terugkwam.
+   */
+  it('laat de naam wissen en opnieuw intikken, ook snel achter elkaar', async () => {
+    const { store } = await seed();
+    renderWith(store, <ManageScreen />);
+    const user = userEvent.setup();
+
+    const naam = await screen.findByLabelText('Naam', { selector: 'input' });
+    await user.clear(naam);
+    expect((naam as HTMLInputElement).value).toBe('');
+
+    await user.type(naam, 'Marit van der Berg');
+    expect((naam as HTMLInputElement).value).toBe('Marit van der Berg');
+
+    await waitFor(
+      async () => expect((await store.profile()).name).toBe('Marit van der Berg'),
+      { timeout: 3000 },
+    );
+  });
+
+  it('valt pas bij het verlaten terug op een naam als je hem leeg laat', async () => {
+    const { store } = await seed();
+    await store.setProfileName('Marit');
+    renderWith(store, <ManageScreen />);
+    const user = userEvent.setup();
+
+    const naam = await screen.findByLabelText('Naam', { selector: 'input' });
+    await waitFor(() => expect((naam as HTMLInputElement).value).toBe('Marit'));
+    await user.clear(naam);
+    await user.tab();
+
+    await waitFor(async () => expect((await store.profile()).name).toBe('Trainer'), { timeout: 3000 });
+  });
+
+  it('bewaart de naam van een speelster zoals je hem intikt', async () => {
+    const { store } = await seed();
+    renderWith(store, <ManageScreen />);
+    const user = userEvent.setup();
+
+    // Wachten tot de selectie geladen is; het naamveld van het profiel staat er
+    // meteen, de speelsters komen uit de opslag.
+    const speelster = (await screen.findByDisplayValue('Speler 1')) as HTMLInputElement;
+    await user.clear(speelster);
+    await user.type(speelster, 'Sanne de Wit');
+    expect(speelster.value).toBe('Sanne de Wit');
+
+    await waitFor(
+      async () => {
+        const spelers = await store.players.all();
+        expect(spelers.map((speler) => speler.name)).toContain('Sanne de Wit');
+      },
+      { timeout: 3000 },
+    );
   });
 });

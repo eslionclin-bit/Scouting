@@ -184,6 +184,12 @@ export class TrainingStore {
     return changed;
   }
 
+  /**
+   * De naam van deze trainer. Leeg laten mag niet — er moet iets op een
+   * gedeelde oefening staan — maar die terugval geldt pas op het moment van
+   * bewaren. Deed hij dat bij elke toetsaanslag, dan kon je het veld nooit
+   * leegmaken om er iets anders in te typen.
+   */
   async setProfileName(name: string): Promise<Profile> {
     const profile = await this.profile();
     const updated = { ...profile, name: name.trim() || 'Trainer' };

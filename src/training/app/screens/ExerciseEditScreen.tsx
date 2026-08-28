@@ -26,7 +26,7 @@ import {
 import { useStore } from '../StoreProvider';
 import { useRoute } from '../router';
 import { AnimationEditor } from '../components/AnimationEditor';
-import { EmptyState, Field, Panel } from '../components/ui';
+import { DraftInput, DraftTextarea, EmptyState, Field, Panel } from '../components/ui';
 
 export function ExerciseEditScreen({ id }: { id: string }) {
   const { store, data } = useStore();
@@ -86,34 +86,34 @@ export function ExerciseEditScreen({ id }: { id: string }) {
 
       <Panel title="Wat is het">
         <Field label="Titel">
-          <input
+          <DraftInput
             className="input"
             value={exercise.title}
-            onChange={(event) => void patch({ title: event.target.value })}
+            onCommit={(title) => void patch({ title })}
           />
         </Field>
         <Field label="Eén regel" hint="Wat je in de lijst leest.">
-          <input
+          <DraftInput
             className="input"
             value={exercise.summary}
-            onChange={(event) => void patch({ summary: event.target.value })}
+            onCommit={(summary) => void patch({ summary })}
           />
         </Field>
         <Field label="Uitleg">
-          <textarea
+          <DraftTextarea
             className="input input--area"
             rows={6}
             value={exercise.description}
-            onChange={(event) => void patch({ description: event.target.value })}
+            onCommit={(description) => void patch({ description })}
           />
         </Field>
         <Field label="Materiaal" hint="Gescheiden door komma's.">
-          <input
+          <DraftInput
             className="input"
             value={exercise.material.join(', ')}
-            onChange={(event) =>
+            onCommit={(value) =>
               void patch({
-                material: event.target.value
+                material: value
                   .split(',')
                   .map((item) => item.trim())
                   .filter(Boolean),
@@ -314,27 +314,27 @@ export function ExerciseEditScreen({ id }: { id: string }) {
       <Panel title="Varianten">
         {exercise.variants.map((variant, index) => (
           <div key={variant.id} className="variant">
-            <input
+            <DraftInput
               className="input"
               value={variant.title}
               aria-label="Titel van de variant"
-              onChange={(event) =>
+              onCommit={(title) =>
                 void patch({
                   variants: exercise.variants.map((item, i) =>
-                    i === index ? { ...item, title: event.target.value } : item,
+                    i === index ? { ...item, title } : item,
                   ),
                 })
               }
             />
-            <textarea
+            <DraftTextarea
               className="input input--area"
               rows={2}
               value={variant.description}
               aria-label="Uitleg van de variant"
-              onChange={(event) =>
+              onCommit={(description) =>
                 void patch({
                   variants: exercise.variants.map((item, i) =>
-                    i === index ? { ...item, description: event.target.value } : item,
+                    i === index ? { ...item, description } : item,
                   ),
                 })
               }
