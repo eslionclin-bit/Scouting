@@ -1,16 +1,22 @@
 /**
  * Een eigen oefening opschrijven.
  *
- * Het formulier is lang, maar de volgorde is die van het bedenken: eerst wat het
- * is, dan wat het traint, dan met hoeveel mensen het werkt, en pas daarna de
- * animatie. Alles wordt bij elke toetsaanslag bewaard — er is geen
- * opslaan-knop, want een half ingevulde oefening kwijtraken omdat de telefoon
- * uitging is nergens goed voor.
+ * Er stonden zestien velden op dit scherm, en dat is er zo veel dat je aan het
+ * invullen begint in plaats van aan het opschrijven van je oefening. Wat er nu
+ * open staat is het minimum waarmee een oefening bruikbaar is: hoe hij heet,
+ * wat je doet, wat het traint, met hoeveel mensen, en waar je op let. De rest
+ * — duur, niveau, materiaal, waar hij in een training past, posities,
+ * varianten — heeft een werkbare standaard en staat onder één knop.
+ *
+ * De volgorde blijft die van het bedenken. En er is geen opslaan-knop: alles
+ * gaat vanzelf naar de opslag, want een half ingevulde oefening kwijtraken
+ * omdat de telefoon uitging is nergens goed voor.
  */
 
 import { useEffect, useState } from 'react';
 import { newId } from '../../../domain/ids';
 import { allowedSizes } from '../../domain/grouping';
+import { describeGroupSpec, summaryFrom, withStep } from '../../domain/library';
 import {
   BLOCK_KINDS,
   BLOCK_LABELS,
@@ -26,7 +32,19 @@ import {
 import { useStore } from '../StoreProvider';
 import { useRoute } from '../router';
 import { AnimationEditor } from '../components/AnimationEditor';
-import { DraftInput, DraftTextarea, EmptyState, Field, Panel } from '../components/ui';
+import { DraftInput, DraftTextarea, EmptyState, Field, More, Panel } from '../components/ui';
+
+/**
+ * De vormen waarin een oefening te doen is. Vier knoppen in plaats van een veld
+ * waar 'per hoeveel' in moet: niemand schrijft een oefening op in stappen, maar
+ * wel in tweetallen of drietallen.
+ */
+const GROUP_SHAPES = [
+  { step: 1, label: 'Elk aantal' },
+  { step: 2, label: 'In tweetallen' },
+  { step: 3, label: 'In drietallen' },
+  { step: 4, label: 'In viertallen' },
+] as const;
 
 export function ExerciseEditScreen({ id }: { id: string }) {
   const { store, data } = useStore();
@@ -69,6 +87,17 @@ export function ExerciseEditScreen({ id }: { id: string }) {
     await store.exercises.update(id, changes);
   }
 
+  /**
+   * De uitleg bewaren, en meteen de regel voor in de lijst als die nog leeg is.
+   * Zo is er één veld minder om in te vullen zonder dat de bank vol lege regels
+   * komt te staan.
+   */
+  async function saveDescription(description: string) {
+    const current = data.exercises.find((item) => item.id === id);
+    const summary = current?.summary.trim() ? current.summary : summaryFrom(description);
+    await patch({ description, summary });
+  }
+
   function toggle<T>(list: T[], value: T): T[] {
     return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
   }
@@ -92,33 +121,12 @@ export function ExerciseEditScreen({ id }: { id: string }) {
             onCommit={(title) => void patch({ title })}
           />
         </Field>
-        <Field label="Eén regel" hint="Wat je in de lijst leest.">
-          <DraftInput
-            className="input"
-            value={exercise.summary}
-            onCommit={(summary) => void patch({ summary })}
-          />
-        </Field>
-        <Field label="Uitleg">
+        <Field label="Uitleg" hint="De eerste zin komt in de lijst te staan.">
           <DraftTextarea
             className="input input--area"
             rows={6}
             value={exercise.description}
-            onCommit={(description) => void patch({ description })}
-          />
-        </Field>
-        <Field label="Materiaal" hint="Gescheiden door komma's.">
-          <DraftInput
-            className="input"
-            value={exercise.material.join(', ')}
-            onCommit={(value) =>
-              void patch({
-                material: value
-                  .split(',')
-                  .map((item) => item.trim())
-                  .filter(Boolean),
-              })
-            }
+            onCommit={(description) => void saveDescription(description)}
           />
         </Field>
       </Panel>
@@ -137,133 +145,59 @@ export function ExerciseEditScreen({ id }: { id: string }) {
           ))}
         </div>
         <p className="muted">Hierop wordt gefilterd; kies er liever twee dan vijf.</p>
-
-        <Field label="Past in">
-          <div className="chips">
-            {BLOCK_KINDS.map((kind: BlockKind) => (
-              <button
-                key={kind}
-                type="button"
-                className={`chip ${exercise.slots.includes(kind) ? 'is-active' : ''}`}
-                onClick={() => void patch({ slots: toggle(exercise.slots, kind) })}
-              >
-                {BLOCK_LABELS[kind]}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        <div className="grid grid--form">
-          <Field label="Richtduur (min)">
-            <input
-              type="number"
-              className="input"
-              min={5}
-              max={60}
-              step={5}
-              value={exercise.minutes}
-              onChange={(event) => void patch({ minutes: Number(event.target.value) })}
-            />
-          </Field>
-          <Field label="Niveau">
-            <select
-              className="input"
-              value={exercise.level}
-              onChange={(event) => void patch({ level: Number(event.target.value) as 1 | 2 | 3 })}
-            >
-              <option value={1}>1 — beginners</option>
-              <option value={2}>2 — gemiddeld</option>
-              <option value={3}>3 — gevorderd</option>
-            </select>
-          </Field>
-        </div>
       </Panel>
 
       <Panel title="Met hoeveel spelers">
-        <div className="grid grid--form">
-          <Field label="Kleinste groep">
+        <div className="chips">
+          {GROUP_SHAPES.map((shape) => (
+            <button
+              key={shape.step}
+              type="button"
+              className={`chip ${exercise.group.step === shape.step ? 'is-active' : ''}`}
+              onClick={() => void patch({ group: withStep(exercise.group, shape.step) })}
+            >
+              {shape.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="row row--wrap">
+          <label className="filters__number">
+            Van
             <input
               type="number"
-              className="input"
+              className="input input--tiny"
               min={1}
-              max={20}
+              max={24}
               value={exercise.group.min}
+              aria-label="Kleinste groep"
               onChange={(event) =>
                 void patch({ group: { ...exercise.group, min: Number(event.target.value) } })
               }
             />
-          </Field>
-          <Field label="Grootste groep">
+          </label>
+          <label className="filters__number">
+            tot en met
             <input
               type="number"
-              className="input"
+              className="input input--tiny"
               min={1}
               max={24}
               value={exercise.group.max}
+              aria-label="Grootste groep"
               onChange={(event) =>
                 void patch({ group: { ...exercise.group, max: Number(event.target.value) } })
               }
             />
-          </Field>
-          <Field label="Per" hint="3 = alleen in drietallen, 1 = elk aantal.">
-            <input
-              type="number"
-              className="input"
-              min={1}
-              max={8}
-              value={exercise.group.step}
-              onChange={(event) =>
-                void patch({ group: { ...exercise.group, step: Number(event.target.value) } })
-              }
-            />
-          </Field>
-          <Field label="Hoe vaak naast elkaar" hint="Hoeveel groepen er tegelijk kunnen draaien.">
-            <input
-              type="number"
-              className="input"
-              min={1}
-              max={8}
-              value={exercise.group.maxGroups}
-              onChange={(event) =>
-                void patch({ group: { ...exercise.group, maxGroups: Number(event.target.value) } })
-              }
-            />
-          </Field>
+          </label>
+          <span className="muted">spelers per groep</span>
         </div>
 
         <p className="muted">
           {sizes.length > 0
-            ? `Werkt met groepen van ${sizes.join(', ')} spelers.`
-            : 'Deze combinatie levert geen enkele werkbare groepsgrootte op — kijk nog eens naar het minimum en de stap.'}
+            ? `Werkt met groepen van ${sizes.join(', ')} spelers. In de bank staat: ${describeGroupSpec(exercise)}.`
+            : 'Zo blijft er geen werkbare groep over — kijk nog eens naar het bereik.'}
         </p>
-
-        <Field label="Posities per groep">
-          <div className="chips">
-            {POSITIONS.map((position: Position) => {
-              const role = exercise.group.roles.find((item) => item.position === position);
-              return (
-                <button
-                  key={position}
-                  type="button"
-                  className={`chip ${role ? 'is-active' : ''}`}
-                  onClick={() =>
-                    void patch({
-                      group: {
-                        ...exercise.group,
-                        roles: role
-                          ? exercise.group.roles.filter((item) => item.position !== position)
-                          : [...exercise.group.roles, { position, count: 1, required: true }],
-                      },
-                    })
-                  }
-                >
-                  {POSITION_LABELS[position]}
-                  {role ? ` ×${role.count}` : ''}
-                </button>
-              );
-            })}
-          </div>
-        </Field>
       </Panel>
 
       <Panel title="Waar je op let">
@@ -311,7 +245,126 @@ export function ExerciseEditScreen({ id }: { id: string }) {
         </div>
       </Panel>
 
-      <Panel title="Varianten">
+
+      <Panel title="Animatie">
+        <AnimationEditor
+          animation={animation}
+          onChange={(next) => {
+            setAnimation(next);
+            void patch({ animation: next });
+          }}
+        />
+      </Panel>
+
+      <More title="Meer instellen — duur, niveau, materiaal, varianten">
+        <div className="grid grid--form">
+          <Field label="Richtduur (min)">
+            <input
+              type="number"
+              className="input"
+              min={5}
+              max={60}
+              step={5}
+              value={exercise.minutes}
+              onChange={(event) => void patch({ minutes: Number(event.target.value) })}
+            />
+          </Field>
+          <Field label="Niveau">
+            <select
+              className="input"
+              value={exercise.level}
+              onChange={(event) => void patch({ level: Number(event.target.value) as 1 | 2 | 3 })}
+            >
+              <option value={1}>1 — beginners</option>
+              <option value={2}>2 — gemiddeld</option>
+              <option value={3}>3 — gevorderd</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Materiaal" hint="Gescheiden door komma's.">
+          <DraftInput
+            className="input"
+            value={exercise.material.join(', ')}
+            onCommit={(value) =>
+              void patch({
+                material: value
+                  .split(',')
+                  .map((item) => item.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </Field>
+
+        <Field label="Eigen regel voor in de lijst" hint="Leeg laten: dan pakt de app de eerste zin van de uitleg.">
+          <DraftInput
+            className="input"
+            value={exercise.summary}
+            onCommit={(summary) => void patch({ summary })}
+          />
+        </Field>
+
+        <Field label="Past in">
+          <div className="chips">
+            {BLOCK_KINDS.map((kind: BlockKind) => (
+              <button
+                key={kind}
+                type="button"
+                className={`chip ${exercise.slots.includes(kind) ? 'is-active' : ''}`}
+                onClick={() => void patch({ slots: toggle(exercise.slots, kind) })}
+              >
+                {BLOCK_LABELS[kind]}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field
+          label="Hoe vaak naast elkaar"
+          hint="Hoeveel groepen er tegelijk kunnen draaien; zoveel netten of vakken heb je nodig."
+        >
+          <input
+            type="number"
+            className="input input--tiny"
+            min={1}
+            max={8}
+            value={exercise.group.maxGroups}
+            onChange={(event) =>
+              void patch({ group: { ...exercise.group, maxGroups: Number(event.target.value) } })
+            }
+          />
+        </Field>
+
+        <Field label="Posities per groep" hint="Alleen invullen als de oefening er echt om vraagt.">
+          <div className="chips">
+            {POSITIONS.map((position: Position) => {
+              const role = exercise.group.roles.find((item) => item.position === position);
+              return (
+                <button
+                  key={position}
+                  type="button"
+                  className={`chip ${role ? 'is-active' : ''}`}
+                  onClick={() =>
+                    void patch({
+                      group: {
+                        ...exercise.group,
+                        roles: role
+                          ? exercise.group.roles.filter((item) => item.position !== position)
+                          : [...exercise.group.roles, { position, count: 1, required: true }],
+                      },
+                    })
+                  }
+                >
+                  {POSITION_LABELS[position]}
+                  {role ? ` ×${role.count}` : ''}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
+
+        <h3>Varianten</h3>
         {exercise.variants.map((variant, index) => (
           <div key={variant.id} className="variant">
             <DraftInput
@@ -364,17 +417,7 @@ export function ExerciseEditScreen({ id }: { id: string }) {
         >
           Variant erbij
         </button>
-      </Panel>
-
-      <Panel title="Animatie">
-        <AnimationEditor
-          animation={animation}
-          onChange={(next) => {
-            setAnimation(next);
-            void patch({ animation: next });
-          }}
-        />
-      </Panel>
+      </More>
 
       <Panel title="Opruimen">
         <button

@@ -10,6 +10,7 @@
 
 import { HybridClock, compareRev, type HlcState } from '../../domain/clock';
 import { getDeviceId, newId } from '../../domain/ids';
+import { Mutex } from '../../db/mutex';
 import type {
   EntityName,
   Exercise,
@@ -69,8 +70,12 @@ export class TrainingStore {
     private readonly now: () => Date,
   ) {
     const emit = (events: readonly WriteEvent[]) => this.emit(events);
+    // Eén slot voor alle collecties samen. Twee wijzigingen die elkaar in de
+    // rede vallen — de uitleg die net is uitgetypt en de knop die er meteen
+    // daarna wordt aangetikt — mogen elkaars werk niet overschrijven.
+    const lock = new Mutex();
     const write = <T extends StoredRecord>(entity: EntityName) =>
-      new Collection<T>(entity, db, () => this.tick(), () => this.now().toISOString(), emit);
+      new Collection<T>(entity, db, () => this.tick(), () => this.now().toISOString(), emit, lock);
 
     this.teams = write<Team>('teams');
     this.players = write<Player>('players');
@@ -286,6 +291,7 @@ export class Collection<T extends StoredRecord> {
     private readonly tick: () => string,
     private readonly stamp: () => string,
     private readonly emit: (events: readonly WriteEvent[]) => void,
+    private readonly lock: Mutex,
   ) {}
 
   async all(includeDeleted = false): Promise<T[]> {
@@ -311,17 +317,46 @@ export class Collection<T extends StoredRecord> {
     return record;
   }
 
+  /**
+   * Een record bijwerken: lezen, aanvullen, terugschrijven.
+   *
+   * Die drie stappen zitten in één transactie én achter één slot, en dat is
+   * geen overdaad. Zonder dat slot lazen twee wijzigingen die vlak na elkaar
+   * komen allebei dezelfde oude versie en schreef de laatste de eerste weg.
+   * In de app was dat te zien: typ een uitleg, tik meteen daarna een doel aan,
+   * en de uitleg was verdwenen.
+   */
   async update(id: string, patch: Partial<Omit<T, Managed>>): Promise<T> {
-    const current = (await this.db.get(this.entity, id)) as unknown as T | undefined;
-    if (!current) throw new Error(`${this.entity} met id ${id} bestaat niet.`);
-    const record = {
-      ...current,
-      ...(patch as object),
-      rev: this.tick(),
-      updatedAt: this.stamp(),
-    } as T;
-    await this.write(record);
-    return record;
+    return this.lock.run(async () => {
+      const tx = this.db.transaction([this.entity, 'outbox'], 'readwrite');
+      const store = tx.objectStore(this.entity);
+      const current = (await store.get(id)) as unknown as T | undefined;
+      if (!current) {
+        tx.abort();
+        throw new Error(`${this.entity} met id ${id} bestaat niet.`);
+      }
+
+      const record = {
+        ...current,
+        ...(patch as object),
+        rev: this.tick(),
+        updatedAt: this.stamp(),
+      } as T;
+
+      await store.put(record as never);
+      await tx.objectStore('outbox').put({
+        entity: this.entity,
+        recordId: record.id,
+        rev: record.rev,
+        createdAt: this.stamp(),
+        attempts: 0,
+        lastError: null,
+      });
+      await tx.done;
+
+      this.emit([{ entity: this.entity, id: record.id, kind: 'put' }]);
+      return record;
+    });
   }
 
   /** Een volledig record wegschrijven, bijvoorbeeld een gekopieerde oefening. */
@@ -337,15 +372,17 @@ export class Collection<T extends StoredRecord> {
    * synchroniseert niet.
    */
   async remove(id: string): Promise<void> {
-    const current = (await this.db.get(this.entity, id)) as unknown as T | undefined;
-    if (!current || current.deletedAt !== null) return;
-    const record = {
-      ...current,
-      rev: this.tick(),
-      updatedAt: this.stamp(),
-      deletedAt: this.stamp(),
-    } as T;
-    await this.write(record, 'delete');
+    await this.lock.run(async () => {
+      const current = (await this.db.get(this.entity, id)) as unknown as T | undefined;
+      if (!current || current.deletedAt !== null) return;
+      const record = {
+        ...current,
+        rev: this.tick(),
+        updatedAt: this.stamp(),
+        deletedAt: this.stamp(),
+      } as T;
+      await this.write(record, 'delete');
+    });
   }
 
   private async write(record: T, kind: WriteEvent['kind'] = 'put'): Promise<void> {

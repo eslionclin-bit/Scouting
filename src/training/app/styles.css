@@ -374,6 +374,42 @@ a {
   letter-spacing: 0.05em;
 }
 
+.more {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin: 0.75rem 0;
+}
+
+.more__head {
+  cursor: pointer;
+  padding: 0.75rem 0.9rem;
+  font-weight: 600;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: var(--tap);
+}
+
+.more__head::before {
+  content: '▸';
+  color: var(--muted);
+}
+
+.more[open] .more__head::before {
+  content: '▾';
+}
+
+.more__head::-webkit-details-marker {
+  display: none;
+}
+
+.more__body {
+  padding: 0 0.9rem 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
 /* ---------- Chips en filters ---------- */
 
 .chips {
