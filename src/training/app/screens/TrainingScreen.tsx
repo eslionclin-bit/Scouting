@@ -27,7 +27,7 @@ import { useStore } from '../StoreProvider';
 import { href, useRoute } from '../router';
 import { ExercisePicker } from '../components/ExercisePicker';
 import { GroupPlan, PlayerName } from '../components/GroupPlan';
-import { EmptyState, Field, Panel, Warning } from '../components/ui';
+import { DraftInput, DraftTextarea, EmptyState, Field, Panel, Warning } from '../components/ui';
 
 export function TrainingScreen({ id }: { id: string }) {
   const { store, data } = useStore();
@@ -138,10 +138,10 @@ export function TrainingScreen({ id }: { id: string }) {
 
       <div className="grid grid--form">
         <Field label="Titel">
-          <input
+          <DraftInput
             className="input"
             value={training.title}
-            onChange={(event) => void patch({ title: event.target.value })}
+            onCommit={(title) => void patch({ title })}
           />
         </Field>
         <Field label="Datum">
@@ -161,10 +161,10 @@ export function TrainingScreen({ id }: { id: string }) {
           />
         </Field>
         <Field label="Zaal">
-          <input
+          <DraftInput
             className="input"
             value={training.location ?? ''}
-            onChange={(event) => void patch({ location: event.target.value || null })}
+            onCommit={(location) => void patch({ location: location.trim() || null })}
           />
         </Field>
       </div>
@@ -334,15 +334,15 @@ export function TrainingScreen({ id }: { id: string }) {
                 />
               )}
 
-              <textarea
+              <DraftTextarea
                 className="input input--note"
                 placeholder="Aantekening voor tijdens de training"
                 value={blockPlan.block.note ?? ''}
-                onChange={(event) =>
+                onCommit={(note) =>
                   void setBlocks(
                     training.blocks.map((block) =>
                       block.id === blockPlan.block.id
-                        ? { ...block, note: event.target.value || null }
+                        ? { ...block, note: note.trim() || null }
                         : block,
                     ),
                   )
