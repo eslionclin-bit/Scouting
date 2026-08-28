@@ -299,7 +299,15 @@ export interface Point {
   y: number;
 }
 
-export type MarkerKind = 'player' | 'opponent' | 'ball' | 'cone' | 'coach' | 'cart';
+export type MarkerKind =
+  | 'player'
+  | 'opponent'
+  | 'ball'
+  | 'cone'
+  | 'coach'
+  | 'cart'
+  /** Een plek op de vloer: een doelvak, een pion om omheen te lopen. */
+  | 'target';
 
 export interface Marker {
   id: string;

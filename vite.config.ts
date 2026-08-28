@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -13,7 +14,12 @@ export default defineConfig({
       // De app-shell wordt bij installatie gecachet; daarna start de app ook op
       // zonder enige verbinding — de wedstrijddata staat toch al in IndexedDB.
       registerType: 'autoUpdate',
-      includeAssets: ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
+      includeAssets: [
+        'icon-192.png',
+        'icon-512.png',
+        'apple-touch-icon.png',
+        'training.webmanifest',
+      ],
       manifest: {
         name: 'Volleybal scouting',
         short_name: 'Scouting',
@@ -39,5 +45,17 @@ export default defineConfig({
       },
     }),
   ],
-  build: { target: 'es2022' },
+  build: {
+    target: 'es2022',
+    // Twee apps in dezelfde repo, elk met een eigen ingang: de scouting-app op
+    // de root, de trainingsapp op /training.html. Ze delen de bouwstenen (ids,
+    // klok, build, tests) maar verder niets — eigen database, eigen schermen,
+    // eigen server.
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        training: fileURLToPath(new URL('./training.html', import.meta.url)),
+      },
+    },
+  },
 });
