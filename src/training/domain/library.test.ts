@@ -6,7 +6,10 @@ import {
   filterExercises,
   originOf,
   sortExercises,
+  summaryFrom,
+  withStep,
 } from './library';
+import { allowedSizes } from './grouping';
 import { makeExercise, makeGroupSpec, makeSquad } from '../test/factory';
 
 const me = 'trainer-1';
@@ -118,5 +121,45 @@ describe('alternatieven', () => {
       group: makeGroupSpec({ min: 6, max: 6, roles: [{ position: 'setter', count: 1, required: true }] }),
     });
     expect(alternativesFor(origineel, [origineel, metSpelverdeler], squad)).toEqual([]);
+  });
+});
+
+describe('groepsvorm kiezen', () => {
+  it('schuift de grenzen mee naar het gekozen groepje', () => {
+    const spec = makeGroupSpec({ min: 4, max: 10, step: 1 });
+    expect(withStep(spec, 3)).toMatchObject({ step: 3, min: 6, max: 9 });
+    expect(withStep(spec, 2)).toMatchObject({ step: 2, min: 4, max: 10 });
+  });
+
+  it('laat de grenzen met rust als elk aantal mag', () => {
+    const spec = makeGroupSpec({ min: 5, max: 7, step: 3 });
+    expect(withStep(spec, 1)).toMatchObject({ step: 1, min: 5, max: 7 });
+  });
+
+  it('houdt een werkbare groep over als het bereik te smal is', () => {
+    const spec = makeGroupSpec({ min: 4, max: 5, step: 1 });
+    const drietallen = withStep(spec, 3);
+    expect(drietallen.min).toBe(6);
+    expect(drietallen.max).toBeGreaterThanOrEqual(drietallen.min);
+    expect(allowedSizes(drietallen).length).toBeGreaterThan(0);
+  });
+});
+
+describe('de ene regel in de lijst', () => {
+  it('pakt de eerste zin uit de uitleg', () => {
+    expect(summaryFrom('Twee spelers pepperen. Daarna harder slaan.')).toBe(
+      'Twee spelers pepperen.',
+    );
+  });
+
+  it('kort een lange eerste zin in', () => {
+    const lang = `${'woord '.repeat(40)}einde.`;
+    const kort = summaryFrom(lang);
+    expect(kort.length).toBeLessThanOrEqual(120);
+    expect(kort.endsWith('…')).toBe(true);
+  });
+
+  it('geeft niets terug bij een lege uitleg', () => {
+    expect(summaryFrom('   ')).toBe('');
   });
 });

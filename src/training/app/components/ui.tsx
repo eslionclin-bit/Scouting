@@ -170,12 +170,24 @@ function useDraft(value: string, onCommit: (value: string) => void, delay: numbe
 
   // Wat er van buiten komt telt alleen als je zelf niet aan het typen bent.
   useEffect(() => {
-    if (!typing.current) setDraft(value);
+    if (typing.current) return;
+    draftRef.current = value;
+    setDraft(value);
   }, [value]);
 
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);
+
+  /**
+   * De laatst getikte tekst, bijgehouden bij het tikken zelf en niet bij het
+   * hertekenen. Dat verschil is niet theoretisch: wie een veld invult en meteen
+   * daarna ergens anders klikt, laat het verlaten van het veld in dezelfde tel
+   * gebeuren als de laatste aanslag. Stond de tekst dan alleen in een waarde die
+   * pas bij het hertekenen wordt bijgewerkt, dan bewaarde hij wat er vóór die
+   * aanslag stond — bij een leeg veld dus niets.
+   */
+  const draftRef = useRef(draft);
 
   function commit(): void {
     if (timer.current) clearTimeout(timer.current);
@@ -185,12 +197,9 @@ function useDraft(value: string, onCommit: (value: string) => void, delay: numbe
     commitRef.current(draftRef.current);
   }
 
-  // De laatste tekst in een ref, zodat de tijdklok hem ziet zoals hij nu is.
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
-
   function change(next: string): void {
     typing.current = true;
+    draftRef.current = next;
     setDraft(next);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
@@ -201,4 +210,20 @@ function useDraft(value: string, onCommit: (value: string) => void, delay: numbe
   }
 
   return { value: draft, change, commit };
+}
+
+/**
+ * Een blok dat dichtgeklapt begint.
+ *
+ * Voor alles wat je zelden invult maar soms nodig hebt. Bewust het gewone
+ * `details`-element: dat werkt zonder toestand, onthoudt zichzelf tijdens het
+ * bewerken, en een schermlezer weet er raad mee.
+ */
+export function More({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <details className="more">
+      <summary className="more__head">{title}</summary>
+      <div className="more__body">{children}</div>
+    </details>
+  );
 }

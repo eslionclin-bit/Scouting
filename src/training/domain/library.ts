@@ -8,7 +8,7 @@
  */
 
 import { allowedSizes, distribute, hasRequiredRoles } from './grouping';
-import type { Exercise, Goal, Player, Visibility } from './types';
+import type { Exercise, Goal, GroupSpec, Player, Visibility } from './types';
 
 /** Herkomst van een oefening, zoals je erop filtert. */
 export type Origin = 'mine' | 'others' | 'builtin';
@@ -185,4 +185,37 @@ export function alternativesFor(
 
 function overlap(a: Exercise, b: Exercise): number {
   return a.goals.filter((goal) => b.goals.includes(goal)).length;
+}
+
+/**
+ * De groepsvraag omzetten naar 'in tweetallen', 'in drietallen', enzovoort.
+ *
+ * In het formulier stonden vier getallen naast elkaar (kleinste, grootste, per,
+ * hoe vaak naast elkaar) en die vier zeggen los van elkaar weinig. Wie een
+ * oefening in drietallen opschrijft, denkt niet in stappen van drie maar in
+ * drietallen — dus is dát de knop, en schuiven de grenzen mee naar wat er dan
+ * nog kan.
+ */
+export function withStep(spec: GroupSpec, step: number): GroupSpec {
+  const stap = Math.max(1, Math.round(step));
+  if (stap === 1) return { ...spec, step: 1 };
+
+  const min = Math.max(stap, Math.ceil(spec.min / stap) * stap);
+  const max = Math.max(min, Math.floor(spec.max / stap) * stap);
+  return { ...spec, step: stap, min, max };
+}
+
+/**
+ * De ene regel die in de lijst staat, afgeleid uit de uitleg.
+ *
+ * Er stond een apart veld voor, en dat is er een te veel: wie een oefening
+ * opschrijft heeft de eerste zin al getypt. Blijft het veld leeg, dan pakt de
+ * app die zin. Zelf iets anders invullen mag nog steeds.
+ */
+export function summaryFrom(description: string, limit = 120): string {
+  const text = description.trim().replace(/\s+/g, ' ');
+  if (text === '') return '';
+  const end = text.search(/[.!?](\s|$)/);
+  const sentence = end > 0 ? text.slice(0, end + 1) : text;
+  return sentence.length > limit ? `${sentence.slice(0, limit - 1).trimEnd()}…` : sentence;
 }

@@ -131,3 +131,46 @@ describe('een account overnemen', () => {
     expect(await store.adoptAccount({ id: 'account-1', name: 'Marit' })).toBe(0);
   });
 });
+
+describe('twee wijzigingen vlak na elkaar', () => {
+  /**
+   * Dit ging in de app echt mis: de uitleg van een oefening intikken en meteen
+   * daarna een doel aantikken, en de uitleg was weg. Beide wijzigingen lazen
+   * dezelfde oude versie en de laatste schreef de eerste weg.
+   */
+  it('overschrijven elkaar niet', async () => {
+    const store = await openStore();
+    const { id, rev, updatedAt, deletedAt, ...input } = makeExercise({
+      title: 'Nieuwe oefening',
+      description: '',
+      goals: [],
+    });
+    const oefening = await store.exercises.create(input);
+
+    await Promise.all([
+      store.exercises.update(oefening.id, { description: 'Zo gaat de oefening.' }),
+      store.exercises.update(oefening.id, { goals: ['attack'] }),
+    ]);
+
+    const bewaard = await store.exercises.get(oefening.id);
+    expect(bewaard?.description).toBe('Zo gaat de oefening.');
+    expect(bewaard?.goals).toEqual(['attack']);
+  });
+
+  it('houden bij tien wijzigingen tegelijk alles vast', async () => {
+    const store = await openStore();
+    const { id, rev, updatedAt, deletedAt, ...input } = makeExercise({ coachingPoints: [] });
+    const oefening = await store.exercises.create(input);
+
+    await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        store.exercises.update(oefening.id, { minutes: index + 1 }),
+      ),
+    );
+
+    const bewaard = await store.exercises.get(oefening.id);
+    expect(bewaard?.minutes).toBeGreaterThan(0);
+    // Elke wijziging heeft een eigen regel in de outbox: er is er geen verdwenen.
+    expect(await store.pendingCount()).toBe(11);
+  });
+});
