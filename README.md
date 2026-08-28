@@ -23,8 +23,8 @@ npm run dev     # ontwikkelserver op http://localhost:5173
                 # de trainingsapp staat op http://localhost:5173/training.html
 npm run build   # typecheck + productiebuild van beide apps, inclusief service worker
 npm run build:demo  # alles in één HTML-bestand, om de app te laten zien
-npm test        # 447 tests: domein, opslag, sync, rotatie, analyse, schermen, export,
-                # en de trainingsapp: verdeling, bank, reeksen, delen
+npm test        # 516 tests: domein, opslag, sync, rotatie, analyse, schermen, export,
+                # en de trainingsapp: verdeling, bank, reeksen, delen, inloggen
 ```
 
 ## Wat er nu staat
@@ -383,6 +383,12 @@ Vink je af wie er vanavond zijn, dan rekent elk blok van de training uit hoeveel
 groepen er draaien, wie er begint, wie wachten en om de hoeveel minuten er
 gewisseld wordt. Past een oefening niet bij de groep, dan staat dat er in gewone
 taal bij, met de oefeningen die hetzelfde trainen en wél passen.
+
+Wie de app mag gebruiken, regelt een inlog: iedere trainer een eigen account met
+wachtwoord, en een gebruikerspagina waarop de eigenaar accounts toevoegt en
+weghaalt. Elk account heeft op een apparaat zijn eigen opslag, dus op een
+gedeelde laptop ziet de tweede trainer niets van de eerste. Zonder deelserver is
+er niets om op in te loggen en werkt de app zoals daarvoor: alles lokaal.
 
 Verder: een oefeningenbank met zestien ingebouwde oefeningen (negen met
 animatie), animaties die je zelf met een vinger tekent — slepen om iemand neer te

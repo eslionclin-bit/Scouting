@@ -9,6 +9,7 @@
  * blokkeren of een melding opdringen.
  */
 
+import { ShareAuthError } from './cloud';
 import type { TrainingStore } from '../db/store';
 import type { EntityName, Group, StoredRecord } from '../domain/types';
 import { scopesFor, subscribedScopes } from './scopes';
@@ -21,6 +22,12 @@ export interface SyncReport {
   local: number;
   scopes: string[];
   errors: string[];
+  /**
+   * De server zegt dat we niet (meer) ingelogd zijn. Anders dan de andere
+   * fouten helpt opnieuw proberen hier niet: er moet iemand een wachtwoord
+   * intikken, en de app hoort het inlogscherm te tonen.
+   */
+  authExpired: boolean;
 }
 
 const BATCH = 200;
@@ -32,7 +39,9 @@ export class ShareEngine {
   ) {}
 
   async syncOnce(): Promise<SyncReport> {
-    const report: SyncReport = { pushed: 0, received: 0, local: 0, scopes: [], errors: [] };
+    const report: SyncReport = {
+      pushed: 0, received: 0, local: 0, scopes: [], errors: [], authExpired: false,
+    };
     const available = (await this.transport.isAvailable?.()) ?? true;
     if (!available) {
       report.errors.push('Geen verbinding.');
@@ -111,6 +120,7 @@ export class ShareEngine {
         await this.store.clearOutbox(done);
         report.pushed += done.length;
       } catch (error) {
+        if (error instanceof ShareAuthError) report.authExpired = true;
         report.errors.push(message(error));
         for (const seq of bucket.seqs) await this.store.markFailed(seq, message(error));
       }
@@ -130,6 +140,7 @@ export class ShareEngine {
         if (!response.hasMore) break;
       }
     } catch (error) {
+      if (error instanceof ShareAuthError) report.authExpired = true;
       report.errors.push(message(error));
     }
   }

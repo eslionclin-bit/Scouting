@@ -21,27 +21,22 @@ import type {
   Team,
   Training,
 } from '../domain/types';
+import {
+  DEFAULT_DEVICE_SETTINGS,
+  loadDeviceSettings,
+  saveDeviceSettings,
+  type DeviceSettings,
+} from '../app/deviceSettings';
 import { openTrainingDb, type OpenOptions, type TrainingDb } from './database';
 import { ENTITY_STORES, META_KEYS, type OutboxEntry } from './schema';
 
-/** Instellingen van dit apparaat; reizen niet mee met de sync. */
-export interface AppSettings {
-  /** Adres van de deelserver. Leeg = alles blijft op dit apparaat. */
-  syncUrl: string | null;
-  /** Openbare oefeningen van anderen ophalen. */
-  followPublic: boolean;
-  /** Team waar de app standaard mee opent. */
-  activeTeamId: string | null;
-  /** Waar de app op rekent als er nog niets is afgevinkt. */
-  defaultParticipants: number | null;
-}
+/**
+ * Instellingen van dit apparaat; reizen niet mee met de sync en staan daarom
+ * niet in de database maar bij het apparaat zelf (zie `app/deviceSettings.ts`).
+ */
+export type AppSettings = DeviceSettings;
 
-export const DEFAULT_SETTINGS: AppSettings = {
-  syncUrl: null,
-  followPublic: true,
-  activeTeamId: null,
-  defaultParticipants: null,
-};
+export const DEFAULT_SETTINGS: AppSettings = DEFAULT_DEVICE_SETTINGS;
 
 export interface WriteEvent {
   entity: EntityName;
@@ -108,7 +103,10 @@ export class TrainingStore {
   }
 
   private emit(events: readonly WriteEvent[]): void {
-    void this.db.put('meta', { key: META_KEYS.clock, value: this.clock.state() });
+    // De klokstand bewaren is nuttig maar nooit dringend: gaat de database net
+    // dicht (bij uitloggen, of bij het wisselen van account), dan mag dat geen
+    // fout opleveren die verder niets met de app te maken heeft.
+    void this.db.put('meta', { key: META_KEYS.clock, value: this.clock.state() }).catch(() => undefined);
     for (const listener of [...this.listeners]) listener(events);
   }
 
@@ -145,6 +143,47 @@ export class TrainingStore {
     return profile;
   }
 
+  /**
+   * Het account overnemen als profiel.
+   *
+   * Zodra er ingelogd wordt, hoort alles wat je maakt op naam van dat account
+   * te staan en niet op een naam die per apparaat verschilt — anders is 'van
+   * mij' op je telefoon iets anders dan op je laptop. Wat er al stond op naam
+   * van het oude profiel gaat mee: dat is jouw werk, alleen had het nog geen
+   * account.
+   *
+   * Levert op hoeveel records er zijn omgezet.
+   */
+  async adoptAccount(account: { id: string; name: string }): Promise<number> {
+    const profile = await this.profile();
+    if (profile.id === account.id && profile.name === account.name) return 0;
+
+    const previous = profile.id;
+    await this.db.put('meta', {
+      key: META_KEYS.profile,
+      value: { id: account.id, name: account.name },
+    });
+
+    let changed = 0;
+    for (const entity of ENTITY_STORES) {
+      const records = (await this.db.getAll(entity)) as unknown as {
+        id: string;
+        authorId?: string;
+      }[];
+      for (const record of records) {
+        if (record.authorId !== previous) continue;
+        await this.collection(entity).update(record.id, {
+          authorId: account.id,
+          authorName: account.name,
+        } as never);
+        changed++;
+      }
+    }
+
+    this.emit([]);
+    return changed;
+  }
+
   async setProfileName(name: string): Promise<Profile> {
     const profile = await this.profile();
     const updated = { ...profile, name: name.trim() || 'Trainer' };
@@ -154,13 +193,11 @@ export class TrainingStore {
   }
 
   async settings(): Promise<AppSettings> {
-    const stored = await this.db.get('meta', META_KEYS.settings);
-    return { ...DEFAULT_SETTINGS, ...(stored?.value as Partial<AppSettings> | undefined) };
+    return loadDeviceSettings();
   }
 
   async saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
-    const settings = { ...(await this.settings()), ...patch };
-    await this.db.put('meta', { key: META_KEYS.settings, value: settings });
+    const settings = saveDeviceSettings(patch);
     this.emit([]);
     return settings;
   }

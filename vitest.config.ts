@@ -9,6 +9,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // De worker van de deelserver hoort er ook bij: dat is gewone JavaScript
+    // die met een nep-database te draaien is, en het is het stuk waar een fout
+    // 'iedereen kan naar binnen' betekent.
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'server/**/*.test.js'],
   },
 });

@@ -1,10 +1,23 @@
 /**
- * De deelserver van de trainingsapp: twee eindpunten, verder niets.
+ * De deelserver van de trainingsapp.
  *
  * `POST /share/push` neemt wijzigingen aan, `POST /share/pull` geeft terug wat
  * er sinds het meegegeven punt bij kwam. De outbox, het opnieuw proberen en het
  * samenvoegen op revisie zitten in de app en horen daar te blijven: die moet
  * ook werken als er geen server te bereiken is.
+ *
+ * ## Wie er binnen mag
+ *
+ * Daaromheen zit een inlog. Iedere trainer heeft een eigen account met een
+ * wachtwoord, en zonder geldige sessie doet deze server niets — ook niet
+ * meelezen. Accounts maakt de eigenaar aan; er is geen openbare aanmeldpagina,
+ * want wie deze server gebruikt is een handjevol mensen dat elkaar kent.
+ *
+ * De allereerste keer is er nog niemand. Dan, en alleen dan, neemt
+ * `POST /auth/setup` één eigenaarsaccount aan. Staat er eenmaal iemand in de
+ * tabel, dan is dat adres dicht. Zet daarom meteen na het uitrollen je eigen
+ * account klaar; wie wil kan dat afdwingen met het secret `SETUP_TOKEN`, dat
+ * dan bij die ene aanroep meegestuurd moet worden.
  *
  * ## Twee soorten bakken
  *
@@ -22,6 +35,21 @@
  * zodat een fout in de app geen namenlijst kan lekken.
  */
 
+import {
+  afterFailedAttempt,
+  bearerToken,
+  hashPassword,
+  hashToken,
+  lockedUntil,
+  looksLikeEmail,
+  newToken,
+  normalizeEmail,
+  passwordProblem,
+  sessionExpiry,
+  sessionIsValid,
+  verifyPassword,
+} from './auth.js';
+
 /** Korter dan dit is te raden, en dan is de hele opzet waardeloos. */
 const MIN_CODE_LENGTH = 16;
 
@@ -32,6 +60,25 @@ const SHAREABLE = new Set(['exercises', 'trainings', 'series', 'groups']);
 const PUBLIC_SHAREABLE = new Set(['exercises', 'trainings', 'series']);
 
 const SCHEMA = [
+  `create table if not exists users (
+     id text primary key,
+     email text not null,
+     name text not null,
+     role text not null,
+     password text not null,
+     created_at text not null,
+     last_login_at text,
+     failed_attempts integer not null default 0,
+     locked_until text
+   )`,
+  'create unique index if not exists users_email on users (email)',
+  `create table if not exists sessions (
+     token text primary key,
+     user_id text not null,
+     created_at text not null,
+     expires_at text not null
+   )`,
+  'create index if not exists sessions_by_user on sessions (user_id)',
   `create table if not exists shared (
      seq integer primary key autoincrement,
      scope text not null,
@@ -80,7 +127,10 @@ export default {
       try {
         await ensureSchema(env);
         const row = await env.DB.prepare('select count(*) as n from shared').first();
-        database = `in orde — ${Number(row?.n ?? 0)} gedeelde records`;
+        const people = await userCount(env);
+        database = `in orde — ${Number(row?.n ?? 0)} gedeelde records, ${people} ${
+          people === 1 ? 'account' : 'accounts'
+        }${people === 0 ? ' (maak in de app het eerste account aan)' : ''}`;
       } catch (error) {
         database = `probleem: ${error instanceof Error ? error.message : String(error)}`;
       }
@@ -100,10 +150,31 @@ export default {
       );
     }
 
-    if (request.method !== 'POST') return json({ error: 'Alleen POST.' }, 405, origin);
-
     try {
       await ensureSchema(env);
+
+      // Of er al iemand is. Het enige dat zonder inlog te vragen valt, en de app
+      // heeft het nodig om te weten of hij een inlogscherm of een
+      // eerste-keer-scherm moet tonen.
+      if (request.method === 'GET' && url.pathname === '/auth/status') {
+        const count = await userCount(env);
+        return json({ setupNeeded: count === 0, users: count }, 200, origin);
+      }
+
+      if (request.method !== 'POST') return json({ error: 'Alleen POST.' }, 405, origin);
+
+      if (url.pathname === '/auth/setup') return await setup(request, env, origin);
+      if (url.pathname === '/auth/login') return await login(request, env, origin);
+      if (url.pathname === '/auth/logout') return await logout(request, env, origin);
+      if (url.pathname === '/auth/me') return await me(request, env, origin);
+      if (url.pathname === '/auth/password') return await changeOwnPassword(request, env, origin);
+
+      if (url.pathname === '/admin/users') return await listUsers(request, env, origin);
+      if (url.pathname === '/admin/users/add') return await addUser(request, env, origin);
+      if (url.pathname === '/admin/users/remove') return await removeUser(request, env, origin);
+      if (url.pathname === '/admin/users/password') return await resetPassword(request, env, origin);
+      if (url.pathname === '/admin/users/role') return await changeRole(request, env, origin);
+
       if (url.pathname === '/share/push') return await push(request, env, origin);
       if (url.pathname === '/share/pull') return await pull(request, env, origin);
       return json({ error: 'Onbekend adres.' }, 404, origin);
@@ -114,7 +185,328 @@ export default {
   },
 };
 
+// ---------- Inloggen ----------
+
+/**
+ * Wat de app van een gebruiker te zien krijgt. Het wachtwoord, de teller van
+ * mislukte pogingen en het slot blijven hier: die zeggen iets over de beveiliging
+ * en niets over de trainer.
+ */
+function publicUser(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    createdAt: row.created_at,
+    lastLoginAt: row.last_login_at ?? null,
+  };
+}
+
+async function userCount(env) {
+  const row = await env.DB.prepare('select count(*) as n from users').first();
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * Het eerste account. Kan één keer, en daarna nooit meer: staat er iemand in de
+ * tabel, dan is dit adres dicht. Zo kan niemand zich er later tussen schuiven.
+ */
+async function setup(request, env, origin) {
+  const body = await readBody(request);
+  if (body.error) return json({ error: body.error }, 400, origin);
+
+  if ((await userCount(env)) > 0) {
+    return json({ error: 'Er is al een account. Log in of vraag de eigenaar om er een te maken.' }, 403, origin);
+  }
+
+  // Staat er een SETUP_TOKEN klaar, dan moet die kloppen. Dat sluit het gaatje
+  // tussen uitrollen en het aanmaken van je eigen account.
+  if (env.SETUP_TOKEN && String(body.value.setupToken ?? '') !== String(env.SETUP_TOKEN)) {
+    return json({ error: 'De code voor de eerste keer klopt niet.' }, 403, origin);
+  }
+
+  const created = await createUser(env, body.value, 'owner');
+  if (created.error) return json({ error: created.error }, 400, origin);
+
+  const session = await startSession(env, created.user.id);
+  return json({ ...session, user: publicUser(created.user) }, 200, origin);
+}
+
+async function login(request, env, origin) {
+  const body = await readBody(request);
+  if (body.error) return json({ error: body.error }, 400, origin);
+
+  const email = normalizeEmail(body.value.email);
+  const password = String(body.value.password ?? '');
+  const user = await env.DB.prepare('select * from users where email = ?').bind(email).first();
+
+  // Eén en dezelfde melding voor 'dit adres kennen we niet' en 'dit wachtwoord
+  // klopt niet'. Anders is deze server een manier om te achterhalen wie er
+  // trainer is bij deze club.
+  const wrong = { error: 'Dit adres en wachtwoord horen niet bij elkaar.' };
+
+  if (!user) {
+    // Toch even rekenen, zodat een onbekend adres niet sneller antwoordt dan een
+    // bekend adres met een fout wachtwoord.
+    await verifyPassword(password, 'pbkdf2$210000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
+    return json(wrong, 401, origin);
+  }
+
+  const locked = lockedUntil(user);
+  if (locked) {
+    return json(
+      { error: 'Te vaak mis achter elkaar. Probeer het over een kwartier nog eens.', lockedUntil: locked },
+      429,
+      origin,
+    );
+  }
+
+  if (!(await verifyPassword(password, user.password))) {
+    const next = afterFailedAttempt(user);
+    await env.DB.prepare('update users set failed_attempts = ?, locked_until = ? where id = ?')
+      .bind(next.attempts, next.lockedUntil, user.id)
+      .run();
+    return json(wrong, 401, origin);
+  }
+
+  await env.DB.prepare(
+    'update users set failed_attempts = 0, locked_until = null, last_login_at = ? where id = ?',
+  )
+    .bind(new Date().toISOString(), user.id)
+    .run();
+
+  const session = await startSession(env, user.id);
+  return json({ ...session, user: publicUser({ ...user, last_login_at: new Date().toISOString() }) }, 200, origin);
+}
+
+async function logout(request, env, origin) {
+  const token = bearerToken(request);
+  if (token) {
+    await env.DB.prepare('delete from sessions where token = ?').bind(await hashToken(token)).run();
+  }
+  return json({ ok: true }, 200, origin);
+}
+
+async function me(request, env, origin) {
+  const session = await authenticate(request, env);
+  if (!session) return json({ error: 'Niet ingelogd.' }, 401, origin);
+  return json({ user: publicUser(session.user) }, 200, origin);
+}
+
+/** Je eigen wachtwoord veranderen. Het oude moet erbij; anders is een openstaande telefoon genoeg. */
+async function changeOwnPassword(request, env, origin) {
+  const session = await authenticate(request, env);
+  if (!session) return json({ error: 'Niet ingelogd.' }, 401, origin);
+
+  const body = await readBody(request);
+  if (body.error) return json({ error: body.error }, 400, origin);
+
+  if (!(await verifyPassword(String(body.value.currentPassword ?? ''), session.user.password))) {
+    return json({ error: 'Het huidige wachtwoord klopt niet.' }, 400, origin);
+  }
+
+  const problem = passwordProblem(body.value.newPassword);
+  if (problem) return json({ error: problem }, 400, origin);
+
+  await env.DB.prepare('update users set password = ? where id = ?')
+    .bind(await hashPassword(String(body.value.newPassword)), session.user.id)
+    .run();
+
+  // Alle andere sessies eruit: een nieuw wachtwoord hoort een oude, gestolen
+  // sessie ongeldig te maken. Deze blijft staan, anders vlieg je er zelf uit.
+  await env.DB.prepare('delete from sessions where user_id = ? and token != ?')
+    .bind(session.user.id, session.tokenHash)
+    .run();
+
+  return json({ ok: true }, 200, origin);
+}
+
+async function startSession(env, userId) {
+  const token = newToken();
+  const expiresAt = sessionExpiry();
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare('insert into sessions (token, user_id, created_at, expires_at) values (?, ?, ?, ?)')
+      .bind(await hashToken(token), userId, now, expiresAt),
+    // Ook hier bijhouden wanneer iemand voor het laatst binnenkwam: anders staat
+    // er bij wie zich net als eigenaar heeft aangemeld 'nog nooit ingelogd'.
+    env.DB.prepare('update users set last_login_at = ? where id = ?').bind(now, userId),
+  ]);
+  return { token, expiresAt };
+}
+
+/**
+ * De gebruiker achter een verzoek, of null.
+ *
+ * Een verlopen sessie wordt meteen opgeruimd: dan groeit die tabel niet aan
+ * rijen die toch niets meer betekenen.
+ */
+async function authenticate(request, env) {
+  const token = bearerToken(request);
+  if (!token) return null;
+  const tokenHash = await hashToken(token);
+  const session = await env.DB.prepare('select * from sessions where token = ?').bind(tokenHash).first();
+  if (!session) return null;
+  if (!sessionIsValid(session)) {
+    await env.DB.prepare('delete from sessions where token = ?').bind(tokenHash).run();
+    return null;
+  }
+  const user = await env.DB.prepare('select * from users where id = ?').bind(session.user_id).first();
+  if (!user) return null;
+  return { user, tokenHash, session };
+}
+
+// ---------- Gebruikers beheren ----------
+
+async function requireOwner(request, env, origin) {
+  const session = await authenticate(request, env);
+  if (!session) return { response: json({ error: 'Niet ingelogd.' }, 401, origin) };
+  if (session.user.role !== 'owner') {
+    return { response: json({ error: 'Alleen de eigenaar kan gebruikers beheren.' }, 403, origin) };
+  }
+  return { session };
+}
+
+async function createUser(env, input, forcedRole) {
+  const email = normalizeEmail(input.email);
+  const name = String(input.name ?? '').trim();
+  const role = forcedRole ?? (input.role === 'owner' ? 'owner' : 'trainer');
+
+  if (!looksLikeEmail(email)) return { error: 'Dit e-mailadres klopt niet.' };
+  if (name.length < 2) return { error: 'Vul een naam in.' };
+  const problem = passwordProblem(input.password);
+  if (problem) return { error: problem };
+
+  const existing = await env.DB.prepare('select id from users where email = ?').bind(email).first();
+  if (existing) return { error: 'Er is al een account met dit adres.' };
+
+  const user = {
+    id: crypto.randomUUID(),
+    email,
+    name,
+    role,
+    password: await hashPassword(String(input.password)),
+    created_at: new Date().toISOString(),
+    last_login_at: null,
+    failed_attempts: 0,
+    locked_until: null,
+  };
+
+  await env.DB.prepare(
+    `insert into users (id, email, name, role, password, created_at, failed_attempts)
+     values (?, ?, ?, ?, ?, ?, 0)`,
+  )
+    .bind(user.id, user.email, user.name, user.role, user.password, user.created_at)
+    .run();
+
+  return { user };
+}
+
+async function listUsers(request, env, origin) {
+  const guard = await requireOwner(request, env, origin);
+  if (guard.response) return guard.response;
+  const { results = [] } = await env.DB.prepare('select * from users order by created_at').all();
+  return json({ users: results.map(publicUser) }, 200, origin);
+}
+
+async function addUser(request, env, origin) {
+  const guard = await requireOwner(request, env, origin);
+  if (guard.response) return guard.response;
+
+  const body = await readBody(request);
+  if (body.error) return json({ error: body.error }, 400, origin);
+
+  const created = await createUser(env, body.value);
+  if (created.error) return json({ error: created.error }, 400, origin);
+  return json({ user: publicUser(created.user) }, 200, origin);
+}
+
+async function removeUser(request, env, origin) {
+  const guard = await requireOwner(request, env, origin);
+  if (guard.response) return guard.response;
+
+  const body = await readBody(request);
+  if (body.error) return json({ error: body.error }, 400, origin);
+  const id = String(body.value.id ?? '');
+
+  if (id === guard.session.user.id) {
+    return json({ error: 'Jezelf verwijderen kan niet; maak eerst iemand anders eigenaar.' }, 400, origin);
+  }
+
+  const target = await env.DB.prepare('select * from users where id = ?').bind(id).first();
+  if (!target) return json({ error: 'Deze gebruiker bestaat niet (meer).' }, 404, origin);
+  if (await wouldLeaveNoOwner(env, target, null)) {
+    return json({ error: 'Er moet minstens één eigenaar overblijven.' }, 400, origin);
+  }
+
+  // De sessies gaan mee. Anders blijft iemand die je net verwijderd hebt
+  // gewoon werken tot zijn sessie vanzelf verloopt, en dat kan maanden duren.
+  await env.DB.batch([
+    env.DB.prepare('delete from sessions where user_id = ?').bind(id),
+    env.DB.prepare('delete from users where id = ?').bind(id),
+  ]);
+
+  return json({ ok: true }, 200, origin);
+}
+
+/** Wachtwoord opnieuw zetten voor iemand die het kwijt is. */
+async function resetPassword(request, env, origin) {
+  const guard = await requireOwner(request, env, origin);
+  if (guard.response) return guard.response;
+
+  const body = await readBody(request);
+  if (body.error) return json({ error: body.error }, 400, origin);
+
+  const problem = passwordProblem(body.value.password);
+  if (problem) return json({ error: problem }, 400, origin);
+
+  const id = String(body.value.id ?? '');
+  const target = await env.DB.prepare('select id from users where id = ?').bind(id).first();
+  if (!target) return json({ error: 'Deze gebruiker bestaat niet (meer).' }, 404, origin);
+
+  await env.DB.batch([
+    env.DB.prepare('update users set password = ?, failed_attempts = 0, locked_until = null where id = ?')
+      .bind(await hashPassword(String(body.value.password)), id),
+    // Ook hier: een nieuw wachtwoord hoort de oude sessies ongeldig te maken.
+    env.DB.prepare('delete from sessions where user_id = ?').bind(id),
+  ]);
+
+  return json({ ok: true }, 200, origin);
+}
+
+async function changeRole(request, env, origin) {
+  const guard = await requireOwner(request, env, origin);
+  if (guard.response) return guard.response;
+
+  const body = await readBody(request);
+  if (body.error) return json({ error: body.error }, 400, origin);
+
+  const id = String(body.value.id ?? '');
+  const role = body.value.role === 'owner' ? 'owner' : 'trainer';
+  const target = await env.DB.prepare('select * from users where id = ?').bind(id).first();
+  if (!target) return json({ error: 'Deze gebruiker bestaat niet (meer).' }, 404, origin);
+  if (await wouldLeaveNoOwner(env, target, role)) {
+    return json({ error: 'Er moet minstens één eigenaar overblijven.' }, 400, origin);
+  }
+
+  await env.DB.prepare('update users set role = ? where id = ?').bind(role, id).run();
+  return json({ ok: true }, 200, origin);
+}
+
+/** Zou deze wijziging de laatste eigenaar wegnemen? */
+async function wouldLeaveNoOwner(env, target, newRole) {
+  if (target.role !== 'owner' || newRole === 'owner') return false;
+  const row = await env.DB.prepare("select count(*) as n from users where role = 'owner'").first();
+  return Number(row?.n ?? 0) <= 1;
+}
+
 async function push(request, env, origin) {
+  // Delen zit achter dezelfde inlog als de rest: zonder sessie neemt deze
+  // server niets aan en geeft hij niets terug.
+  const session = await authenticate(request, env);
+  if (!session) return json({ error: 'Niet ingelogd.' }, 401, origin);
+
   const body = await readBody(request);
   if (body.error) return json({ error: body.error }, 400, origin);
 
@@ -156,6 +548,9 @@ async function push(request, env, origin) {
 }
 
 async function pull(request, env, origin) {
+  const session = await authenticate(request, env);
+  if (!session) return json({ error: 'Niet ingelogd.' }, 401, origin);
+
   const body = await readBody(request);
   if (body.error) return json({ error: body.error }, 400, origin);
 
@@ -239,7 +634,7 @@ async function readBody(request) {
 function cors(origin) {
   return {
     'access-control-allow-origin': origin,
-    'access-control-allow-headers': 'content-type',
+    'access-control-allow-headers': 'content-type, authorization',
     'access-control-allow-methods': 'POST, OPTIONS',
     'access-control-max-age': '86400',
   };

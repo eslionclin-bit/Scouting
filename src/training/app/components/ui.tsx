@@ -55,12 +55,17 @@ export function Field({
   hint?: string;
   children: ReactNode;
 }) {
+  // De toelichting staat buiten het label. Anders wordt de naam van het veld
+  // 'Eerste wachtwoordMinstens tien tekens', en dat is precies wat een
+  // schermlezer voorleest.
   return (
-    <label className="field">
-      <span className="field__label">{label}</span>
-      {children}
+    <div className="field">
+      <label>
+        <span className="field__label">{label}</span>
+        {children}
+      </label>
       {hint && <span className="field__hint">{hint}</span>}
-    </label>
+    </div>
   );
 }
 

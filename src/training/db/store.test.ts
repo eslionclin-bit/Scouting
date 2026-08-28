@@ -97,3 +97,37 @@ describe('binnengekomen wijzigingen', () => {
     expect(await store.pendingCount()).toBe(0);
   });
 });
+
+describe('een account overnemen', () => {
+  it('zet het profiel en alles wat op naam van het oude profiel stond om', async () => {
+    const store = await openStore();
+    const profile = await store.profile();
+    const { id, rev, updatedAt, deletedAt, ...input } = makeExercise({
+      title: 'Van mij',
+      authorId: profile.id,
+      authorName: 'Trainer',
+    });
+    const eigen = await store.exercises.create(input);
+    const { id: id2, rev: rev2, updatedAt: u2, deletedAt: d2, ...vanAnder } = makeExercise({
+      title: 'Van een ander',
+      authorId: 'iemand-anders',
+      authorName: 'Joost',
+    });
+    const ander = await store.exercises.create(vanAnder);
+
+    const changed = await store.adoptAccount({ id: 'account-1', name: 'Marit' });
+
+    expect(changed).toBe(1);
+    expect(await store.profile()).toEqual({ id: 'account-1', name: 'Marit' });
+    expect((await store.exercises.get(eigen.id))?.authorId).toBe('account-1');
+    expect((await store.exercises.get(eigen.id))?.authorName).toBe('Marit');
+    // Wat van iemand anders is, blijft van iemand anders.
+    expect((await store.exercises.get(ander.id))?.authorId).toBe('iemand-anders');
+  });
+
+  it('doet niets als het al hetzelfde account is', async () => {
+    const store = await openStore();
+    await store.adoptAccount({ id: 'account-1', name: 'Marit' });
+    expect(await store.adoptAccount({ id: 'account-1', name: 'Marit' })).toBe(0);
+  });
+});
