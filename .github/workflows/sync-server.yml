@@ -5,13 +5,19 @@
 # eigen workflow. Ontbreken de gegevens, dan slaat hij zichzelf over: dat is de
 # normale situatie voor wie de online koppeling niet gebruikt.
 #
-# Eenmalig instellen (Settings → Secrets and variables → Actions):
-#   CLOUDFLARE_API_TOKEN   — een token met rechten 'Workers Scripts: Edit' en
-#                            'D1: Edit' op je account
+# Eenmalig instellen (Settings → Secrets and variables → Actions, tabblad
+# Secrets). Voor allebei de servers:
+#   CLOUDFLARE_API_TOKEN   — een gebruikerstoken (My Profile → API Tokens) met
+#                            rechten 'Workers Scripts: Edit' en 'D1: Edit'
 #   CLOUDFLARE_ACCOUNT_ID  — staat in het adres van je Cloudflare-dashboard, het
 #                            lange stuk na dash.cloudflare.com/
+#
+# Alleen voor de sync-server van de scouting-app:
 #   CLOUDFLARE_D1_ID       — de Database ID van je D1-database, te vinden op de
-#                            pagina van die database
+#                            pagina van die database. Ontbreekt hij, dan wordt
+#                            alleen die server overgeslagen; de deelserver van de
+#                            trainingsapp zoekt zijn database zelf op en gaat
+#                            gewoon door.
 #
 # Voor de deelserver van de trainingsapp is verder niets nodig: die workflow
 # zoekt zijn eigen database op en maakt hem aan als hij er nog niet is. Alleen
@@ -105,41 +111,57 @@ jobs:
             echo "::warning::CLOUDFLARE_API_TOKEN bevat tekens die niet in een token voorkomen. Kopieer alleen het token, zonder de tekst eromheen en zonder het woord Bearer."
           fi
 
-          missing=""
-          [ -n "$TOKEN_C" ]   || missing="$missing CLOUDFLARE_API_TOKEN"
-          [ -n "$ACCOUNT_C" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
-          [ -n "$D1_C" ]      || missing="$missing CLOUDFLARE_D1_ID"
-
-          if [ -z "$missing" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "CF_TOKEN=$TOKEN_C"
-              echo "CF_ACCOUNT=$ACCOUNT_C"
-              echo "CF_D1=$D1_C"
-            } >> "$GITHUB_ENV"
-            exit 0
-          fi
-
-          echo "ready=false" >> "$GITHUB_OUTPUT"
-
-          # Verreweg de meest gemaakte vergissing: de pagina in GitHub heeft twee
-          # tabbladen, Secrets en Variables, en ze zien er hetzelfde uit. Staat
-          # het onder Variables, dan is het geen geheim en ziet deze workflow het
-          # niet op de plek waar hij kijkt.
+          # Twee servers, twee verschillende eisen. De sync-server van de
+          # scouting-app heeft een database-id nodig die met de hand is
+          # aangemaakt; de deelserver van de trainingsapp zoekt zijn database
+          # zelf op en heeft dus genoeg aan het token en de account-id.
+          #
+          # Ze hingen eerst allebei aan hetzelfde vinkje, en dat betekende: wie
+          # alleen de trainingsapp wil gebruiken, krijgt niets uitgerold en een
+          # melding over een secret dat hij niet nodig heeft.
           hint=""
           if [ -n "$VAR_TOKEN$VAR_ACCOUNT$VAR_D1" ]; then
+            # Verreweg de meest gemaakte vergissing: de pagina in GitHub heeft
+            # twee tabbladen, Secrets en Variables, en ze zien er hetzelfde uit.
+            # Staat het onder Variables, dan is het geen geheim en ziet deze
+            # workflow het niet op de plek waar hij kijkt.
             hint=" Ze staan wel onder het tabblad Variables: zet ze over naar Secrets."
           fi
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "::error::De sync-server kan niet worden uitgerold, deze secrets ontbreken:$missing.$hint"
-            exit 1
+          basis=""
+          [ -n "$TOKEN_C" ]   || basis="$basis CLOUDFLARE_API_TOKEN"
+          [ -n "$ACCOUNT_C" ] || basis="$basis CLOUDFLARE_ACCOUNT_ID"
+
+          if [ -n "$basis" ]; then
+            echo "training=false" >> "$GITHUB_OUTPUT"
+            echo "scouting=false" >> "$GITHUB_OUTPUT"
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "::error::Er kan niets worden uitgerold, deze secrets ontbreken:$basis.$hint"
+              exit 1
+            fi
+            echo "::warning::Uitrollen overgeslagen, deze secrets ontbreken:$basis.$hint"
+            exit 0
           fi
 
-          echo "::warning::Sync-server overgeslagen, deze secrets ontbreken:$missing.$hint"
+          {
+            echo "CF_TOKEN=$TOKEN_C"
+            echo "CF_ACCOUNT=$ACCOUNT_C"
+            echo "CF_D1=$D1_C"
+          } >> "$GITHUB_ENV"
+
+          echo "any=true" >> "$GITHUB_OUTPUT"
+          echo "training=true" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$D1_C" ]; then
+            echo "scouting=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "scouting=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Sync-server van de scouting-app overgeslagen: CLOUDFLARE_D1_ID ontbreekt. De deelserver van de trainingsapp gaat wel door."
+          fi
 
       - uses: actions/setup-node@v4
-        if: steps.check.outputs.ready == 'true'
+        if: steps.check.outputs.any == 'true'
         with:
           node-version: 22
 
@@ -147,14 +169,14 @@ jobs:
       # van de eigenaar, en die kan wisselen. Daarom staat er een plaatshouder
       # in wrangler.toml die hier wordt ingevuld.
       - name: Database-id invullen
-        if: steps.check.outputs.ready == 'true'
+        if: steps.check.outputs.scouting == 'true'
         working-directory: server/cloud
         run: sed -i "s|vul-hier-de-id-in-die-wrangler-afdrukt|$CF_D1|" wrangler.toml
 
       # Het adres van de worker staat in de uitvoer hieronder; dat is de
       # waarde voor het secret SYNC_URL waarmee de app hem gaat gebruiken.
       - name: Uitrollen
-        if: steps.check.outputs.ready == 'true'
+        if: steps.check.outputs.scouting == 'true'
         working-directory: server/cloud
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CF_TOKEN }}
@@ -175,7 +197,7 @@ jobs:
       # CLOUDFLARE_TRAINING_D1_ID in; dat gaat voor.
       - name: Database van de trainingsapp klaarzetten
         id: training
-        if: steps.check.outputs.ready == 'true'
+        if: steps.check.outputs.training == 'true'
         env:
           TRAINING_D1: ${{ secrets.CLOUDFLARE_TRAINING_D1_ID }}
           DB_NAME: volley-training
