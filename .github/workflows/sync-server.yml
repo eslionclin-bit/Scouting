@@ -310,6 +310,16 @@ jobs:
           ANTWOORD=$(curl -sS -m 20 "$ADRES/auth/status" || true)
           echo "Antwoord van de server: ${ANTWOORD:-(geen)}"
 
+          # En of hij wachtwoorden aankan. Dat hangt aan de omgeving en niet aan
+          # onze code — te veel rondes leverde bij het aanmaken van het eerste
+          # account alleen 'er ging iets mis op de server' op.
+          CRYPTO=$(curl -sS -m 20 "$ADRES/health/crypto" || true)
+          echo "Wachtwoordafleiding: ${CRYPTO:-(geen antwoord)}"
+          case "$CRYPTO" in
+            *'"ok":true'*) : ;;
+            *) echo "::warning::De server kan geen wachtwoorden verwerken: ${CRYPTO:-geen antwoord}. Inloggen en accounts aanmaken werken dan niet." ;;
+          esac
+
           {
             echo "## Deelserver van de trainingsapp"
             echo

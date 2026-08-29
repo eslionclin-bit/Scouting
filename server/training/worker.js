@@ -38,6 +38,7 @@
 import {
   afterFailedAttempt,
   bearerToken,
+  cryptoSelfTest,
   hashPassword,
   hashToken,
   lockedUntil,
@@ -153,6 +154,16 @@ export default {
     try {
       await ensureSchema(env);
 
+      // Kan deze server überhaupt wachtwoorden verwerken? Het aantal rondes
+      // van PBKDF2 is aan de omgeving gebonden en niet aan onze code; toen dat
+      // te hoog stond, gaf het aanmaken van het eerste account niets anders dan
+      // 'er ging iets mis op de server'. Dit adres beantwoordt die vraag zonder
+      // dat er een account voor nodig is.
+      if (request.method === 'GET' && url.pathname === '/health/crypto') {
+        const result = await cryptoSelfTest();
+        return json(result, result.ok ? 200 : 500, origin);
+      }
+
       // Of er al iemand is. Het enige dat zonder inlog te vragen valt, en de app
       // heeft het nodig om te weten of hij een inlogscherm of een
       // eerste-keer-scherm moet tonen.
@@ -179,8 +190,12 @@ export default {
       if (url.pathname === '/share/pull') return await pull(request, env, origin);
       return json({ error: 'Onbekend adres.' }, 404, origin);
     } catch (error) {
+      // Nooit een stacktrace naar buiten, maar wél de naam van de fout: 'er ging
+      // iets mis' zonder meer kostte hier een avond zoeken, terwijl één woord
+      // ('OperationError') meteen de goede kant op wijst.
       console.error(error);
-      return json({ error: 'Er ging iets mis op de server.' }, 500, origin);
+      const naam = error instanceof Error ? error.name : 'onbekend';
+      return json({ error: `Er ging iets mis op de server (${naam}).` }, 500, origin);
     }
   },
 };

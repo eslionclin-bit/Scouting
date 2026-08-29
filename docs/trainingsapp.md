@@ -125,7 +125,7 @@ regelt, en wat niet:
 
 | Wat | Hoe |
 |---|---|
-| Wachtwoord | PBKDF2-SHA256, 210.000 rondes, eigen zout per gebruiker. Het wachtwoord zelf wordt nooit bewaard. |
+| Wachtwoord | PBKDF2-SHA256, 100.000 rondes, eigen zout per gebruiker. Het wachtwoord zelf wordt nooit bewaard. Meer rondes zou beter zijn (OWASP houdt 210.000 aan), maar de Web Crypto van Cloudflare Workers weigert boven de 100.000; dit is het maximum van het platform. |
 | Sessie | 32 willekeurige bytes, 90 dagen geldig, in de database alleen als SHA-256. |
 | Raden afremmen | Tien mispogingen op rij zetten het account een kwartier op slot. |
 | Onbekend adres | Levert exact dezelfde melding en dezelfde wachttijd op als een fout wachtwoord — anders is de server een manier om te achterhalen wie er trainer is. |

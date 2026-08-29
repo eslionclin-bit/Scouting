@@ -21,11 +21,17 @@
 /**
  * Zoveel rondes gaan er over een wachtwoord heen.
  *
- * De rem op raden is dat dit tijd kost. Cloudflare rekent per verzoek met een
- * CPU-limiet, dus het kan niet eindeloos omhoog; 210.000 is wat OWASP voor
- * PBKDF2-SHA256 aanhoudt en blijft ruim binnen de limiet.
+ * De rem op raden is dat dit tijd kost, dus hoe meer hoe beter — maar niet meer
+ * dan de plek waar het draait toestaat. De Web Crypto van Cloudflare Workers
+ * weigert PBKDF2 boven de 100.000 rondes, en dat weigeren gebeurt als een fout
+ * midden in het verzoek: het eerste account aanmaken gaf 'er ging iets mis op
+ * de server', zonder dat er iets in de app of in de logica mis was.
+ *
+ * OWASP houdt 210.000 aan voor PBKDF2-SHA256. Dat halen we hier dus niet; wat
+ * er overblijft is het maximum van het platform. Wie meer wil, moet naar een
+ * andere afleiding (scrypt of Argon2) en dus naar een andere server.
  */
-export const PBKDF2_ROUNDS = 210_000;
+export const PBKDF2_ROUNDS = 100_000;
 
 /** Korter dan dit is geen wachtwoord maar een formaliteit. */
 export const MIN_PASSWORD_LENGTH = 10;
@@ -189,4 +195,29 @@ export function fromBase64(text) {
 
 function toHex(bytes) {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Draait de wachtwoordafleiding hier eigenlijk wel?
+ *
+ * Dat lijkt een overbodige vraag tot je hem nodig hebt: Web Crypto is overal
+ * aanwezig maar niet overal hetzelfde, en de grens waar het op stukliep (het
+ * aantal rondes) is van de omgeving, niet van de code. Deze controle is
+ * daarom een echte afleiding en verificatie, en geen nabootsing.
+ */
+export async function cryptoSelfTest() {
+  try {
+    const stored = await hashPassword('proefwachtwoord-zonder-betekenis');
+    const goed = await verifyPassword('proefwachtwoord-zonder-betekenis', stored);
+    const fout = await verifyPassword('iets anders', stored);
+    return { ok: goed && !fout, rounds: PBKDF2_ROUNDS };
+  } catch (error) {
+    return {
+      ok: false,
+      rounds: PBKDF2_ROUNDS,
+      // Alleen de naam van de fout. Die zegt genoeg om te zoeken en verklapt
+      // niets over de inhoud van het verzoek.
+      error: error instanceof Error ? error.name : 'onbekend',
+    };
+  }
 }

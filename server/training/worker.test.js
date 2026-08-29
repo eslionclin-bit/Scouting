@@ -38,6 +38,17 @@ async function setupOwner() {
   return result.body;
 }
 
+describe('kan deze server wachtwoorden aan', () => {
+  it('zegt het als de afleiding werkt', async () => {
+    const result = await call(get('/health/crypto'));
+    expect(result.status).toBe(200);
+    expect(result.body.ok).toBe(true);
+    // Boven dit aantal weigert Cloudflare de afleiding; dat gaf eerder een
+    // onverklaarbare serverfout bij het aanmaken van het eerste account.
+    expect(result.body.rounds).toBeLessThanOrEqual(100_000);
+  });
+});
+
 describe('de eerste keer', () => {
   it('meldt dat er nog geen account is', async () => {
     const result = await call(get('/auth/status'));
